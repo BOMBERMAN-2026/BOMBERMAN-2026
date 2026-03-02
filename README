@@ -1,0 +1,11 @@
+Distribución de carpeta
+
+- include => ficheros .hpp o cabeceras
+- levels => niveles del juego 
+- lib => para las librerias externas, ficheros extraños del palo .a o .so 
+    - lib/include => cabeceras de apis de librerias y tal
+- resources
+    - resources/sprites => imagenes de los sprites del juego a usar
+    - resources/sounds => canciones y efectos de sonido del juego
+- src => ficheros .cpp o codigo fuente
+
