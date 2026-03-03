@@ -7,6 +7,7 @@ Distribución de carpetas
 - **resources**
     - **resources/sprites** => imagenes de los sprites del juego a usar
     - **resources/sounds** => canciones y efectos de sonido del juego
+- **docs** => documentación (guía de diseño, etc.)
 - **src** => ficheros .cpp o codigo fuente
 
 En el directorio base deberia de haber algun tipo de **CMake** o algo asi para compilar y tmb algun **fichero de configuración** de variables
