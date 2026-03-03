@@ -8,6 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
+  "/home/jogue/Escritorio/Videojuegos/BOMBERMAN-2026/src/bomberman.cpp" "CMakeFiles/Bomberman.dir/src/bomberman.cpp.o" "gcc" "CMakeFiles/Bomberman.dir/src/bomberman.cpp.o.d"
   "/home/jogue/Escritorio/Videojuegos/BOMBERMAN-2026/src/main.cpp" "CMakeFiles/Bomberman.dir/src/main.cpp.o" "gcc" "CMakeFiles/Bomberman.dir/src/main.cpp.o.d"
   )
 

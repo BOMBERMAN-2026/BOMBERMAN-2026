@@ -1,6 +1,8 @@
 file(REMOVE_RECURSE
   "Bomberman"
   "Bomberman.pdb"
+  "CMakeFiles/Bomberman.dir/src/bomberman.cpp.o"
+  "CMakeFiles/Bomberman.dir/src/bomberman.cpp.o.d"
   "CMakeFiles/Bomberman.dir/src/main.cpp.o"
   "CMakeFiles/Bomberman.dir/src/main.cpp.o.d"
 )
