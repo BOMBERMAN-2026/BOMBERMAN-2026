@@ -1,22 +1,12 @@
-// System includes
-#include <cstdio>
-#include <cstdlib>
-
-// OpenGL includes
+// GL and GLFW
+#define GLEW_STATIC
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-// GLM includes
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+#include <iostream>
 
-// Constants
-const int WIDTH = 800;
-const int HEIGHT = 600;
+int main() {
 
-int main()
-{
     // Initialize GLFW
     if (!glfwInit())
     {
@@ -30,16 +20,23 @@ int main()
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-    GLFWwindow* mainWindow = glfwCreateWindow(WIDTH, HEIGHT, "P1.2_videojuegos", nullptr, nullptr);
+    // Screen dimensions
+    int resolutionHeight = glfwGetVideoMode(glfwGetPrimaryMonitor())->height;
+
+	const int SCREEN_HEIGHT = 0.9 * resolutionHeight;
+    //const int SCREEN_HEIGHT = 300;
+    const int SCREEN_WIDTH = SCREEN_HEIGHT;
+
+    GLFWwindow* mainWindow = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Bomberman", nullptr, nullptr);
     if (!mainWindow)
     {
         printf("GLFW window creation failed!\n");
         glfwTerminate();
         return 1;
     }
-    int bufferWidth, bufferHeight;
-    glfwGetFramebufferSize(mainWindow, &bufferWidth, &bufferHeight);
+
     glfwMakeContextCurrent(mainWindow);
+
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK)
     {
@@ -47,5 +44,33 @@ int main()
         glfwTerminate();
         return 1;
     }
-    glViewport(0, 0, bufferWidth, bufferHeight);
+
+    // OpenGL configuration
+    glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+
+    // Initialize blend to blend transparent to the background
+    glEnable(GL_BLEND);
+    glEnable(GL_DEPTH_TEST);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    
+    // inicializar juego, ticks?
+
+
+    while (!glfwWindowShouldClose(mainWindow))
+    {
+        // Check and call events
+        glfwPollEvents();
+
+        /*
+        */
+
+        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+        glClear(GL_COLOR_BUFFER_BIT);
+        
+        // Swap buffers
+		glfwSwapBuffers(mainWindow);
+    }
+
+    return 0;
 }
