@@ -1,1 +1,0 @@
-/usr/bin/c++ CMakeFiles/Bomberman.dir/src/bomberman.cpp.o CMakeFiles/Bomberman.dir/src/main.cpp.o -o Bomberman  /usr/lib/x86_64-linux-gnu/libGLEW.so /usr/lib/x86_64-linux-gnu/libglfw.so.3.3 -lX11 -lXrandr -lXinerama -lXcursor -lXi -lXxf86vm -ldl /usr/lib/x86_64-linux-gnu/libGLX.so /usr/lib/x86_64-linux-gnu/libOpenGL.so 

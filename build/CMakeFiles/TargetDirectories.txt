@@ -1,3 +1,0 @@
-/home/jogue/Escritorio/Videojuegos/BOMBERMAN-2026/build/CMakeFiles/Bomberman.dir
-/home/jogue/Escritorio/Videojuegos/BOMBERMAN-2026/build/CMakeFiles/edit_cache.dir
-/home/jogue/Escritorio/Videojuegos/BOMBERMAN-2026/build/CMakeFiles/rebuild_cache.dir
