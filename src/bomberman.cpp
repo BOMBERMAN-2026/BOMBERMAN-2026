@@ -1,8 +1,10 @@
 #include "bomberman.hpp"
+#include "player.hpp"
 
 #include <iostream>
 #include <string>
 
+Player* player;
 
 // Copiada de Pengu, por si sirve
 static std::string getKeyName(GLint key){
@@ -254,14 +256,30 @@ static std::string getKeyName(GLint key){
     return str;
 }
 
+void Game::init() {
+    player = new Player( glm::vec2(0.0f, 0.0f),  glm::vec2(0.2f, 0.2f), 0.01f);
+}
+
 void Game::processInput() {
     
     if (this->state == GAME_PLAYING) {
-                   
+        if (this->keys[GLFW_KEY_UP] >= GLFW_PRESS) {
+            player->UpdateSprite(MOVE_UP);
+        }
+        if (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS) {
+            player->UpdateSprite(MOVE_DOWN);
+        }
+        if (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS) {
+            player->UpdateSprite(MOVE_LEFT);
+        }
+        if (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS) {
+            player->UpdateSprite(MOVE_RIGHT);
+        }
     }
 
 }
 
-void Game::update() {
+void Game::update() {}
 
-}
+void Game::render() {}
+

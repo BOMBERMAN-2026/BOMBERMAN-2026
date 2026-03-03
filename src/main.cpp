@@ -5,6 +5,12 @@
 
 #include <iostream>
 
+#include "bomberman.hpp"
+
+Game* bomberman;
+
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+
 int main() {
 
     // Initialize GLFW
@@ -45,6 +51,8 @@ int main() {
         return 1;
     }
 
+    glfwSetKeyCallback(mainWindow, key_callback);
+
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
@@ -56,21 +64,33 @@ int main() {
     
     // inicializar juego, ticks?
 
-
     while (!glfwWindowShouldClose(mainWindow))
     {
         // Check and call events
         glfwPollEvents();
 
-        /*
-        */
+        // Deberia estar dentro de un bucle de ticks?
+        //bomberman->processInput();
+        // Deberia estar dentro de un bucle de ticks?
+        //bomberman->update();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        //bomberman->render();
         
         // Swap buffers
 		glfwSwapBuffers(mainWindow);
     }
 
     return 0;
+}
+
+/*
+* It is called when a key is pressed/released
+*/
+void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
+    if (key >= 0 && key < 1024) {
+        bomberman->keys[key] = action;
+        //Game::lastKey = key;
+    }
 }

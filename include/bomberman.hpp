@@ -16,7 +16,8 @@ class Game
     private:
     public:
 
-        std::map<GLint, GLint> keys; // <Key, {Release(0), Press(1)}>
+        // Mapa de teclas que muestra si estan siendo pulsadas (1), no pulsadas (0) o se han vuelto a pulsar (2)
+        std::map<GLint, GLint> keys; // <Key, {Release(0), Press(1), Repeat(2)}>
         
         GameState state;
         
@@ -32,9 +33,9 @@ class Game
         void processInput();
         // Modificar el estado del juego
         void update();
+
+        void render();
 };
-
-
 
 
 
