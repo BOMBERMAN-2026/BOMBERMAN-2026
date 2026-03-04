@@ -1,0 +1,13 @@
+{
+  "ruta_imagen": "resources/sprites/BombermanArcade-baddies.png",
+  "tamano_imagen": { "ancho": 636, "alto": 2554 },
+
+  "color_transparente": {
+    "primario": { "r": 255, "g": 0, "b": 255 },
+    "secundario": { "r": 0, "g": 255, "b": 255 },
+    "tolerancia": 0
+  },
+
+  "sprites": {
+  }
+}
