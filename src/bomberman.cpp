@@ -1,5 +1,6 @@
 #include "bomberman.hpp"
 #include "player.hpp"
+#include "sprite_atlas.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -10,13 +11,14 @@
 
 #include <iostream>
 #include <string>
+#include <cstdlib>
 
 Player* player;
 
 /**************************************************** Solo para que funcione de primeras ****************************************/
 
 // Global variables for OpenGL
-GLuint VAO, VBO, EBO, shader, uniformModel, uniformTexture, uniformTintColor;
+GLuint VAO, VBO, EBO, shader, uniformModel, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX;
 
 GLuint texture;
 
@@ -27,10 +29,16 @@ layout (location = 0) in vec3 pos;
 layout (location = 1) in vec2 texCoord;
 out vec2 TexCoord;
 uniform mat4 model;
+uniform vec4 uvRect; // (u0, v0, u1, v1)
+uniform float flipX; // 0.0 normal, 1.0 mirror horizontally
 void main()
 {
     gl_Position = model * vec4(pos, 1.0);
-    TexCoord = texCoord;
+    float tx = mix(texCoord.x, 1.0 - texCoord.x, flipX);
+    TexCoord = vec2(
+        mix(uvRect.x, uvRect.z, tx),
+        mix(uvRect.y, uvRect.w, texCoord.y)
+    );
 }
 )";
 
@@ -46,6 +54,10 @@ void main()
     vec4 texColor = texture(ourTexture, TexCoord);
     color = texColor * tintColor; // Apply tint color
 })";
+
+static SpriteAtlas gPlayerAtlas;
+static std::string gCurrentSpriteName;
+static float gFlipX = 0.0f;
 
 void CreateRectangle()
 {
@@ -135,6 +147,8 @@ void CompileShaders()
     uniformModel = glGetUniformLocation(shader, "model");
     uniformTexture = glGetUniformLocation(shader, "ourTexture");
     uniformTintColor = glGetUniformLocation(shader, "tintColor");
+    uniformUvRect = glGetUniformLocation(shader, "uvRect");
+    uniformFlipX = glGetUniformLocation(shader, "flipX");
 }
 
 GLuint LoadTexture(const char* filePath)
@@ -156,6 +170,11 @@ GLuint LoadTexture(const char* filePath)
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
     glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
     stbi_image_free(data);
     return textureID;
@@ -422,12 +441,25 @@ void Game::init() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    texture = LoadTexture("../resources/sprites/BombermanArcade-baddies.png");
+    // Cargar atlas + textura del jugador (alpha) desde JSON
+    const std::string atlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasPlayer.json");
+    if (!loadSpriteAtlasMinimal(atlasPath, gPlayerAtlas))
+    {
+        std::cerr << "Error cargando atlas: " << atlasPath << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
+    texture = LoadTexture(texturePath.c_str());
     if (texture == 0)
     {
-        std::cerr << "Error cargando textura" << std::endl;
-        exit;
+        std::cerr << "Error cargando textura: " << texturePath << std::endl;
+        std::exit(EXIT_FAILURE);
     }
+
+    // Sprite inicial de prueba
+    gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
+    gFlipX = 0.0f;
 
     player = new Player(glm::vec2(0.0f, 0.0f),  glm::vec2(0.2f, 0.2f), 0.01f);
 }
@@ -437,18 +469,26 @@ void Game::processInput() {
     if (this->state == GAME_PLAYING) {
         if (this->keys[GLFW_KEY_UP] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_UP);
+            gCurrentSpriteName = "jugadorblanco.quieto.arriba.0";
+            gFlipX = 0.0f;
             std::cout << "Arriba" << std::endl;
         }
         if (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_DOWN);
+            gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
+            gFlipX = 0.0f;
             std::cout << "Abajo" << std::endl;
         }
         if (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_LEFT);
+            gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
+            gFlipX = 1.0f;
             std::cout << "Izq" << std::endl;
         }
         if (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_RIGHT);
+            gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
+            gFlipX = 0.0f;
             std::cout << "Der" << std::endl;
         }
     }
@@ -463,6 +503,9 @@ void Game::render() {
 
     glUseProgram(shader);
 
+    // Texture unit 0
+    glUniform1i(uniformTexture, 0);
+
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -470,9 +513,30 @@ void Game::render() {
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(player->position, 0.0f));
-    model = glm::scale(model, glm::vec3(0.05f, 0.05f, 1.0f));
+
+    // UV del sprite actual (si falla, se pinta la textura completa)
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    getUvRectForSprite(gPlayerAtlas, gCurrentSpriteName, uvRect);
+
+    // Ajuste simple de escala en función del tamaño del frame (referencia: 32x32)
+    int frameW = 32;
+    int frameH = 32;
+    auto it = gPlayerAtlas.sprites.find(gCurrentSpriteName);
+    if (it != gPlayerAtlas.sprites.end()) {
+        frameW = (it->second.w > 0) ? it->second.w : 32;
+        frameH = (it->second.h > 0) ? it->second.h : 32;
+    }
+
+    // Escala en NDC basada en píxeles del frame vs tamaño de ventana.
+    // El quad base mide 2 unidades (de -1 a 1). Con escala s, mide 2s.
+    // Queremos que mida (2 * frameW / WIDTH) en NDC => s = frameW / WIDTH.
+    const float sx = (this->WIDTH > 0) ? (static_cast<float>(frameW) / static_cast<float>(this->WIDTH)) : 0.05f;
+    const float sy = (this->HEIGHT > 0) ? (static_cast<float>(frameH) / static_cast<float>(this->HEIGHT)) : 0.05f;
+    model = glm::scale(model, glm::vec3(sx, sy, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+    glUniform1f(uniformFlipX, gFlipX);
     glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
     glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
 
