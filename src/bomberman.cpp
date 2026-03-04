@@ -1,10 +1,168 @@
 #include "bomberman.hpp"
 #include "player.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <iostream>
 #include <string>
 
 Player* player;
+
+/**************************************************** Solo para que funcione de primeras ****************************************/
+
+// Global variables for OpenGL
+GLuint VAO, VBO, EBO, shader, uniformModel, uniformTexture, uniformTintColor;
+
+GLuint texture;
+
+// Vertex Shader
+static const char* vShaderSrc = R"(
+#version 330
+layout (location = 0) in vec3 pos;
+layout (location = 1) in vec2 texCoord;
+out vec2 TexCoord;
+uniform mat4 model;
+void main()
+{
+    gl_Position = model * vec4(pos, 1.0);
+    TexCoord = texCoord;
+}
+)";
+
+// Fragment Shader
+static const char* fShaderSrc = R"(
+#version 330
+in vec2 TexCoord;
+out vec4 color;
+uniform sampler2D ourTexture;
+uniform vec4 tintColor;
+void main()
+{
+    vec4 texColor = texture(ourTexture, TexCoord);
+    color = texColor * tintColor; // Apply tint color
+})";
+
+void CreateRectangle()
+{
+    GLfloat vertices[] = {
+        -1.0f, -1.0f, 0.0f, 0.0f, 1.0f, // Bottom-left
+         1.0f, -1.0f, 0.0f, 1.0f, 1.0f, // Bottom-right
+         1.0f,  1.0f, 0.0f, 1.0f, 0.0f, // Top-right
+        -1.0f,  1.0f, 0.0f, 0.0f, 0.0f  // Top-left
+    };
+
+    GLuint indices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+
+    glGenVertexArrays(1, &VAO);
+    glBindVertexArray(VAO);
+
+    glGenBuffers(1, &VBO);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
+
+    glGenBuffers(1, &EBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glBindVertexArray(0);
+}
+
+void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
+{
+    GLuint shader = glCreateShader(shaderType);
+    glShaderSource(shader, 1, &shaderCode, nullptr);
+    glCompileShader(shader);
+
+    GLint result = 0;
+    GLchar errorLog[1024] = { 0 };
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
+    if (!result)
+    {
+        glGetShaderInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
+        printf("Error compiling the %d shader: '%s'\n", shaderType, errorLog);
+        return;
+    }
+
+    glAttachShader(program, shader);
+}
+
+void CompileShaders()
+{
+    shader = glCreateProgram();
+    if (!shader)
+    {
+        printf("Error creating shader program!\n");
+        return;
+    }
+
+    AddShader(shader, vShaderSrc, GL_VERTEX_SHADER);
+    AddShader(shader, fShaderSrc, GL_FRAGMENT_SHADER);
+
+    GLint result = 0;
+    GLchar errorLog[1024] = { 0 };
+
+    glLinkProgram(shader);
+    glGetProgramiv(shader, GL_LINK_STATUS, &result);
+    if (!result)
+    {
+        glGetProgramInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
+        printf("Error linking program: '%s'\n", errorLog);
+        return;
+    }
+
+    glValidateProgram(shader);
+    glGetProgramiv(shader, GL_VALIDATE_STATUS, &result);
+    if (!result)
+    {
+        glGetProgramInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
+        printf("Error validating program: '%s'\n", errorLog);
+        return;
+    }
+
+    uniformModel = glGetUniformLocation(shader, "model");
+    uniformTexture = glGetUniformLocation(shader, "ourTexture");
+    uniformTintColor = glGetUniformLocation(shader, "tintColor");
+}
+
+GLuint LoadTexture(const char* filePath)
+{
+    GLuint textureID;
+    int width, height, nrChannels;
+    unsigned char* data = stbi_load(filePath, &width, &height, &nrChannels, STBI_rgb_alpha);
+    if (!data)
+    {
+        printf("Failed to load texture\n");
+        return 0;
+    }
+
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    stbi_image_free(data);
+    return textureID;
+}
+
+/**************************************************** Solo para que funcione de primeras ****************************************/
+
 
 // Copiada de Pengu, por si sirve
 static std::string getKeyName(GLint key){
@@ -257,7 +415,21 @@ static std::string getKeyName(GLint key){
 }
 
 void Game::init() {
-    player = new Player( glm::vec2(0.0f, 0.0f),  glm::vec2(0.2f, 0.2f), 0.01f);
+
+    CreateRectangle();
+    CompileShaders();
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    texture = LoadTexture("../resources/sprites/BombermanArcade-baddies.png");
+    if (texture == 0)
+    {
+        std::cerr << "Error cargando textura" << std::endl;
+        exit;
+    }
+
+    player = new Player(glm::vec2(0.0f, 0.0f),  glm::vec2(0.2f, 0.2f), 0.01f);
 }
 
 void Game::processInput() {
@@ -265,15 +437,19 @@ void Game::processInput() {
     if (this->state == GAME_PLAYING) {
         if (this->keys[GLFW_KEY_UP] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_UP);
+            std::cout << "Arriba" << std::endl;
         }
         if (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_DOWN);
+            std::cout << "Abajo" << std::endl;
         }
         if (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_LEFT);
+            std::cout << "Izq" << std::endl;
         }
         if (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS) {
             player->UpdateSprite(MOVE_RIGHT);
+            std::cout << "Der" << std::endl;
         }
     }
 
@@ -281,5 +457,28 @@ void Game::processInput() {
 
 void Game::update() {}
 
-void Game::render() {}
+void Game::render() {
+
+    //printf("Render \n");
+
+    glUseProgram(shader);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glBindVertexArray(VAO);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(player->position, 0.0f));
+    model = glm::scale(model, glm::vec3(0.05f, 0.05f, 1.0f));
+
+    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+    glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glBindVertexArray(0);
+    glUseProgram(0);
+}
 

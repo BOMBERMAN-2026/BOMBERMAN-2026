@@ -56,12 +56,14 @@ int main() {
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
-    // Initialize blend to blend transparent to the background
-    glEnable(GL_BLEND);
-    glEnable(GL_DEPTH_TEST);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    bomberman = new Game(mainWindow, SCREEN_WIDTH, SCREEN_HEIGHT);
+    bomberman->init();
 
-    
+    // Initialize blend to blend transparent to the background
+    //glEnable(GL_BLEND);
+    //glEnable(GL_DEPTH_TEST);
+    //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
     // inicializar juego, ticks?
 
     while (!glfwWindowShouldClose(mainWindow))
@@ -70,13 +72,13 @@ int main() {
         glfwPollEvents();
 
         // Deberia estar dentro de un bucle de ticks?
-        //bomberman->processInput();
+        bomberman->processInput();
         // Deberia estar dentro de un bucle de ticks?
         //bomberman->update();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        //bomberman->render();
+        bomberman->render();
         
         // Swap buffers
 		glfwSwapBuffers(mainWindow);

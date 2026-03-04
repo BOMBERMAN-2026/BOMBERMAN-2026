@@ -11,7 +11,7 @@ enum GameState {
     GAME_PLAYING
 };
 
-class Game 
+class Game
 {
     private:
     public:
@@ -24,7 +24,7 @@ class Game
         GLuint WIDTH, HEIGHT;
         GLFWwindow* window;
 
-        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {}
+        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_PLAYING;}
         ~Game();
 
         void init();
