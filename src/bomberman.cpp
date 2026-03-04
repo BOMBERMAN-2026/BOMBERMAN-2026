@@ -513,6 +513,7 @@ void Game::render() {
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(player->position, 0.0f));
+    model = glm::scale(model, glm::vec3(4.0f, 4.0f, 1.0f));
 
     // UV del sprite actual (si falla, se pinta la textura completa)
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);

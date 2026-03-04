@@ -25,8 +25,8 @@ void Player::UpdateSprite(Move mov) {
     }
 
     // Limitar la posición dentro de los bordes de la ventana (clip space -1..1)
-    // El jugador se escala 0.05 sobre un quad de -1..1, así que su semitamaño es 0.05
-    const float halfSize = 0.05f;
+    // El sprite se escala 4.0 * (frameW/WIDTH). Para ~800px y frame de 32px => ~0.16
+    const float halfSize = 0.16f;
     this->position.x = std::max(-1.0f + halfSize, std::min(this->position.x, 1.0f - halfSize));
     this->position.y = std::max(-1.0f + halfSize, std::min(this->position.y, 1.0f - halfSize));
 }
