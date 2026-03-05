@@ -11,6 +11,7 @@ struct SpriteFrame {
     int y = 0;
     int w = 0;
     int h = 0;
+    bool walkable = true; // leido del campo "walkable" del JSON
 };
 
 struct SpriteAtlas {

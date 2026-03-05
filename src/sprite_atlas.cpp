@@ -204,6 +204,18 @@ bool loadSpriteAtlasMinimal(const std::string& jsonPath, SpriteAtlas& out)
                 parseIntInFrame("w", frame.w) &&
                 parseIntInFrame("h", frame.h))
             {
+                // Leer campo "walkable" (true si no existe)
+                std::string wKey = "\"walkable\"";
+                size_t wpos = contents.find(wKey, frameOpen);
+                if (wpos != std::string::npos && wpos < frameClose) {
+                    size_t cpos = contents.find(':', wpos);
+                    if (cpos != std::string::npos && cpos < frameClose) {
+                        size_t vpos = cpos + 1;
+                        skipWs(contents, vpos);
+                        // "true" o "false"
+                        frame.walkable = (contents.compare(vpos, 4, "true") == 0);
+                    }
+                }
                 out.sprites[spriteName] = frame;
             }
 
@@ -223,11 +235,11 @@ bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spriteName,
     const SpriteFrame& f = it->second;
     if (atlas.imageWidth <= 0 || atlas.imageHeight <= 0) return false;
 
-    // Nota: tus texcoords usan v=0 arriba, v=1 abajo. El JSON también usa y desde arriba.
-    float u0 = static_cast<float>(f.x) / static_cast<float>(atlas.imageWidth);
-    float v0 = static_cast<float>(f.y) / static_cast<float>(atlas.imageHeight);
-    float u1 = static_cast<float>(f.x + f.w) / static_cast<float>(atlas.imageWidth);
-    float v1 = static_cast<float>(f.y + f.h) / static_cast<float>(atlas.imageHeight);
+    // Media texel de inset para evitar muestrear fuera del sprite con GL_NEAREST
+    float u0 = (static_cast<float>(f.x) + 0.5f) / static_cast<float>(atlas.imageWidth);
+    float v0 = (static_cast<float>(f.y) + 0.5f) / static_cast<float>(atlas.imageHeight);
+    float u1 = (static_cast<float>(f.x + f.w) - 0.5f) / static_cast<float>(atlas.imageWidth);
+    float v1 = (static_cast<float>(f.y + f.h) - 0.5f) / static_cast<float>(atlas.imageHeight);
 
     uvRect = glm::vec4(u0, v0, u1, v1);
     return true;

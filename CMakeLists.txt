@@ -64,6 +64,28 @@ if(WIN32)
         glfw 
         OpenGL::GL
     )
+
+    # Copiar DLLs de runtime junto al .exe para poder ejecutarlo desde build/
+    # sin depender de PATH del sistema/terminal.
+    set(MSYS2_UCRT_BIN "C:/msys64/ucrt64/bin")
+    set(BOMBERMAN_RUNTIME_DLLS
+        glfw3.dll
+        glew32.dll
+        libstdc++-6.dll
+        libgcc_s_seh-1.dll
+        libwinpthread-1.dll
+    )
+
+    foreach(_dll ${BOMBERMAN_RUNTIME_DLLS})
+        if(EXISTS "${MSYS2_UCRT_BIN}/${_dll}")
+            add_custom_command(TARGET Bomberman POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${MSYS2_UCRT_BIN}/${_dll}"
+                    "$<TARGET_FILE_DIR:Bomberman>/${_dll}"
+                VERBATIM
+            )
+        endif()
+    endforeach()
 else()
     # En Linux, necesitamos las librerías de X11 que mencionaste antes
     find_package(Threads REQUIRED) # Reemplaza a -lpthread

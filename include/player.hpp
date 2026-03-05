@@ -4,6 +4,8 @@
 #include "entity.hpp"
 #include <string>
 
+class GameMap;
+
 enum Move {
     MOVE_UP,
     MOVE_LEFT,
@@ -22,7 +24,7 @@ class Player : public Entity {
         void Draw()   override;
 
         // Lógica específica del jugador
-        void UpdateSprite(Move mov);
+        void UpdateSprite(Move mov, const GameMap* map);
 };
 
 #endif // PLAYER_H

@@ -1,5 +1,6 @@
 
 #include "player.hpp"
+#include "game_map.hpp"
 #include <algorithm>
 
 Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity)
@@ -15,18 +16,20 @@ void Player::Draw() {
     // Lógica de renderizado del jugador (a completar)
 }
 
-void Player::UpdateSprite(Move mov) {
+void Player::UpdateSprite(Move mov, const GameMap* map) {
+    const float step = this->speed;
+
+    glm::vec2 newPos = this->position;
     switch (mov) {
-        case MOVE_UP:    this->position += glm::vec2( 0.0f,    0.010f); break;
-        case MOVE_DOWN:  this->position += glm::vec2( 0.0f,   -0.010f); break;
-        case MOVE_LEFT:  this->position += glm::vec2(-0.010f,   0.0f  ); break;
-        case MOVE_RIGHT: this->position += glm::vec2( 0.010f,   0.0f  ); break;
-        default: break;
+        case MOVE_UP:    newPos.y += step; break;
+        case MOVE_DOWN:  newPos.y -= step; break;
+        case MOVE_LEFT:  newPos.x -= step; break;
+        case MOVE_RIGHT: newPos.x += step; break;
+        default: return;
     }
 
-    // Limitar la posición dentro de los bordes de la ventana (clip space -1..1)
-    // El sprite se escala 4.0 * (frameW/WIDTH). Para ~800px y frame de 32px => ~0.16
-    const float halfSize = 0.16f;
-    this->position.x = std::max(-1.0f + halfSize, std::min(this->position.x, 1.0f - halfSize));
-    this->position.y = std::max(-1.0f + halfSize, std::min(this->position.y, 1.0f - halfSize));
+    float halfTile = map->getTileSize() / 2.0f;
+    if (map->canMoveTo(newPos, halfTile)) {
+        this->position = newPos;
+    }
 }

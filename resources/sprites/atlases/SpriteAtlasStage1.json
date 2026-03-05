@@ -1,0 +1,73 @@
+{
+  "ruta_imagen": "resources/sprites/mapas/Stage1/sprites-Stage1.png",
+  "tamano_imagen": {
+    "ancho": 1280,
+    "alto": 720
+  },
+  "sprites": {
+    "0": {
+      "x": 466,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "borde_azul",
+      "walkable": false
+    },
+    "1": {
+      "x": 550,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "borde_amarillo",
+      "walkable": false
+    },
+    "2": {
+      "x": 633,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_indestructible_var",
+      "walkable": true
+    },
+    "3": {
+      "x": 710,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_indestructible",
+      "walkable": true
+    },
+    "4": {
+      "x": 468,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_destructible",
+      "walkable": false
+    },
+    "5": {
+      "x": 555,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo",
+      "walkable": true
+    },
+    "6": {
+      "x": 632,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_var1",
+      "walkable": true
+    },
+    "7": {
+      "x": 710,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_var2",
+      "walkable": true
+    }
+  }
+}

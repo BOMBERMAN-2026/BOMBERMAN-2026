@@ -1,6 +1,7 @@
 #include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
+#include "game_map.hpp"
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
@@ -14,6 +15,8 @@
 #include <cstdlib>
 
 Player* player;
+GameMap* gameMap;
+GLuint mapTexture;
 
 /**************************************************** Solo para que funcione de primeras ****************************************/
 
@@ -457,39 +460,61 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
+    // Cargar mapa
+    gameMap = new GameMap();
+    if (!gameMap->loadFromFile("levels/level_01.txt"))
+    {
+        std::cerr << "Error cargando mapa" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    // Cargar atlas del mapa (coordenadas de sprites)
+    if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json"))
+    {
+        std::cerr << "Error cargando atlas del mapa" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    // Cargar textura de la sprite sheet del mapa
+    const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
+    mapTexture = LoadTexture(mapTexPath.c_str());
+    if (mapTexture == 0)
+    {
+        std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
     // Sprite inicial de prueba
     gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
     gFlipX = 0.0f;
 
-    player = new Player(glm::vec2(0.0f, 0.0f),  glm::vec2(0.2f, 0.2f), 0.01f);
+    // Crear jugador en la posicion de spawn del mapa
+    glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
+    player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.001f);
 }
 
 void Game::processInput() {
     
     if (this->state == GAME_PLAYING) {
         if (this->keys[GLFW_KEY_UP] >= GLFW_PRESS) {
-            player->UpdateSprite(MOVE_UP);
+            player->UpdateSprite(MOVE_UP, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.arriba.0";
             gFlipX = 0.0f;
-            std::cout << "Arriba" << std::endl;
         }
         if (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS) {
-            player->UpdateSprite(MOVE_DOWN);
+            player->UpdateSprite(MOVE_DOWN, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
             gFlipX = 0.0f;
-            std::cout << "Abajo" << std::endl;
         }
         if (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS) {
-            player->UpdateSprite(MOVE_LEFT);
+            player->UpdateSprite(MOVE_LEFT, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
             gFlipX = 1.0f;
-            std::cout << "Izq" << std::endl;
         }
         if (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS) {
-            player->UpdateSprite(MOVE_RIGHT);
+            player->UpdateSprite(MOVE_RIGHT, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
             gFlipX = 0.0f;
-            std::cout << "Der" << std::endl;
         }
     }
 
@@ -499,13 +524,15 @@ void Game::update() {}
 
 void Game::render() {
 
-    //printf("Render \n");
-
     glUseProgram(shader);
 
     // Texture unit 0
     glUniform1i(uniformTexture, 0);
 
+    // === 1. Renderizar mapa (fondo) ===
+    gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
+
+    // === 2. Renderizar jugador (encima del mapa) ===
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -513,7 +540,9 @@ void Game::render() {
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(player->position, 0.0f));
-    model = glm::scale(model, glm::vec3(4.0f, 4.0f, 1.0f));
+
+    // Escalar el sprite del jugador para que ocupe ~1 tile del mapa
+    float halfTile = gameMap->getTileSize() / 2.0f;
 
     // UV del sprite actual (si falla, se pinta la textura completa)
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
@@ -528,11 +557,9 @@ void Game::render() {
         frameH = (it->second.h > 0) ? it->second.h : 32;
     }
 
-    // Escala en NDC basada en píxeles del frame vs tamaño de ventana.
-    // El quad base mide 2 unidades (de -1 a 1). Con escala s, mide 2s.
-    // Queremos que mida (2 * frameW / WIDTH) en NDC => s = frameW / WIDTH.
-    const float sx = (this->WIDTH > 0) ? (static_cast<float>(frameW) / static_cast<float>(this->WIDTH)) : 0.05f;
-    const float sy = (this->HEIGHT > 0) ? (static_cast<float>(frameH) / static_cast<float>(this->HEIGHT)) : 0.05f;
+    // Escala en NDC basada en el tamaño de tile del mapa
+    const float sx = halfTile;
+    const float sy = halfTile;
     model = glm::scale(model, glm::vec3(sx, sy, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
