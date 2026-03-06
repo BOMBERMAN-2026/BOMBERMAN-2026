@@ -29,6 +29,33 @@ void Player::UpdateSprite(Move mov, const GameMap* map) {
     }
 
     float halfTile = map->getTileSize() / 2.0f;
+
+    // Sondas extra en el borde visual del sprite.
+    // Cada dirección usa la misma distancia que canMoveTo para ese eje,
+    // así la distancia de parada es coherente en todas las direcciones.
+    {
+        int r, c;
+        const float edgeUp    = halfTile * 0.45f; // igual que mY de canMoveTo
+        const float edgeDown  = halfTile * 0.95f; // protege borde inferior del mapa
+        const float edgeLR    = halfTile * 0.72f; // igual que mX de canMoveTo
+        if (mov == MOVE_UP) {
+            map->ndcToGrid({newPos.x, newPos.y + edgeUp}, r, c);
+            if (!map->isWalkable(r, c)) return;
+        }
+        if (mov == MOVE_DOWN) {
+            map->ndcToGrid({newPos.x, newPos.y - edgeDown}, r, c);
+            if (!map->isWalkable(r, c)) return;
+        }
+        if (mov == MOVE_LEFT) {
+            map->ndcToGrid({newPos.x - edgeLR, newPos.y}, r, c);
+            if (!map->isWalkable(r, c)) return;
+        }
+        if (mov == MOVE_RIGHT) {
+            map->ndcToGrid({newPos.x + edgeLR, newPos.y}, r, c);
+            if (!map->isWalkable(r, c)) return;
+        }
+    }
+
     if (map->canMoveTo(newPos, halfTile)) {
         this->position = newPos;
     }

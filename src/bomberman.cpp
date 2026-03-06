@@ -490,7 +490,7 @@ void Game::init() {
 
     // Crear jugador en la posicion de spawn del mapa
     glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-    player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.001f);
+    player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.0005f);
 }
 
 void Game::processInput() {
@@ -557,9 +557,10 @@ void Game::render() {
         frameH = (it->second.h > 0) ? it->second.h : 32;
     }
 
-    // Escala en NDC basada en el tamaño de tile del mapa
-    const float sx = halfTile;
-    const float sy = halfTile;
+    // Escala en NDC: el jugador ocupa exactamente 1 tile
+    const float playerScaleFactor = 1.0f;
+    const float sx = halfTile * playerScaleFactor;
+    const float sy = halfTile * playerScaleFactor;
     model = glm::scale(model, glm::vec3(sx, sy, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));

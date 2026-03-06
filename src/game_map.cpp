@@ -105,15 +105,21 @@ void GameMap::ndcToGrid(glm::vec2 ndc, int& row, int& col) const {
 }
 
 bool GameMap::canMoveTo(glm::vec2 center, float halfSize) const {
-    // Reducir ligeramente el hitbox para no quedarse atascado en esquinas
-    float m = halfSize * 0.82f;
-    glm::vec2 corners[4] = {
-        {center.x - m, center.y - m},
-        {center.x + m, center.y - m},
-        {center.x - m, center.y + m},
-        {center.x + m, center.y + m}
+    // Hitbox asimétrico: ancho suficiente para detectar muros laterales,
+    // pero bajo en Y para que las esquinas no entren en la fila de arriba/abajo
+    // cuando el jugador está ligeramente descentrado verticalmente.
+    // Las sondas explícitas de player.cpp cubren los bordes visuales sup/inf.
+    const float mX = halfSize * 0.72f;
+    const float mY = halfSize * 0.45f;
+
+    glm::vec2 probes[] = {
+        {center.x - mX, center.y - mY},
+        {center.x + mX, center.y - mY},
+        {center.x - mX, center.y + mY},
+        {center.x + mX, center.y + mY}
     };
-    for (const auto& c : corners) {
+
+    for (const auto& c : probes) {
         int r, cl;
         ndcToGrid(c, r, cl);
         if (!isWalkable(r, cl)) return false;
