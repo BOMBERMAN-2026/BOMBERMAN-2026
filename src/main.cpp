@@ -26,14 +26,16 @@ int main() {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 
-    // Screen dimensions
-    int resolutionHeight = glfwGetVideoMode(glfwGetPrimaryMonitor())->height;
+    // Screen dimensions (Fullscreen)
+    GLFWmonitor* primaryMonitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(primaryMonitor);
+    
+    // Configurar GLFW para usar la resolución actual del monitor en fullscreen
+    const int SCREEN_WIDTH = mode->width;
+    const int SCREEN_HEIGHT = mode->height;
 
-	const int SCREEN_HEIGHT = 0.9 * resolutionHeight;
-    //const int SCREEN_HEIGHT = 300;
-    const int SCREEN_WIDTH = SCREEN_HEIGHT;
-
-    GLFWwindow* mainWindow = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Bomberman", nullptr, nullptr);
+    // Crear la ventana en modo fullscreen pasando el monitor
+    GLFWwindow* mainWindow = glfwCreateWindow(SCREEN_WIDTH, SCREEN_HEIGHT, "Bomberman", primaryMonitor, nullptr);
     if (!mainWindow)
     {
         printf("GLFW window creation failed!\n");

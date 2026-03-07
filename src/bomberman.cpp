@@ -21,7 +21,7 @@ GLuint mapTexture;
 /**************************************************** Solo para que funcione de primeras ****************************************/
 
 // Global variables for OpenGL
-GLuint VAO, VBO, EBO, shader, uniformModel, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX;
+GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX;
 
 GLuint texture;
 
@@ -32,11 +32,12 @@ layout (location = 0) in vec3 pos;
 layout (location = 1) in vec2 texCoord;
 out vec2 TexCoord;
 uniform mat4 model;
+uniform mat4 projection;
 uniform vec4 uvRect; // (u0, v0, u1, v1)
 uniform float flipX; // 0.0 normal, 1.0 mirror horizontally
 void main()
 {
-    gl_Position = model * vec4(pos, 1.0);
+    gl_Position = projection * model * vec4(pos, 1.0);
     float tx = mix(texCoord.x, 1.0 - texCoord.x, flipX);
     TexCoord = vec2(
         mix(uvRect.x, uvRect.z, tx),
@@ -148,6 +149,7 @@ void CompileShaders()
     }
 
     uniformModel = glGetUniformLocation(shader, "model");
+    uniformProjection = glGetUniformLocation(shader, "projection");
     uniformTexture = glGetUniformLocation(shader, "ourTexture");
     uniformTintColor = glGetUniformLocation(shader, "tintColor");
     uniformUvRect = glGetUniformLocation(shader, "uvRect");
@@ -475,6 +477,10 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
+    // Calcular metricas del mapa (ahora que tenemos cols, rows y aspectRatio)
+    float aspectRatio = (float)WIDTH / (float)HEIGHT;
+    gameMap->calculateTileMetrics(aspectRatio);
+
     // Cargar textura de la sprite sheet del mapa
     const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
     mapTexture = LoadTexture(mapTexPath.c_str());
@@ -534,6 +540,11 @@ void Game::update() {
 void Game::render() {
 
     glUseProgram(shader);
+
+    // Calcular proyeccion ortografica para mantener el aspect ratio en NDC original
+    float aspect = (float)WIDTH / (float)HEIGHT;
+    glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
     // Texture unit 0
     glUniform1i(uniformTexture, 0);

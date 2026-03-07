@@ -74,10 +74,7 @@ bool GameMap::loadFromFile(const std::string& filePath) {
         return false;
     }
 
-    calculateTileMetrics();
-
-    std::cout << "GameMap: cargado " << cols << "x" << rows
-              << " (tileSize=" << tileSize << ")" << std::endl;
+    std::cout << "GameMap: cargado " << cols << "x" << rows << std::endl;
     return true;
 }
 
@@ -112,26 +109,47 @@ void GameMap::update(float deltaTime) {
     animator.update(deltaTime);
 }
 
-void GameMap::calculateTileMetrics() {
-    float sizeByWidth  = 2.0f / (float)cols;
-    float sizeByHeight = 2.0f / (float)rows;
+void GameMap::calculateTileMetrics(float aspectRatio) {
+    currentAspectRatio = aspectRatio;
+    // La pantalla OpenGL ortográfica va desde -aspectRatio hasta aspectRatio en X
+    // y de -1.0 a 1.0 en Y.
+    float screenWidthInOrtho = 2.0f * aspectRatio;
+    float screenHeightInOrtho = 2.0f;
+
+    float sizeByWidth  = screenWidthInOrtho / (float)cols;
+    float sizeByHeight = screenHeightInOrtho / (float)rows;
+    // Escoger el mínimo para que los tiles sean siempre cuadrados perfectos y entren completos
     tileSize = std::min(sizeByWidth, sizeByHeight);
 
     float mapWidth  = cols * tileSize;
     float mapHeight = rows * tileSize;
-    offsetX = (2.0f - mapWidth)  / 2.0f;
-    offsetY = (2.0f - mapHeight) / 2.0f;
+    
+    // El mapa siempre lo centramos en medio de la pantalla ortográfica
+    offsetX = (screenWidthInOrtho - mapWidth)  / 2.0f;
+    offsetY = (screenHeightInOrtho - mapHeight) / 2.0f;
 }
 
 glm::vec2 GameMap::gridToNDC(int row, int col) const {
-    float x = -1.0f + offsetX + (col + 0.5f) * tileSize;
-    float y =  1.0f - offsetY - (row + 0.5f) * tileSize;
+    // x va desde -screenWidthInOrtho/2 hasta +screenWidthInOrtho/2
+    // Sabiendo que offsetX ya calcula el margen desde -screenWidthInOrtho/2...
+    // Necesitamos ajustar la base. Mejor recalculamos usando el tamaño de pantalla ortográfico
+    // pero lo más fácil es que gridToNDC empiece en el punto superior izquierdo:
+    
+    // Asumimos un espacio ortográfico donde Left = -aspectRatio y Top = 1.0f
+    float left = -currentAspectRatio;
+    float top = 1.0f;
+    
+    float x = left + offsetX + (col + 0.5f) * tileSize;
+    float y = top - offsetY - (row + 0.5f) * tileSize;
     return glm::vec2(x, y);
 }
 
 void GameMap::ndcToGrid(glm::vec2 ndc, int& row, int& col) const {
-    col = (int)std::floor((ndc.x + 1.0f - offsetX) / tileSize);
-    row = (int)std::floor((1.0f - offsetY - ndc.y) / tileSize);
+    float left = -currentAspectRatio;
+    float top = 1.0f;
+    
+    col = (int)std::floor((ndc.x - left - offsetX) / tileSize);
+    row = (int)std::floor((top - offsetY - ndc.y) / tileSize);
 }
 
 bool GameMap::canMoveTo(glm::vec2 center, float halfSize) const {

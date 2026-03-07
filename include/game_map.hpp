@@ -70,6 +70,8 @@ public:
 
     float getTileSize() const { return tileSize; }
 
+    void calculateTileMetrics(float aspectRatio);
+
 private:
     std::vector<std::vector<Block>> grid;
     int rows = 0;
@@ -78,6 +80,7 @@ private:
     float tileSize = 0.0f;
     float offsetX  = 0.0f;
     float offsetY  = 0.0f;
+    float currentAspectRatio = 1.0f;
 
     SpriteAtlas atlas;
     bool atlasLoaded = false;
@@ -85,8 +88,6 @@ private:
     TileAnimator animator;
 
     int destroyedFloorId = 5; // sprite a mostrar cuando se destruye
-
-    void calculateTileMetrics();
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);
