@@ -11,7 +11,9 @@ struct SpriteFrame {
     int y = 0;
     int w = 0;
     int h = 0;
-    bool walkable = true; // leido del campo "walkable" del JSON
+    bool walkable = true;        // leido del campo "walkable" del JSON
+    std::string type = "floor";  // leido del campo "type" del JSON (floor, barrier, indestructible, destructible)
+    std::string align = "center"; // leido del campo "align" del JSON (center, left, right)
 };
 
 struct SpriteAtlas {
@@ -19,6 +21,10 @@ struct SpriteAtlas {
     int imageWidth = 0;
     int imageHeight = 0;
     std::unordered_map<std::string, SpriteFrame> sprites;
+
+    // Animacion de tiles (opcional)
+    float animInterval = 0.0f; // 0 = sin animacion
+    std::unordered_map<int, int> animSwaps; // ID original -> ID alternativo
 };
 
 // Intenta resolver rutas cuando el exe se ejecuta desde build/.

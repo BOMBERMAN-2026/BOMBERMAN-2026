@@ -4,13 +4,32 @@
 #include <GL/glew.h>
 #include <glm/glm.hpp>
 #include "sprite_atlas.hpp"
+#include "tile_animator.hpp"
 
 #include <string>
 #include <vector>
 
-struct Tile {
+enum class BlockType {
+    FLOOR,          // Suelo caminable
+    BARRIER,        // Borde del mapa, nunca se destruye
+    INDESTRUCTIBLE, // Muro fijo interior, bloquea pero no se rompe
+    DESTRUCTIBLE    // Ladrillo que se puede destruir con bombas
+};
+
+struct Block {
     int spriteId;
-    bool destroyed; // for destructible tiles that have been blown up
+    BlockType type;
+    bool destroyed  = false; // Solo relevante si type == DESTRUCTIBLE
+    bool hasPowerUp = false; // Si al destruirse revela un power-up
+
+    bool isWalkable() const {
+        if (destroyed) return true; // destructible ya destruido → suelo
+        return (type == BlockType::FLOOR);
+    }
+
+    bool isDestructible() const {
+        return (type == BlockType::DESTRUCTIBLE && !destroyed);
+    }
 };
 
 class GameMap {
@@ -46,10 +65,13 @@ public:
     glm::vec2 getSpawnPosition(int playerIndex) const;
     glm::vec2 gridToNDC(int row, int col) const;
 
+    // Modifica el estado interno de la animacion de tiles del map (si la hay)
+    void update(float deltaTime);
+
     float getTileSize() const { return tileSize; }
 
 private:
-    std::vector<std::vector<Tile>> grid;
+    std::vector<std::vector<Block>> grid;
     int rows = 0;
     int cols = 0;
 
@@ -59,10 +81,15 @@ private:
 
     SpriteAtlas atlas;
     bool atlasLoaded = false;
+    
+    TileAnimator animator;
 
     int destroyedFloorId = 5; // sprite a mostrar cuando se destruye
 
     void calculateTileMetrics();
+
+    // Convierte el string "type" del atlas JSON a BlockType
+    static BlockType blockTypeFromString(const std::string& typeStr);
 };
 
 #endif // GAME_MAP_HPP

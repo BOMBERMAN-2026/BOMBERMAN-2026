@@ -6,68 +6,197 @@
   },
   "sprites": {
     "0": {
-      "x": 466,
-      "y": 286,
+      "x": 469,
+      "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul",
-      "walkable": false
+      "nombre": "borde_amarillo_izquierda",
+      "walkable": false,
+      "type": "barrier"
     },
     "1": {
-      "x": 550,
-      "y": 286,
+      "x": 554,
+      "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_amarillo",
-      "walkable": false
+      "nombre": "borde_azul_izquierda",
+      "walkable": false,
+      "type": "barrier"
     },
     "2": {
-      "x": 633,
-      "y": 286,
+      "x": 631,
+      "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "muro_indestructible_var",
-      "walkable": true
+      "nombre": "borde_azul_arriba",
+      "walkable": false,
+      "type": "barrier"
     },
     "3": {
+      "x": 469,
+      "y": 290,
+      "w": 48,
+      "h": 48,
+      "nombre": "borde_azul_esquina_izquierda_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "4": {
+      "x": 554,
+      "y": 288,
+      "w": 48,
+      "h": 48,
+      "nombre": "borde_amarillo_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "5": {
+      "x": 710,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "borde_azul_esquina_derecha_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "6": {
+      "x": 633,
+      "y": 287,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_esquina_arriba_izquierda",
+      "walkable": true,
+      "type": "floor"
+    },
+    "7": {
       "x": 710,
       "y": 286,
       "w": 48,
       "h": 48,
-      "nombre": "muro_indestructible",
-      "walkable": true
+      "nombre": "suelo_sombra_arriba",
+      "walkable": true,
+      "type": "floor"
     },
-    "4": {
+    "8": {
       "x": 468,
       "y": 360,
       "w": 48,
       "h": 48,
-      "nombre": "muro_destructible",
-      "walkable": false
+      "nombre": "muro_indestructible",
+      "walkable": false,
+      "type": "indestructible"
     },
-    "5": {
+    "9": {
       "x": 555,
       "y": 360,
       "w": 48,
       "h": 48,
-      "nombre": "suelo",
-      "walkable": true
+      "nombre": "suelo_sombra_izquierda",
+      "walkable": true,
+      "type": "floor"
     },
-    "6": {
+    "10": {
       "x": 632,
       "y": 360,
       "w": 48,
       "h": 48,
-      "nombre": "suelo_var1",
-      "walkable": true
+      "nombre": "suelo_sombra_enmedio_del_mapa",
+      "walkable": true,
+      "type": "floor"
     },
-    "7": {
+    "11": {
       "x": 710,
       "y": 360,
       "w": 48,
       "h": 48,
-      "nombre": "suelo_var2",
-      "walkable": true
+      "nombre": "suelo_sombra_enmedio_del_mapa_arriba",
+      "walkable": true,
+      "type": "floor"
+    },
+    "12": {
+      "x": 439,
+      "y": 222,
+      "w": 21,
+      "h": 48,
+      "nombre": "muroexteriorIzq",
+      "walkable": false,
+      "type": "barrier",
+      "align": "right"
+    },
+    "13": {
+      "x": 409,
+      "y": 222,
+      "w": 21,
+      "h": 48,
+      "nombre": "muroexteriorDer",
+      "walkable": false,
+      "type": "barrier",
+      "align": "left"
+    },
+    "14": {
+      "x": 554,
+      "y": 168,
+      "w": 48,
+      "h": 48,
+      "nombre": "bombilla_azul_cambia_arriba_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "15": {
+      "x": 631,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bombilla_azul_cambia_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "16": {
+      "x": 766,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bombilla_azul_cambia_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "17": {
+      "x": 818,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bombilla_azul_cambia_abajo_esquina_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "18": {
+      "x": 710,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bombilla_amarilla_cambia_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "19": {
+      "x": 766,
+      "y": 223,
+      "w": 48,
+      "h": 48,
+      "nombre": "bombilla_amarilla_cambia_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    }
+  },
+  "animations": {
+    "interval": 0.15,
+    "swaps": {
+      "3": 14,
+      "4": 18,
+      "2": 15,
+      "0": 19,
+      "1": 16,
+      "5": 17
     }
   }
 }

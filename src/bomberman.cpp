@@ -520,7 +520,16 @@ void Game::processInput() {
 
 }
 
-void Game::update() {}
+void Game::update() {
+    static double lastTime = glfwGetTime();
+    double currentTime = glfwGetTime();
+    float deltaTime = static_cast<float>(currentTime - lastTime);
+    lastTime = currentTime;
+
+    if (gameMap) {
+        gameMap->update(deltaTime);
+    }
+}
 
 void Game::render() {
 

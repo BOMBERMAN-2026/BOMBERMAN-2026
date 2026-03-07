@@ -74,7 +74,7 @@ int main() {
         // Deberia estar dentro de un bucle de ticks?
         bomberman->processInput();
         // Deberia estar dentro de un bucle de ticks?
-        //bomberman->update();
+        bomberman->update();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);

@@ -216,10 +216,101 @@ bool loadSpriteAtlasMinimal(const std::string& jsonPath, SpriteAtlas& out)
                         frame.walkable = (contents.compare(vpos, 4, "true") == 0);
                     }
                 }
+
+                // Leer campo "type" ("floor" si no existe)
+                std::string tKey = "\"type\"";
+                size_t tpos = contents.find(tKey, frameOpen);
+                if (tpos != std::string::npos && tpos < frameClose) {
+                    size_t cpos = contents.find(':', tpos);
+                    if (cpos != std::string::npos && cpos < frameClose) {
+                        size_t vpos = cpos + 1;
+                        if (parseQuotedString(contents, vpos, frame.type)) {
+                            // OK
+                        }
+                    }
+                }
+                // Leer campo "align" ("center" si no existe)
+                std::string aKey = "\"align\"";
+                size_t apos = contents.find(aKey, frameOpen);
+                if (apos != std::string::npos && apos < frameClose) {
+                    size_t cpos = contents.find(':', apos);
+                    if (cpos != std::string::npos && cpos < frameClose) {
+                        size_t vpos = cpos + 1;
+                        if (parseQuotedString(contents, vpos, frame.align)) {
+                            // OK
+                        }
+                    }
+                }
+
                 out.sprites[spriteName] = frame;
             }
 
             i = frameClose + 1;
+        }
+    }
+
+    // animations (opcional)
+    {
+        size_t pos = contents.find("\"animations\"");
+        if (pos != std::string::npos) {
+            size_t open = contents.find('{', pos);
+            if (open != std::string::npos) {
+                size_t close = findMatchingBrace(contents, open);
+                if (close != std::string::npos) {
+                    
+                    // Parse interval (float)
+                    std::string iKey = "\"interval\"";
+                    size_t ipos = contents.find(iKey, open);
+                    if (ipos != std::string::npos && ipos < close) {
+                        size_t cpos = contents.find(':', ipos);
+                        if (cpos != std::string::npos && cpos < close) {
+                            size_t vpos = cpos + 1;
+                            skipWs(contents, vpos);
+                            // Simple float string to float
+                            std::string fStr;
+                            while(vpos < close && (std::isdigit(contents[vpos]) || contents[vpos] == '.' || contents[vpos] == '-')) {
+                                fStr += contents[vpos];
+                                vpos++;
+                            }
+                            if (!fStr.empty()) {
+                                out.animInterval = std::stof(fStr);
+                            }
+                        }
+                    }
+
+                    // Parse swaps
+                    size_t swapsPos = contents.find("\"swaps\"", open);
+                    if (swapsPos != std::string::npos && swapsPos < close) {
+                        size_t sOpen = contents.find('{', swapsPos);
+                        if (sOpen != std::string::npos && sOpen < close) {
+                            size_t sClose = findMatchingBrace(contents, sOpen);
+                            if (sClose != std::string::npos && sClose <= close) {
+                                size_t si = sOpen + 1;
+                                while (si < sClose) {
+                                    skipWs(contents, si);
+                                    if (si < sClose && contents[si] == ',') { si++; continue; }
+                                    if (si >= sClose || contents[si] == '}') break;
+
+                                    std::string keyStr;
+                                    if (!parseQuotedString(contents, si, keyStr)) break;
+                                    
+                                    skipWs(contents, si);
+                                    if (si >= sClose || contents[si] != ':') break;
+                                    si++;
+                                    
+                                    int valInt;
+                                    if (!parseIntValue(contents, si, valInt)) break;
+
+                                    try {
+                                        int keyInt = std::stoi(keyStr);
+                                        out.animSwaps[keyInt] = valInt;
+                                    } catch (...) {}
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

@@ -13,6 +13,13 @@ GameMap::GameMap() {}
 
 GameMap::~GameMap() {}
 
+BlockType GameMap::blockTypeFromString(const std::string& typeStr) {
+    if (typeStr == "barrier")        return BlockType::BARRIER;
+    if (typeStr == "indestructible") return BlockType::INDESTRUCTIBLE;
+    if (typeStr == "destructible")   return BlockType::DESTRUCTIBLE;
+    return BlockType::FLOOR; // default
+}
+
 bool GameMap::loadFromFile(const std::string& filePath) {
     std::string resolved = resolveAssetPath(filePath);
     std::ifstream file(resolved);
@@ -30,14 +37,16 @@ bool GameMap::loadFromFile(const std::string& filePath) {
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
 
-        std::vector<Tile> row;
+        std::vector<Block> row;
         std::istringstream iss(line);
         int id;
         while (iss >> id) {
-            Tile t;
-            t.spriteId = id;
-            t.destroyed = false;
-            row.push_back(t);
+            Block b;
+            b.spriteId  = id;
+            b.type      = BlockType::FLOOR; // se asignara bien tras loadAtlas
+            b.destroyed = false;
+            b.hasPowerUp = false;
+            row.push_back(b);
         }
         if ((int)row.size() > maxCols)
             maxCols = (int)row.size();
@@ -48,13 +57,15 @@ bool GameMap::loadFromFile(const std::string& filePath) {
     rows = (int)grid.size();
     cols = maxCols;
 
-    // Rellenar filas cortas con suelo (ID 5)
+    // Rellenar filas cortas con suelo
     for (auto& row : grid) {
         while ((int)row.size() < cols) {
-            Tile t;
-            t.spriteId = destroyedFloorId;
-            t.destroyed = false;
-            row.push_back(t);
+            Block b;
+            b.spriteId  = destroyedFloorId;
+            b.type      = BlockType::FLOOR;
+            b.destroyed = false;
+            b.hasPowerUp = false;
+            row.push_back(b);
         }
     }
 
@@ -77,9 +88,28 @@ bool GameMap::loadAtlas(const std::string& jsonPath) {
         return false;
     }
     atlasLoaded = true;
+    
+    // Iniciar sistema de animacion de tiles (si el atlas lo define)
+    animator.setup(atlas);
+
+    // Ahora que tenemos el atlas, asignar BlockType a cada celda del grid
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            Block& b = grid[r][c];
+            auto it = atlas.sprites.find(std::to_string(b.spriteId));
+            if (it != atlas.sprites.end()) {
+                b.type = blockTypeFromString(it->second.type);
+            }
+        }
+    }
+
     std::cout << "GameMap: atlas cargado con " << atlas.sprites.size()
               << " sprites" << std::endl;
     return true;
+}
+
+void GameMap::update(float deltaTime) {
+    animator.update(deltaTime);
 }
 
 void GameMap::calculateTileMetrics() {
@@ -130,48 +160,26 @@ bool GameMap::canMoveTo(glm::vec2 center, float halfSize) const {
 int GameMap::getSpriteId(int row, int col) const {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return 0; // fuera de limites = borde
-    return grid[row][col].spriteId;
+        
+    int rawId = grid[row][col].spriteId;
+    return animator.getDisplayId(rawId);
 }
 
 bool GameMap::isWalkable(int row, int col) const {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return false;
-    const Tile& t = grid[row][col];
-    // Si el atlas esta cargado, usamos el campo walkable del JSON
-    if (atlasLoaded) {
-        // Tile destructible destruido -> siempre transitable
-        if (t.destroyed) return true;
-        auto it = atlas.sprites.find(std::to_string(t.spriteId));
-        if (it != atlas.sprites.end())
-            return it->second.walkable;
-        return false; // ID desconocido = solido
-    }
-    // Fallback sin atlas: solo IDs 5,6,7 son suelo
-    if (t.destroyed) return true;
-    return (t.spriteId >= 5);
+    return grid[row][col].isWalkable();
 }
 
 bool GameMap::destroyTile(int row, int col) {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return false;
-    Tile& t = grid[row][col];
-    if (t.destroyed) return false;
-    // Un tile es destructible si en el atlas walkable=false pero puede destruirse
-    // Por convencion: el tile 4 del nivel original es destructible
-    // Usamos el campo walkable: si es solido y no es borde (IDs 0,1) ni muro fijo (IDs 2,3) -> destructible
-    if (atlasLoaded) {
-        auto it = atlas.sprites.find(std::to_string(t.spriteId));
-        if (it != atlas.sprites.end() && !it->second.walkable) {
-            t.destroyed = true;
-            return true;
-        }
+    Block& b = grid[row][col];
+    if (!b.isDestructible())
         return false;
-    }
-    if (!isWalkable(row, col)) {
-        t.destroyed = true;
-        return true;
-    }
-    return false;
+    b.destroyed = true;
+    // Si tenia un power-up, el sistema de juego deberia spawnearlo aqui
+    return true;
 }
 
 glm::vec2 GameMap::getSpawnPosition(int playerIndex) const {
@@ -206,25 +214,54 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
 
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
-            const Tile& tile = grid[r][c];
+            const Block& block = grid[r][c];
 
-            // Si el tile fue destruido, pintar suelo (primer sprite walkable del atlas)
-            int displayId = tile.spriteId;
-            if (tile.destroyed)
+            // Si el bloque fue destruido, pintar suelo
+            int originalId = block.spriteId;
+            int displayId = animator.getDisplayId(originalId);
+            
+            if (block.destroyed)
                 displayId = destroyedFloorId;
 
             // Obtener UV rect del atlas
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            float scaleX = scale;
+            float scaleY = scale;
+
             if (atlasLoaded) {
                 std::string idStr = std::to_string(displayId);
                 getUvRectForSprite(atlas, idStr, uvRect);
+
+                // Ajustar escala segun el tamano real del sprite en el atlas
+                auto it = atlas.sprites.find(idStr);
+                if (it != atlas.sprites.end()) {
+                    const SpriteFrame& frame = it->second;
+                    // Usar la dimension mayor como referencia (normalmente 48)
+                    float maxDim = (float)std::max(frame.w, frame.h);
+                    scaleX = ((float)frame.w / maxDim) * scale;
+                    scaleY = ((float)frame.h / maxDim) * scale;
+                }
             }
 
             glm::vec2 center = gridToNDC(r, c);
 
+            // Ajustar posicion segun el campo "align" del atlas
+            if (atlasLoaded) {
+                std::string idStr = std::to_string(displayId);
+                auto it = atlas.sprites.find(idStr);
+                if (it != atlas.sprites.end()) {
+                    const std::string& align = it->second.align;
+                    if (align == "right") {
+                        center.x += (scale - scaleX);
+                    } else if (align == "left") {
+                        center.x -= (scale - scaleX);
+                    }
+                }
+            }
+
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(center, 0.0f));
-            model = glm::scale(model, glm::vec3(scale, scale, 1.0f));
+            model = glm::scale(model, glm::vec3(scaleX, scaleY, 1.0f));
 
             glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
             glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
