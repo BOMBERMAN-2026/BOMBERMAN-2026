@@ -1,592 +1,117 @@
 {
   "ruta_imagen": "resources/sprites/BombermanArcade-player_alpha.png",
-  "tamano_imagen": {
-    "ancho": 381,
-    "alto": 912
-  },
+  "tamano_imagen": {"ancho": 381, "alto": 912},
   "color_transparente": {
-    "primario": {
-      "r": 255,
-      "g": 0,
-      "b": 255
-    },
-    "secundario": {
-      "r": 0,
-      "g": 255,
-      "b": 0
-    },
+    "primario": {"r": 255, "g": 0, "b": 255}, 
+    "secundario": {"r": 0, "g": 255, "b": 0}, 
     "tolerancia": 10
   },
   "sprites": {
-    "jugadorblanco.quieto.abajo.0": {
-      "x": 36,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.camina.abajo.0": {
-      "x": 70,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.camina.abajo.1": {
-      "x": 104,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.quieto.derecha.0": {
-      "x": 138,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.camina.derecha.0": {
-      "x": 172,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.camina.derecha.1": {
-      "x": 206,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.quieto.arriba.0": {
-      "x": 240,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.camina.arriba.0": {
-      "x": 274,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.camina.arriba.1": {
-      "x": 308,
-      "y": 2,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.muerto.normal.0": {
-      "x": 36,
-      "y": 86,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.muerto.normal.1": {
-      "x": 70,
-      "y": 70,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorblanco.muerto.normal.2": {
-      "x": 104,
-      "y": 70,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorblanco.muerto.normal.3": {
-      "x": 138,
-      "y": 70,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorblanco.muerto.normal.4": {
-      "x": 172,
-      "y": 86,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.muerto.normal.5": {
-      "x": 206,
-      "y": 86,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.muerto.normal.6": {
-      "x": 240,
-      "y": 86,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.muerto.normal.7": {
-      "x": 274,
-      "y": 86,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.victoria.recto.0": {
-      "x": 2,
-      "y": 170,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.victoria.dedos.0": {
-      "x": 36,
-      "y": 154,
-      "w": 48,
-      "h": 48
-    },
-    "jugadorblanco.victoria.delado.0": {
-      "x": 86,
-      "y": 170,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorblanco.victoria.bocabajo.0": {
-      "x": 120,
-      "y": 170,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.quieto.abajo.0": {
-      "x": 36,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.camina.abajo.0": {
-      "x": 70,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.camina.abajo.1": {
-      "x": 104,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.quieto.derecha.0": {
-      "x": 138,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.camina.derecha.0": {
-      "x": 172,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.camina.derecha.1": {
-      "x": 206,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.quieto.arriba.0": {
-      "x": 240,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.camina.arriba.0": {
-      "x": 274,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.camina.arriba.1": {
-      "x": 308,
-      "y": 204,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.muerto.normal.0": {
-      "x": 36,
-      "y": 288,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.muerto.normal.1": {
-      "x": 70,
-      "y": 272,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorrojo.muerto.normal.2": {
-      "x": 104,
-      "y": 272,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorrojo.muerto.normal.3": {
-      "x": 138,
-      "y": 272,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorrojo.muerto.normal.4": {
-      "x": 172,
-      "y": 288,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.muerto.normal.5": {
-      "x": 206,
-      "y": 288,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.muerto.normal.6": {
-      "x": 240,
-      "y": 288,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.muerto.normal.7": {
-      "x": 274,
-      "y": 288,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.victoria.recto.0": {
-      "x": 154,
-      "y": 170,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.victoria.dedos.0": {
-      "x": 188,
-      "y": 154,
-      "w": 48,
-      "h": 48
-    },
-    "jugadorrojo.victoria.delado.0": {
-      "x": 238,
-      "y": 170,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorrojo.victoria.bocabajo.0": {
-      "x": 272,
-      "y": 170,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.quieto.abajo.0": {
-      "x": 36,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.camina.abajo.0": {
-      "x": 70,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.camina.abajo.1": {
-      "x": 104,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.quieto.derecha.0": {
-      "x": 138,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.camina.derecha.0": {
-      "x": 172,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.camina.derecha.1": {
-      "x": 206,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.quieto.arriba.0": {
-      "x": 240,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.camina.arriba.0": {
-      "x": 274,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.camina.arriba.1": {
-      "x": 308,
-      "y": 356,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.muerto.normal.0": {
-      "x": 36,
-      "y": 440,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.muerto.normal.1": {
-      "x": 70,
-      "y": 424,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorazul.muerto.normal.2": {
-      "x": 104,
-      "y": 424,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorazul.muerto.normal.3": {
-      "x": 138,
-      "y": 424,
-      "w": 32,
-      "h": 48
-    },
-    "jugadorazul.muerto.normal.4": {
-      "x": 172,
-      "y": 440,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.muerto.normal.5": {
-      "x": 206,
-      "y": 440,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.muerto.normal.6": {
-      "x": 240,
-      "y": 440,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.muerto.normal.7": {
-      "x": 274,
-      "y": 440,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.victoria.recto.0": {
-      "x": 2,
-      "y": 524,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.victoria.dedos.0": {
-      "x": 36,
-      "y": 508,
-      "w": 48,
-      "h": 48
-    },
-    "jugadorazul.victoria.delado.0": {
-      "x": 86,
-      "y": 524,
-      "w": 32,
-      "h": 32
-    },
-    "jugadorazul.victoria.bocabajo.0": {
-      "x": 120,
-      "y": 524,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.quieto.abajo.0": {
-      "x": 36,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.camina.abajo.0": {
-      "x": 70,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.camina.abajo.1": {
-      "x": 104,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.quieto.derecha.0": {
-      "x": 138,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.camina.derecha.0": {
-      "x": 172,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.camina.derecha.1": {
-      "x": 206,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.quieto.arriba.0": {
-      "x": 240,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.camina.arriba.0": {
-      "x": 274,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.camina.arriba.1": {
-      "x": 308,
-      "y": 558,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.muerto.normal.0": {
-      "x": 36,
-      "y": 642,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.muerto.normal.1": {
-      "x": 70,
-      "y": 626,
-      "w": 32,
-      "h": 48
-    },
-    "jugadoramarillo.muerto.normal.2": {
-      "x": 104,
-      "y": 626,
-      "w": 32,
-      "h": 48
-    },
-    "jugadoramarillo.muerto.normal.3": {
-      "x": 138,
-      "y": 626,
-      "w": 32,
-      "h": 48
-    },
-    "jugadoramarillo.muerto.normal.4": {
-      "x": 172,
-      "y": 642,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.muerto.normal.5": {
-      "x": 206,
-      "y": 642,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.muerto.normal.6": {
-      "x": 240,
-      "y": 642,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.muerto.normal.7": {
-      "x": 274,
-      "y": 642,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.victoria.recto.0": {
-      "x": 154,
-      "y": 524,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.victoria.dedos.0": {
-      "x": 188,
-      "y": 508,
-      "w": 48,
-      "h": 48
-    },
-    "jugadoramarillo.victoria.delado.0": {
-      "x": 238,
-      "y": 524,
-      "w": 32,
-      "h": 32
-    },
-    "jugadoramarillo.victoria.bocabajo.0": {
-      "x": 272,
-      "y": 524,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.0": {
-      "x": 2,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.1": {
-      "x": 36,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.2": {
-      "x": 70,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.3": {
-      "x": 104,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.4": {
-      "x": 138,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.5": {
-      "x": 172,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.6": {
-      "x": 206,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.7": {
-      "x": 240,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.8": {
-      "x": 274,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.9": {
-      "x": 308,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    },
-    "jugador.muerto.quemado.10": {
-      "x": 342,
-      "y": 120,
-      "w": 32,
-      "h": 32
-    }
+    "jugadorblanco.quieto.abajo.0": {"x": 36, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.camina.abajo.0": {"x": 70, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.camina.abajo.1": {"x": 104, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.quieto.derecha.0": {"x": 138, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.camina.derecha.0": {"x": 172, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.camina.derecha.1": {"x": 206, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.quieto.arriba.0": {"x": 240, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.camina.arriba.0": {"x": 274, "y": 2, "w": 32, "h": 32},
+    "jugadorblanco.camina.arriba.1": {"x": 308, "y": 2, "w": 32, "h": 32},
+
+    "jugadorblanco.muerto.normal.0": {"x": 36, "y": 86, "w": 32, "h": 32},
+    "jugadorblanco.muerto.normal.1": {"x": 70, "y": 70, "w": 32, "h": 48},
+    "jugadorblanco.muerto.normal.2": {"x": 104, "y": 70, "w": 32, "h": 48},
+    "jugadorblanco.muerto.normal.3": {"x": 138, "y": 70, "w": 32, "h": 48},
+    "jugadorblanco.muerto.normal.4": {"x": 172, "y": 86, "w": 32, "h": 32},
+    "jugadorblanco.muerto.normal.5": {"x": 206, "y": 86, "w": 32, "h": 32},
+    "jugadorblanco.muerto.normal.6": {"x": 240, "y": 86, "w": 32, "h": 32},
+    "jugadorblanco.muerto.normal.7": {"x": 274, "y": 86, "w": 32, "h": 32},
+
+    "jugadorblanco.victoria.recto.0": {"x": 2, "y": 170, "w": 32, "h": 32},
+    "jugadorblanco.victoria.dedos.0": {"x": 36, "y": 154, "w": 48, "h": 48},
+    "jugadorblanco.victoria.delado.0": {"x": 86, "y": 170, "w": 32, "h": 32},
+    "jugadorblanco.victoria.bocabajo.0": {"x": 120, "y": 170, "w": 32, "h": 32},
+
+    "jugadorrojo.quieto.abajo.0": {"x": 36, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.camina.abajo.0": {"x": 70, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.camina.abajo.1": {"x": 104, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.quieto.derecha.0": {"x": 138, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.camina.derecha.0": {"x": 172, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.camina.derecha.1": {"x": 206, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.quieto.arriba.0": {"x": 240, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.camina.arriba.0": {"x": 274, "y": 204, "w": 32, "h": 32},
+    "jugadorrojo.camina.arriba.1": {"x": 308, "y": 204, "w": 32, "h": 32},
+
+    "jugadorrojo.muerto.normal.0": {"x": 36, "y": 288, "w": 32, "h": 32},
+    "jugadorrojo.muerto.normal.1": {"x": 70, "y": 272, "w": 32, "h": 48},
+    "jugadorrojo.muerto.normal.2": {"x": 104, "y": 272, "w": 32, "h": 48},
+    "jugadorrojo.muerto.normal.3": {"x": 138, "y": 272, "w": 32, "h": 48},
+    "jugadorrojo.muerto.normal.4": {"x": 172, "y": 288, "w": 32, "h": 32},
+    "jugadorrojo.muerto.normal.5": {"x": 206, "y": 288, "w": 32, "h": 32},
+    "jugadorrojo.muerto.normal.6": {"x": 240, "y": 288, "w": 32, "h": 32},
+    "jugadorrojo.muerto.normal.7": {"x": 274, "y": 288, "w": 32, "h": 32},
+
+    "jugadorrojo.victoria.recto.0": {"x": 154, "y": 170, "w": 32, "h": 32},
+    "jugadorrojo.victoria.dedos.0": {"x": 188, "y": 154, "w": 48, "h": 48},
+    "jugadorrojo.victoria.delado.0": {"x": 238, "y": 170, "w": 32, "h": 32},
+    "jugadorrojo.victoria.bocabajo.0": {"x": 272, "y": 170, "w": 32, "h": 32},
+
+    "jugadorazul.quieto.abajo.0": {"x": 36, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.camina.abajo.0": {"x": 70, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.camina.abajo.1": {"x": 104, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.quieto.derecha.0": {"x": 138, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.camina.derecha.0": {"x": 172, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.camina.derecha.1": {"x": 206, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.quieto.arriba.0": {"x": 240, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.camina.arriba.0": {"x": 274, "y": 356, "w": 32, "h": 32},
+    "jugadorazul.camina.arriba.1": {"x": 308, "y": 356, "w": 32, "h": 32},
+
+    "jugadorazul.muerto.normal.0": {"x": 36, "y": 440, "w": 32, "h": 32},
+    "jugadorazul.muerto.normal.1": {"x": 70, "y": 424, "w": 32, "h": 48},
+    "jugadorazul.muerto.normal.2": {"x": 104, "y": 424, "w": 32, "h": 48},
+    "jugadorazul.muerto.normal.3": {"x": 138, "y": 424, "w": 32, "h": 48},
+    "jugadorazul.muerto.normal.4": {"x": 172, "y": 440, "w": 32, "h": 32},
+    "jugadorazul.muerto.normal.5": {"x": 206, "y": 440, "w": 32, "h": 32},
+    "jugadorazul.muerto.normal.6": {"x": 240, "y": 440, "w": 32, "h": 32},
+    "jugadorazul.muerto.normal.7": {"x": 274, "y": 440, "w": 32, "h": 32},
+
+    "jugadorazul.victoria.recto.0": {"x": 2, "y": 524, "w": 32, "h": 32},
+    "jugadorazul.victoria.dedos.0": {"x": 36, "y": 508, "w": 48, "h": 48},
+    "jugadorazul.victoria.delado.0": {"x": 86, "y": 524, "w": 32, "h": 32},
+    "jugadorazul.victoria.bocabajo.0": {"x": 120, "y": 524, "w": 32, "h": 32},
+    "jugadoramarillo.quieto.abajo.0": {"x": 36, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.camina.abajo.0": {"x": 70, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.camina.abajo.1": {"x": 104, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.quieto.derecha.0": {"x": 138, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.camina.derecha.0": {"x": 172, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.camina.derecha.1": {"x": 206, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.quieto.arriba.0": {"x": 240, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.camina.arriba.0": {"x": 274, "y": 558, "w": 32, "h": 32},
+    "jugadoramarillo.camina.arriba.1": {"x": 308, "y": 558, "w": 32, "h": 32},
+
+    "jugadoramarillo.muerto.normal.0": {"x": 36, "y": 642, "w": 32, "h": 32},
+    "jugadoramarillo.muerto.normal.1": {"x": 70, "y": 626, "w": 32, "h": 48},
+    "jugadoramarillo.muerto.normal.2": {"x": 104, "y": 626, "w": 32, "h": 48},
+    "jugadoramarillo.muerto.normal.3": {"x": 138, "y": 626, "w": 32, "h": 48},
+    "jugadoramarillo.muerto.normal.4": {"x": 172, "y": 642, "w": 32, "h": 32},
+    "jugadoramarillo.muerto.normal.5": {"x": 206, "y": 642, "w": 32, "h": 32},
+    "jugadoramarillo.muerto.normal.6": {"x": 240, "y": 642, "w": 32, "h": 32},
+    "jugadoramarillo.muerto.normal.7": {"x": 274, "y": 642, "w": 32, "h": 32},
+
+    "jugadoramarillo.victoria.recto.0": {"x": 154, "y": 524, "w": 32, "h": 32},
+    "jugadoramarillo.victoria.dedos.0": {"x": 188, "y": 508, "w": 48, "h": 48},
+    "jugadoramarillo.victoria.delado.0": {"x": 238, "y": 524, "w": 32, "h": 32},
+    "jugadoramarillo.victoria.bocabajo.0": {"x": 272, "y": 524, "w": 32, "h": 32},
+
+    "jugador.muerto.quemado.0": {"x": 2, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.1": {"x": 36, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.2": {"x": 70, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.3": {"x": 104, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.4": {"x": 138, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.5": {"x": 172, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.6": {"x": 206, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.7": {"x": 240, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.8": {"x": 274, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.9": {"x": 308, "y": 120, "w": 32, "h": 32},
+    "jugador.muerto.quemado.10": {"x": 342, "y": 120, "w": 32, "h": 32}
   }
 }
