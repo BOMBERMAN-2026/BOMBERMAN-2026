@@ -186,6 +186,15 @@
       "nombre": "bombilla_amarilla_cambia_izquierda",
       "walkable": false,
       "type": "barrier"
+    },
+    "20": {
+      "x": 767,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_destructible",
+      "walkable": false,
+      "type": "destructible"
     }
   },
   "animations": {
