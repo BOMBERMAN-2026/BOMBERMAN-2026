@@ -500,28 +500,54 @@ void Game::init() {
 }
 
 void Game::processInput() {
-    
-    if (this->state == GAME_PLAYING) {
-        if (this->keys[GLFW_KEY_UP] >= GLFW_PRESS) {
+    if (this->state != GAME_PLAYING) return;
+
+    const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
+    const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
+    const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
+    const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
+
+    const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
+    if (pressedCount == 0) return;
+
+    GLint keyToUse = GLFW_KEY_UNKNOWN;
+    if (pressedCount == 1) {
+        if (up) keyToUse = GLFW_KEY_UP;
+        if (down) keyToUse = GLFW_KEY_DOWN;
+        if (left) keyToUse = GLFW_KEY_LEFT;
+        if (right) keyToUse = GLFW_KEY_RIGHT;
+        this->lastDirKey = keyToUse;
+    } else {
+        switch (this->lastDirKey) {
+            case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
+            case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
+            case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
+            case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
+        }
+        if (keyToUse == GLFW_KEY_UNKNOWN) return;
+    }
+
+    switch (keyToUse) {
+        case GLFW_KEY_UP:
             player->UpdateSprite(MOVE_UP, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.arriba.0";
             gFlipX = 0.0f;
-        }
-        if (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS) {
+            break;
+        case GLFW_KEY_DOWN:
             player->UpdateSprite(MOVE_DOWN, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
             gFlipX = 0.0f;
-        }
-        if (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS) {
+            break;
+        case GLFW_KEY_LEFT:
             player->UpdateSprite(MOVE_LEFT, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
             gFlipX = 1.0f;
-        }
-        if (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS) {
+            break;
+        case GLFW_KEY_RIGHT:
             player->UpdateSprite(MOVE_RIGHT, gameMap);
             gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
             gFlipX = 0.0f;
-        }
+            break;
     }
 
 }

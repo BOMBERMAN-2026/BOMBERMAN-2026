@@ -18,6 +18,9 @@ class Game
 
         // Mapa de teclas que muestra si estan siendo pulsadas (1), no pulsadas (0) o se han vuelto a pulsar (2)
         std::map<GLint, GLint> keys; // <Key, {Release(0), Press(1), Repeat(2)}>
+
+        // Última flecha pulsada (para resolver varias teclas sin prioridad fija)
+        GLint lastDirKey = GLFW_KEY_UNKNOWN;
         
         GameState state;
         
