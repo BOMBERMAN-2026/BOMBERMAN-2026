@@ -32,8 +32,8 @@ void Player::Draw() {
 }
 
 // Aplica un paso de movimiento en NDC y realiza colisión contra el grid del mapa.
-void Player::UpdateSprite(Move mov, const GameMap* map) {
-    const float step = this->speed;
+void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
+    const float step = this->speed * deltaTime;
 
     glm::vec2 newPos = this->position;
     switch (mov) {

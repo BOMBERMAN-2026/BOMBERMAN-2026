@@ -35,7 +35,7 @@ class Player : public Entity {
 
         // Intenta mover el jugador un paso en la dirección indicada.
         // Aplica colisión con el mapa (`GameMap`) y actualiza `position` si se puede mover.
-        void UpdateSprite(Move mov, const GameMap* map);
+        void UpdateSprite(Move mov, const GameMap* map, float deltaTime);
 };
 
 #endif // PLAYER_H

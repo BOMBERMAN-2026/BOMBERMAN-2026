@@ -51,6 +51,8 @@ class Game
         GLuint WIDTH, HEIGHT;
         GLFWwindow* window;
 
+        float deltaTime = 0.0f;  // Tiempo entre frames (segundos)
+
         Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_PLAYING;}
         ~Game();
 
