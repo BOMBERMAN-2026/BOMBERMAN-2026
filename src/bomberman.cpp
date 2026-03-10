@@ -2,6 +2,7 @@
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
+#include "enemies/leon.hpp"
 
 /*
  * bomberman.cpp
@@ -94,6 +95,18 @@ void main()
 
 static SpriteAtlas gPlayerAtlas;
 static constexpr float gWalkFrameInterval = 0.12f; // segundos por cambio de fase
+
+static SpriteAtlas gEnemyAtlas;
+GLuint enemyTexture = 0;
+
+struct LeonInstance {
+    Leon* leon = nullptr;
+    float animTimer = 0.0f;
+    int animFrame = 0;          // 0 o 1: alterna entre los dos frames de movimiento
+    std::string currentSpriteName;
+    float flipX = 0.0f;
+};
+static std::vector<LeonInstance> gLeons;
 
 static int walkPhaseToFrameIndex(int phase)
 {
@@ -584,7 +597,7 @@ void Game::init() {
         PlayerInstance p1;
         p1.spritePrefix = "jugadorblanco";
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-        p1.player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.0005f);
+        p1.player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f);
         p1.facingDirKey = GLFW_KEY_DOWN;
         p1.isWalking = false;
         p1.walkTimer = 0.0f;
@@ -597,13 +610,41 @@ void Game::init() {
         PlayerInstance p2;
         p2.spritePrefix = "jugadorrojo";
         glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
-        p2.player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.0005f);
+        p2.player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f);
         p2.facingDirKey = GLFW_KEY_DOWN;
         p2.isWalking = false;
         p2.walkTimer = 0.0f;
         p2.walkPhase = 0;
         setPlayerSpriteFromDirAndFrame(p2, p2.facingDirKey, 0);
         gPlayers.push_back(p2);
+    }
+
+    // Cargar atlas + textura de enemigos
+    {
+        const std::string enemyAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasEnemy.json");
+        if (!loadSpriteAtlasMinimal(enemyAtlasPath, gEnemyAtlas))
+        {
+            std::cerr << "Error cargando atlas enemigos: " << enemyAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        const std::string enemyTexPath = resolveAssetPath(gEnemyAtlas.imagePath);
+        enemyTexture = LoadTexture(enemyTexPath.c_str());
+        if (enemyTexture == 0)
+        {
+            std::cerr << "Error cargando textura enemigos: " << enemyTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Crear Leon en una posicion cercana al spawn del jugador 1
+    gLeons.clear();
+    {
+        LeonInstance l;
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
+        l.leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
+        l.leon->setContext(gameMap, &gPlayers[0].player->position);
+        l.currentSpriteName = "leon.derecha.0";
+        gLeons.push_back(l);
     }
 }
 
@@ -653,28 +694,28 @@ void Game::processInput() {
 
         switch (keyToUse) {
             case GLFW_KEY_UP:
-                p1.player->UpdateSprite(MOVE_UP, gameMap);
+                p1.player->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
                 if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_UP) {
                     p1.walkTimer = 0.0f; p1.walkPhase = 0;
                 }
                 p1.facingDirKey = GLFW_KEY_UP;
                 break;
             case GLFW_KEY_DOWN:
-                p1.player->UpdateSprite(MOVE_DOWN, gameMap);
+                p1.player->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
                 if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_DOWN) {
                     p1.walkTimer = 0.0f; p1.walkPhase = 0;
                 }
                 p1.facingDirKey = GLFW_KEY_DOWN;
                 break;
             case GLFW_KEY_LEFT:
-                p1.player->UpdateSprite(MOVE_LEFT, gameMap);
+                p1.player->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
                 if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_LEFT) {
                     p1.walkTimer = 0.0f; p1.walkPhase = 0;
                 }
                 p1.facingDirKey = GLFW_KEY_LEFT;
                 break;
             case GLFW_KEY_RIGHT:
-                p1.player->UpdateSprite(MOVE_RIGHT, gameMap);
+                p1.player->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
                 if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_RIGHT) {
                     p1.walkTimer = 0.0f; p1.walkPhase = 0;
                 }
@@ -739,7 +780,7 @@ void Game::processInput() {
                 case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
             }
 
-            p2.player->UpdateSprite(mov2, gameMap);
+            p2.player->UpdateSprite(mov2, gameMap, this->deltaTime);
             if (!p2.isWalking || p2.facingDirKey != dir2) {
                 p2.walkTimer = 0.0f;
                 p2.walkPhase = 0;
@@ -753,13 +794,36 @@ void Game::processInput() {
 
 // Actualiza timers/animación en función del deltaTime.
 void Game::update() {
-    static double lastTime = glfwGetTime();
-    double currentTime = glfwGetTime();
-    float deltaTime = static_cast<float>(currentTime - lastTime);
-    lastTime = currentTime;
+    float deltaTime = this->deltaTime;
 
     if (gameMap) {
         gameMap->update(deltaTime);
+    }
+
+    // Actualizar enemigos (lógica de movimiento + animación)
+    for (auto& l : gLeons) {
+        if (!l.leon || !l.leon->alive) continue;
+        l.leon->setDeltaTime(deltaTime);
+        l.leon->Update();
+
+        // Alternar entre frame 0 y 1 cada 0.2 s
+        l.animTimer += deltaTime;
+        if (l.animTimer >= 0.2f) {
+            l.animTimer = 0.0f;
+            l.animFrame ^= 1;
+        }
+
+        // Elegir sprite según la dirección actual
+        l.flipX = 0.0f;
+        std::string prefix;
+        switch (l.leon->facing) {
+            case EnemyDirection::RIGHT: prefix = "leon.derecha."; break;
+            case EnemyDirection::LEFT:  prefix = "leon.derecha."; l.flipX = 1.0f; break;
+            case EnemyDirection::UP:    prefix = "leon.arriba.";  break;
+            case EnemyDirection::DOWN:  prefix = "leon.abajo.";   break;
+            default:                    prefix = "leon.derecha."; break;
+        }
+        l.currentSpriteName = prefix + std::to_string(l.animFrame);
     }
 
     // Animación de caminar por jugador: .0 .1 .0 .2 ...
@@ -877,6 +941,36 @@ void Game::render() {
     }
 
     glBindVertexArray(0);
+
+    // === 3. Renderizar enemigos (León) ===
+    if (enemyTexture != 0 && !gLeons.empty()) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, enemyTexture);
+        glBindVertexArray(VAO);
+
+        for (auto& l : gLeons) {
+            if (!l.leon || !l.leon->alive) continue;
+
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(l.leon->position, 0.0f));
+
+            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            getUvRectForSprite(gEnemyAtlas, l.currentSpriteName, uvRect);
+
+            model = glm::scale(model, glm::vec3(halfTile, halfTile, 1.0f));
+
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+            glUniform1f(uniformFlipX, l.flipX);
+            glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+            glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+
+        glBindVertexArray(0);
+    }
+
     glUseProgram(0);
 }
 

@@ -85,8 +85,13 @@ int main() {
     // inicializar juego, ticks?
 
     // ============================== Loop principal ==============================
+    double lastTime = glfwGetTime();
     while (!glfwWindowShouldClose(mainWindow))
     {
+        double currentTime = glfwGetTime();
+        bomberman->deltaTime = static_cast<float>(currentTime - lastTime);
+        lastTime = currentTime;
+
         // Check and call events
         glfwPollEvents();
 
