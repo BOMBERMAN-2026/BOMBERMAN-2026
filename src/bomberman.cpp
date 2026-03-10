@@ -63,6 +63,50 @@ static SpriteAtlas gPlayerAtlas;
 static std::string gCurrentSpriteName;
 static float gFlipX = 0.0f;
 
+// Estado de animación del jugador (caminar): 0,1,0,2,...
+static GLint gFacingDirKey = GLFW_KEY_DOWN;
+static bool gIsWalking = false;
+static float gWalkTimer = 0.0f;
+static int gWalkPhase = 0; // 0..3 -> {0,1,0,2}
+static constexpr float gWalkFrameInterval = 0.12f; // segundos por cambio de fase
+
+static int walkPhaseToFrameIndex(int phase)
+{
+    switch (phase & 3) {
+        case 0: return 0;
+        case 1: return 1;
+        case 2: return 0;
+        case 3: return 2;
+    }
+    return 0;
+}
+
+static void setPlayerSpriteFromDirAndFrame(GLint dirKey, int frameIndex)
+{
+    gFlipX = 0.0f;
+
+    if (frameIndex < 0) frameIndex = 0;
+    if (frameIndex > 2) frameIndex = 0;
+
+    switch (dirKey) {
+        case GLFW_KEY_UP:
+            gCurrentSpriteName = "jugadorblanco.arriba." + std::to_string(frameIndex);
+            break;
+        case GLFW_KEY_DOWN:
+            gCurrentSpriteName = "jugadorblanco.abajo." + std::to_string(frameIndex);
+            break;
+        case GLFW_KEY_LEFT:
+            // Reutilizamos los frames de la derecha espejando en X
+            gCurrentSpriteName = "jugadorblanco.derecha." + std::to_string(frameIndex);
+            gFlipX = 1.0f;
+            break;
+        case GLFW_KEY_RIGHT:
+        default:
+            gCurrentSpriteName = "jugadorblanco.derecha." + std::to_string(frameIndex);
+            break;
+    }
+}
+
 void CreateRectangle()
 {
     GLfloat vertices[] = {
@@ -454,6 +498,17 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
+    // Sanity check: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON)
+    if (gPlayerAtlas.sprites.find("jugadorblanco.abajo.0") == gPlayerAtlas.sprites.end()) {
+        std::cerr << "[SpriteAtlas] Aviso: no existe 'jugadorblanco.abajo.0' en el atlas."
+                  << " Total sprites: " << gPlayerAtlas.sprites.size() << "\n";
+        int shown = 0;
+        for (const auto& p : gPlayerAtlas.sprites) {
+            std::cerr << "  - " << p.first << "\n";
+            if (++shown >= 10) break;
+        }
+    }
+
     const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
     texture = LoadTexture(texturePath.c_str());
     if (texture == 0)
@@ -490,9 +545,12 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Sprite inicial de prueba
-    gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
-    gFlipX = 0.0f;
+    // Sprite inicial
+    gFacingDirKey = GLFW_KEY_DOWN;
+    gIsWalking = false;
+    gWalkTimer = 0.0f;
+    gWalkPhase = 0;
+    setPlayerSpriteFromDirAndFrame(gFacingDirKey, 0);
 
     // Crear jugador en la posicion de spawn del mapa
     glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
@@ -508,7 +566,19 @@ void Game::processInput() {
     const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
 
     const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
-    if (pressedCount == 0) return;
+    if (pressedCount == 0) {
+        // Al soltar todas las teclas, quedarse SIEMPRE en el frame .0 (idle)
+        gIsWalking = false;
+        gWalkTimer = 0.0f;
+        gWalkPhase = 0;
+
+        // Mantener la última dirección a la que miraba
+        if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
+            gFacingDirKey = this->lastDirKey;
+        }
+        setPlayerSpriteFromDirAndFrame(gFacingDirKey, 0);
+        return;
+    }
 
     GLint keyToUse = GLFW_KEY_UNKNOWN;
     if (pressedCount == 1) {
@@ -530,25 +600,36 @@ void Game::processInput() {
     switch (keyToUse) {
         case GLFW_KEY_UP:
             player->UpdateSprite(MOVE_UP, gameMap);
-            gCurrentSpriteName = "jugadorblanco.quieto.arriba.0";
-            gFlipX = 0.0f;
+            if (!gIsWalking || gFacingDirKey != GLFW_KEY_UP) {
+                gWalkTimer = 0.0f; gWalkPhase = 0;
+            }
+            gFacingDirKey = GLFW_KEY_UP;
             break;
         case GLFW_KEY_DOWN:
             player->UpdateSprite(MOVE_DOWN, gameMap);
-            gCurrentSpriteName = "jugadorblanco.quieto.abajo.0";
-            gFlipX = 0.0f;
+            if (!gIsWalking || gFacingDirKey != GLFW_KEY_DOWN) {
+                gWalkTimer = 0.0f; gWalkPhase = 0;
+            }
+            gFacingDirKey = GLFW_KEY_DOWN;
             break;
         case GLFW_KEY_LEFT:
             player->UpdateSprite(MOVE_LEFT, gameMap);
-            gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
-            gFlipX = 1.0f;
+            if (!gIsWalking || gFacingDirKey != GLFW_KEY_LEFT) {
+                gWalkTimer = 0.0f; gWalkPhase = 0;
+            }
+            gFacingDirKey = GLFW_KEY_LEFT;
             break;
         case GLFW_KEY_RIGHT:
             player->UpdateSprite(MOVE_RIGHT, gameMap);
-            gCurrentSpriteName = "jugadorblanco.quieto.derecha.0";
-            gFlipX = 0.0f;
+            if (!gIsWalking || gFacingDirKey != GLFW_KEY_RIGHT) {
+                gWalkTimer = 0.0f; gWalkPhase = 0;
+            }
+            gFacingDirKey = GLFW_KEY_RIGHT;
             break;
     }
+
+    // Si hay dirección pulsada, consideramos que está caminando
+    gIsWalking = true;
 
 }
 
@@ -560,6 +641,21 @@ void Game::update() {
 
     if (gameMap) {
         gameMap->update(deltaTime);
+    }
+
+    // Animación de caminar del jugador: .0 .1 .0 .2 ...
+    if (gIsWalking) {
+        gWalkTimer += deltaTime;
+        while (gWalkTimer >= gWalkFrameInterval) {
+            gWalkTimer -= gWalkFrameInterval;
+            gWalkPhase = (gWalkPhase + 1) & 3;
+        }
+        setPlayerSpriteFromDirAndFrame(gFacingDirKey, walkPhaseToFrameIndex(gWalkPhase));
+    } else {
+        // Asegurar idle consistente
+        gWalkTimer = 0.0f;
+        gWalkPhase = 0;
+        setPlayerSpriteFromDirAndFrame(gFacingDirKey, 0);
     }
 }
 
@@ -592,7 +688,55 @@ void Game::render() {
 
     // UV del sprite actual (si falla, se pinta la textura completa)
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-    getUvRectForSprite(gPlayerAtlas, gCurrentSpriteName, uvRect);
+    bool okUv = getUvRectForSprite(gPlayerAtlas, gCurrentSpriteName, uvRect);
+    if (!okUv) {
+        static bool warnedMissingSprite = false;
+        if (!warnedMissingSprite) {
+            warnedMissingSprite = true;
+            std::cerr << "[SpriteAtlas] Sprite no encontrado: '" << gCurrentSpriteName
+                      << "'. Usando fallback.\n";
+        }
+
+        // Fallback a un sprite que exista seguro en el atlas del jugador
+        const char* fallbacks[] = {
+            "jugadorblanco.abajo.0",
+            "jugadorblanco.derecha.0",
+            "jugadorblanco.arriba.0"
+        };
+        for (const char* fb : fallbacks) {
+            if (gPlayerAtlas.sprites.find(fb) != gPlayerAtlas.sprites.end()) {
+                gCurrentSpriteName = fb;
+                gFacingDirKey = GLFW_KEY_DOWN;
+                gFlipX = 0.0f;
+                // Ajustar dirección/flip para que coincida con el fallback elegido
+                if (std::string(fb).find("arriba") != std::string::npos) {
+                    gFacingDirKey = GLFW_KEY_UP;
+                } else if (std::string(fb).find("derecha") != std::string::npos) {
+                    gFacingDirKey = GLFW_KEY_RIGHT;
+                } else {
+                    gFacingDirKey = GLFW_KEY_DOWN;
+                }
+                gIsWalking = false;
+                gWalkTimer = 0.0f;
+                gWalkPhase = 0;
+                okUv = getUvRectForSprite(gPlayerAtlas, gCurrentSpriteName, uvRect);
+                break;
+            }
+        }
+
+        // Último recurso: coger el primer sprite del atlas y calcular UVs a mano
+        if (!okUv && !gPlayerAtlas.sprites.empty() && gPlayerAtlas.imageWidth > 0 && gPlayerAtlas.imageHeight > 0) {
+            const auto& any = *gPlayerAtlas.sprites.begin();
+            gCurrentSpriteName = any.first;
+            const SpriteFrame& f = any.second;
+            float u0 = (static_cast<float>(f.x) + 0.5f) / static_cast<float>(gPlayerAtlas.imageWidth);
+            float v0 = (static_cast<float>(f.y) + 0.5f) / static_cast<float>(gPlayerAtlas.imageHeight);
+            float u1 = (static_cast<float>(f.x + f.w) - 0.5f) / static_cast<float>(gPlayerAtlas.imageWidth);
+            float v1 = (static_cast<float>(f.y + f.h) - 0.5f) / static_cast<float>(gPlayerAtlas.imageHeight);
+            uvRect = glm::vec4(u0, v0, u1, v1);
+            okUv = true;
+        }
+    }
 
     // Ajuste simple de escala en función del tamaño del frame (referencia: 32x32)
     int frameW = 32;
