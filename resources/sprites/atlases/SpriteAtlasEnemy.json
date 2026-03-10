@@ -3,8 +3,11 @@
   "tamano_imagen": { "ancho": 636, "alto": 2554 },
 
   "color_transparente": {
-    "primario": { "r": 255, "g": 0, "b": 128 },
-    "secundario": { "r": 115, "g": 189, "b": 156 },
+    "colores": [
+      { "r": 255, "g": 0, "b": 128 },
+      { "r": 115, "g": 189, "b": 156 },
+      { "r": 189, "g": 189, "b": 189 }
+    ],
     "tolerancia": 0
   },
 

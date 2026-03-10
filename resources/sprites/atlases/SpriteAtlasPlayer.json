@@ -1,11 +1,15 @@
 {
   "ruta_imagen": "resources/sprites/BombermanArcade-player_alpha.png",
   "tamano_imagen": {"ancho": 381, "alto": 912},
+
   "color_transparente": {
-    "primario": {"r": 255, "g": 0, "b": 255}, 
-    "secundario": {"r": 0, "g": 255, "b": 0}, 
-    "tolerancia": 10
+    "colores": [
+      { "r": 255, "g": 0, "b": 255 },
+      { "r": 0, "g": 255, "b": 0 }
+    ],
+    "tolerancia": 0
   },
+  
   "sprites": {
     "jugadorblanco.quieto.abajo.0": {"x": 36, "y": 2, "w": 32, "h": 32},
     "jugadorblanco.camina.abajo.0": {"x": 70, "y": 2, "w": 32, "h": 32},
