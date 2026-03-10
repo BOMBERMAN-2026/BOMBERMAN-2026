@@ -7,11 +7,24 @@
 
 #include "bomberman.hpp"
 
+/*
+ * main.cpp
+ * -------
+ * Punto de entrada.
+ *
+ * Responsabilidades:
+ * - Inicializar GLFW/GLEW y crear la ventana.
+ * - Construir `Game` y ejecutar el loop principal (input/update/render).
+ * - Registrar el callback de teclado (flechas para P1, WASD para P2).
+ */
+
 Game* bomberman;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 
 int main() {
+
+    // ============================== Ventana / OpenGL ==============================
 
     // Initialize GLFW
     if (!glfwInit())
@@ -58,7 +71,10 @@ int main() {
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
 
+    // ============================== Juego ==============================
     bomberman = new Game(mainWindow, SCREEN_WIDTH, SCREEN_HEIGHT);
+    // Cambia a GameMode::OnePlayer si quieres modo 1 jugador.
+    bomberman->setMode(GameMode::TwoPlayers);
     bomberman->init();
 
     // Initialize blend to blend transparent to the background
@@ -68,6 +84,7 @@ int main() {
 
     // inicializar juego, ticks?
 
+    // ============================== Loop principal ==============================
     while (!glfwWindowShouldClose(mainWindow))
     {
         // Check and call events
@@ -89,9 +106,7 @@ int main() {
     return 0;
 }
 
-/*
-* It is called when a key is pressed/released
-*/
+// Callback de teclado (GLFW). Guarda estado y recuerda “última dirección” por jugador.
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if (key >= 0 && key < 1024) {
         bomberman->keys[key] = action;
@@ -99,6 +114,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         if (action == GLFW_PRESS) {
             if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
                 bomberman->lastDirKey = key;
+            }
+
+            if (key == GLFW_KEY_W || key == GLFW_KEY_A || key == GLFW_KEY_S || key == GLFW_KEY_D) {
+                bomberman->lastDirKeyP2 = key;
             }
         }
     }

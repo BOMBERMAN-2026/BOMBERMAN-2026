@@ -3,10 +3,25 @@
 #include "game_map.hpp"
 #include <algorithm>
 
+/*
+ * player.cpp
+ * ----------
+ * Implementación del `Player`.
+ *
+ * Nota:
+ * - El movimiento real se aplica en `UpdateSprite` (según una dirección) y se valida
+ *   contra el `GameMap` usando una combinación de sondas + `canMoveTo`.
+ * - `Update`/`Draw` están como placeholders (la renderización se realiza desde Game).
+ */
+
+// ============================== Ctor / dtor ==============================
+
 Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity)
     : Entity(pos, size, velocity) {}
 
 Player::~Player() {}
+
+// ============================== API base (placeholders) ==============================
 
 void Player::Update() {
     // Lógica de actualización del jugador (a completar)
@@ -16,6 +31,7 @@ void Player::Draw() {
     // Lógica de renderizado del jugador (a completar)
 }
 
+// Aplica un paso de movimiento en NDC y realiza colisión contra el grid del mapa.
 void Player::UpdateSprite(Move mov, const GameMap* map) {
     const float step = this->speed;
 

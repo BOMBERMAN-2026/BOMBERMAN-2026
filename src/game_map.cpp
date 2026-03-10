@@ -8,10 +8,31 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
+
+/*
+ * game_map.cpp
+ * -----------
+ * Implementación de `GameMap`.
+ *
+ * Qué hace este módulo:
+ * - Carga el layout del nivel desde `levels/*.txt`.
+ * - Carga el atlas de stage (JSON) y traduce `spriteId` -> propiedades (walkable/tipo/align).
+ * - Calcula métricas de tile para encajar el mapa en ortográfica (-aspect..aspect, -1..1).
+ * - Provee utilidades: conversiones grid<->NDC, colisión simple y spawns por jugador.
+ *
+ * Coordenadas de grid:
+ * - Se usan como (row, col) internamente en la mayoría de funciones.
+ * - En directivas `spawn`, el fichero habla en (x,y) = (col,row) con (0,0) arriba-izquierda.
+ */
+
+// ============================== Ctor / dtor ==============================
 
 GameMap::GameMap() {}
 
 GameMap::~GameMap() {}
+
+// ============================== Carga / atlas ==============================
 
 BlockType GameMap::blockTypeFromString(const std::string& typeStr) {
     if (typeStr == "barrier")        return BlockType::BARRIER;
@@ -20,6 +41,7 @@ BlockType GameMap::blockTypeFromString(const std::string& typeStr) {
     return BlockType::FLOOR; // default
 }
 
+// Carga el grid del nivel y parsea directivas opcionales (p.ej. `spawn`).
 bool GameMap::loadFromFile(const std::string& filePath) {
     std::string resolved = resolveAssetPath(filePath);
     std::ifstream file(resolved);
@@ -29,6 +51,16 @@ bool GameMap::loadFromFile(const std::string& filePath) {
     }
 
     grid.clear();
+    spawnCells.clear();
+
+    struct PendingSpawn {
+        int index = -1;
+        int x = 0;      // columna
+        int y = 0;      // fila
+        bool inner = true; // si true: coordenadas en el área jugable (sin borde) => +1
+    };
+    std::vector<PendingSpawn> pendingSpawns;
+
     std::string line;
     int maxCols = 0;
 
@@ -37,8 +69,57 @@ bool GameMap::loadFromFile(const std::string& filePath) {
         if (!line.empty() && line.back() == '\r')
             line.pop_back();
 
+        // Trim simple de espacios iniciales
+        size_t firstNonSpace = line.find_first_not_of(" \t");
+        if (firstNonSpace == std::string::npos) continue;
+        std::string trimmed = line.substr(firstNonSpace);
+
+        // Comentarios
+        if (!trimmed.empty() && trimmed[0] == '#') continue;
+
+        // Directivas: spawn <white|red|blanco|rojo|index> <x> <y>
+        // - "spawn" usa coordenadas en el área interior (sin borde), ya en coordenadas de grid:
+        //   (x,y) => (col=x,row=y), típicamente con x∈[1..cols-2], y∈[1..rows-2]
+        // - "spawn_abs" usa coordenadas absolutas del grid: (x,y) => (col=x,row=y)
+        {
+            std::istringstream issDir(trimmed);
+            std::string kw;
+            issDir >> kw;
+            if (kw == "spawn" || kw == "spawn_abs") {
+                std::string who;
+                int x = 0, y = 0;
+                if (!(issDir >> who >> x >> y)) {
+                    std::cerr << "GameMap: directiva spawn inválida: '" << trimmed << "'\n";
+                    continue;
+                }
+
+                int idx = -1;
+                // who puede ser nombre o índice
+                if (who == "white" || who == "blanco") idx = 0;
+                else if (who == "red" || who == "rojo") idx = 1;
+                else {
+                    // intentar parsear índice
+                    bool allDigits = !who.empty() && std::all_of(who.begin(), who.end(), [](unsigned char ch){ return std::isdigit(ch) != 0; });
+                    if (allDigits) idx = std::atoi(who.c_str());
+                }
+
+                if (idx < 0) {
+                    std::cerr << "GameMap: spawn: jugador desconocido '" << who << "'\n";
+                    continue;
+                }
+
+                PendingSpawn ps;
+                ps.index = idx;
+                ps.x = x;
+                ps.y = y;
+                ps.inner = (kw == "spawn");
+                pendingSpawns.push_back(ps);
+                continue;
+            }
+        }
+
         std::vector<Block> row;
-        std::istringstream iss(line);
+        std::istringstream iss(trimmed);
         int id;
         while (iss >> id) {
             Block b;
@@ -74,10 +155,33 @@ bool GameMap::loadFromFile(const std::string& filePath) {
         return false;
     }
 
+    // Resolver spawns definidos (si los hay)
+    if (!pendingSpawns.empty()) {
+        int maxIndex = -1;
+        for (const auto& ps : pendingSpawns) maxIndex = std::max(maxIndex, ps.index);
+        spawnCells.assign(maxIndex + 1, SpawnCell{});
+
+        for (const auto& ps : pendingSpawns) {
+            const int col = ps.x;
+            const int row = ps.y;
+
+            if (row < 0 || row >= rows || col < 0 || col >= cols) {
+                std::cerr << "GameMap: spawn fuera de rango para jugador " << ps.index
+                          << " (x=" << ps.x << ", y=" << ps.y << ", inner=" << (ps.inner ? "true" : "false") << ")\n";
+                continue;
+            }
+            if (ps.index >= 0 && ps.index < (int)spawnCells.size()) {
+                spawnCells[ps.index].row = row;
+                spawnCells[ps.index].col = col;
+            }
+        }
+    }
+
     std::cout << "GameMap: cargado " << cols << "x" << rows << std::endl;
     return true;
 }
 
+// Carga el atlas del stage (JSON) y asigna `BlockType` por celda según metadata del sprite.
 bool GameMap::loadAtlas(const std::string& jsonPath) {
     std::string resolved = resolveAssetPath(jsonPath);
     if (!loadSpriteAtlasMinimal(resolved, atlas)) {
@@ -105,10 +209,12 @@ bool GameMap::loadAtlas(const std::string& jsonPath) {
     return true;
 }
 
+// Avanza animaciones de tiles (si el atlas define animaciones).
 void GameMap::update(float deltaTime) {
     animator.update(deltaTime);
 }
 
+// Recalcula tileSize/offsets para el aspect ratio actual y centra el mapa en pantalla.
 void GameMap::calculateTileMetrics(float aspectRatio) {
     currentAspectRatio = aspectRatio;
     // La pantalla OpenGL ortográfica va desde -aspectRatio hasta aspectRatio en X
@@ -129,6 +235,8 @@ void GameMap::calculateTileMetrics(float aspectRatio) {
     offsetY = (screenHeightInOrtho - mapHeight) / 2.0f;
 }
 
+// ============================== Coordenadas: Grid <-> NDC ==============================
+
 glm::vec2 GameMap::gridToNDC(int row, int col) const {
     // x va desde -screenWidthInOrtho/2 hasta +screenWidthInOrtho/2
     // Sabiendo que offsetX ya calcula el margen desde -screenWidthInOrtho/2...
@@ -144,6 +252,7 @@ glm::vec2 GameMap::gridToNDC(int row, int col) const {
     return glm::vec2(x, y);
 }
 
+// Convierte una posición NDC en una celda (row,col) usando tileSize y offsets actuales.
 void GameMap::ndcToGrid(glm::vec2 ndc, int& row, int& col) const {
     float left = -currentAspectRatio;
     float top = 1.0f;
@@ -152,6 +261,7 @@ void GameMap::ndcToGrid(glm::vec2 ndc, int& row, int& col) const {
     row = (int)std::floor((top - offsetY - ndc.y) / tileSize);
 }
 
+// Comprueba si una AABB centrada en `center` (NDC) cabe en celdas walkable del grid.
 bool GameMap::canMoveTo(glm::vec2 center, float halfSize) const {
     // Hitbox asimétrico: ancho suficiente para detectar muros laterales,
     // pero bajo en Y para que las esquinas no entren en la fila de arriba/abajo
@@ -175,6 +285,8 @@ bool GameMap::canMoveTo(glm::vec2 center, float halfSize) const {
     return true;
 }
 
+// ============================== Consultas del grid / colisión ==============================
+
 int GameMap::getSpriteId(int row, int col) const {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return 0; // fuera de limites = borde
@@ -183,12 +295,14 @@ int GameMap::getSpriteId(int row, int col) const {
     return animator.getDisplayId(rawId);
 }
 
+// Walkable lógico (según `BlockType` + flags del bloque).
 bool GameMap::isWalkable(int row, int col) const {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return false;
     return grid[row][col].isWalkable();
 }
 
+// Marca un bloque destructible como destruido (placeholder para futuros power-ups).
 bool GameMap::destroyTile(int row, int col) {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return false;
@@ -200,8 +314,25 @@ bool GameMap::destroyTile(int row, int col) {
     return true;
 }
 
+// ============================== Spawn de jugadores ==============================
 glm::vec2 GameMap::getSpawnPosition(int playerIndex) const {
-    // Busca la primera celda walkable desde la esquina correspondiente
+    // 1) Si el nivel define un spawn para este índice, usarlo (si es válido y walkable)
+    if (playerIndex >= 0 && playerIndex < (int)spawnCells.size()) {
+        const SpawnCell& sc = spawnCells[playerIndex];
+        if (sc.row >= 0 && sc.col >= 0) {
+            if (isWalkable(sc.row, sc.col)) {
+                return gridToNDC(sc.row, sc.col);
+            }
+            static bool warnedBadSpawn = false;
+            if (!warnedBadSpawn) {
+                warnedBadSpawn = true;
+                std::cerr << "GameMap: spawn definido para jugador " << playerIndex
+                          << " no es walkable (row=" << sc.row << ", col=" << sc.col << "). Usando fallback.\n";
+            }
+        }
+    }
+
+    // 2) Fallback: buscar la primera celda walkable desde la esquina correspondiente
     if (playerIndex == 0) {
         for (int r = 1; r < rows - 1; r++)
             for (int c = 1; c < cols - 1; c++)
@@ -213,6 +344,8 @@ glm::vec2 GameMap::getSpawnPosition(int playerIndex) const {
     }
     return gridToNDC(rows / 2, cols / 2);
 }
+
+// ============================== Render ==============================
 
 void GameMap::render(GLuint vao, GLuint atlasTexture,
                      GLuint uniformModel, GLuint uniformUvRect,

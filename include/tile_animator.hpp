@@ -4,6 +4,15 @@
 #include <unordered_map>
 #include "sprite_atlas.hpp"
 
+/*
+ * tile_animator.hpp
+ * -----------------
+ * Animación simple de tiles del mapa por “swap” de IDs.
+ *
+ * - El atlas puede definir un intervalo y pares (A<->B).
+ * - El `TileAnimator` alterna el estado cada `interval` y traduce IDs al render.
+ */
+
 // Clase independiente que gestiona animaciones de sprites en el mapa.
 // Recibe la configuracion desde el SpriteAtlas y mantiene el estado.
 class TileAnimator {
@@ -11,14 +20,15 @@ public:
     TileAnimator();
     ~TileAnimator();
 
-    // Configura la animacion leyendo los pares de intercambio y el intervalo desde el atlas
+    // Configura la animación leyendo el intervalo y los pares de intercambio desde el atlas.
     void setup(const SpriteAtlas& atlas);
 
-    // Actualiza el temporizador interno. Devuelve true si ha habido un cambio de estado este frame.
+    // Actualiza el temporizador interno.
+    // Devuelve true si cambió el estado (toggle) en este frame.
     bool update(float deltaTime);
 
-    // Dado el Id original del tile, devuelve el Id que se deberia renderizar ahora.
-    // Maneja automaticamente la bidireccionalidad (A <-> B).
+    // Dado el ID del tile (el que viene del .txt), devuelve el ID a renderizar ahora.
+    // Maneja automáticamente la bidireccionalidad (A <-> B).
     int getDisplayId(int originalId) const;
 
 private:
