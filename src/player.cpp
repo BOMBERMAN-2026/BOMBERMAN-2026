@@ -2,6 +2,7 @@
 #include "player.hpp"
 #include "game_map.hpp"
 #include <algorithm>
+#include <cmath>
 
 /*
  * player.cpp
@@ -33,7 +34,28 @@ void Player::Draw() {
 
 // Aplica un paso de movimiento en NDC y realiza colisión contra el grid del mapa.
 void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
-    const float step = this->speed * deltaTime;
+    const float step     = this->speed * deltaTime;
+    const float halfTile = map->getTileSize() / 2.0f;
+
+    // --- Snap perpendicular al movimiento hacia el centro del tile actual ---
+    // Impide que el jugador se cuele por las esquinas en pasillos de 1 tile.
+    {
+        const float snapStrength = 0.25f;         // fracción de corrección por frame
+        const float snapMaxDist  = halfTile * 0.45f; // umbral máximo para aplicar
+        int tr, tc;
+        map->ndcToGrid(this->position, tr, tc);
+        glm::vec2 tileCenter = map->gridToNDC(tr, tc);
+
+        if (mov == MOVE_LEFT || mov == MOVE_RIGHT) {
+            float dy = tileCenter.y - this->position.y;
+            if (std::abs(dy) <= snapMaxDist)
+                this->position.y += dy * snapStrength;
+        } else {
+            float dx = tileCenter.x - this->position.x;
+            if (std::abs(dx) <= snapMaxDist)
+                this->position.x += dx * snapStrength;
+        }
+    }
 
     glm::vec2 newPos = this->position;
     switch (mov) {
@@ -44,35 +66,38 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
         default: return;
     }
 
-    float halfTile = map->getTileSize() / 2.0f;
-
-    // Sondas extra en el borde visual del sprite.
-    // Cada dirección usa la misma distancia que canMoveTo para ese eje,
-    // así la distancia de parada es coherente en todas las direcciones.
+    // --- Sondas de colisión: dos esquinas en el borde frontal de la dirección ---
+    // Cada dirección comprueba ambas esquinas del lado que avanza.
     {
         int r, c;
-        const float edgeUp    = halfTile * 0.45f; // igual que mY de canMoveTo
-        const float edgeDown  = halfTile * 0.95f; // protege borde inferior del mapa
-        const float edgeLR    = halfTile * 0.72f; // igual que mX de canMoveTo
+        const float eFront = halfTile;          // siempre cae en el tile vecino
+        const float eSide  = halfTile * 0.60f; // semiancho del hitbox
+
         if (mov == MOVE_UP) {
-            map->ndcToGrid({newPos.x, newPos.y + edgeUp}, r, c);
+            map->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
+            if (!map->isWalkable(r, c)) return;
+            map->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
             if (!map->isWalkable(r, c)) return;
         }
         if (mov == MOVE_DOWN) {
-            map->ndcToGrid({newPos.x, newPos.y - edgeDown}, r, c);
+            map->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
+            if (!map->isWalkable(r, c)) return;
+            map->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
             if (!map->isWalkable(r, c)) return;
         }
         if (mov == MOVE_LEFT) {
-            map->ndcToGrid({newPos.x - edgeLR, newPos.y}, r, c);
+            map->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
+            if (!map->isWalkable(r, c)) return;
+            map->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
             if (!map->isWalkable(r, c)) return;
         }
         if (mov == MOVE_RIGHT) {
-            map->ndcToGrid({newPos.x + edgeLR, newPos.y}, r, c);
+            map->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
+            if (!map->isWalkable(r, c)) return;
+            map->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
             if (!map->isWalkable(r, c)) return;
         }
     }
 
-    if (map->canMoveTo(newPos, halfTile)) {
-        this->position = newPos;
-    }
+    this->position = newPos;
 }

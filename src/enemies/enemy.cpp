@@ -84,16 +84,64 @@ EnemyDirection Enemy::randomDirection() {
 
 bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
     if (!gameMap) return false;
-    glm::vec2 delta = dirToVec(dir) * stepSize;
-    glm::vec2 newPos = position + delta;
-    float halfTile = gameMap->getTileSize() / 2.0f;
+    const float halfTile = gameMap->getTileSize() / 2.0f;
 
-    if (gameMap->canMoveTo(newPos, halfTile)) {
-        position = newPos;
-        facing = dir;
-        return true;
+    // Snap perpendicular al movimiento hacia el centro del tile actual.
+    {
+        const float snapStrength = 0.2f;
+        const float snapMaxDist  = halfTile * 0.45f;
+        int tr, tc;
+        gameMap->ndcToGrid(position, tr, tc);
+        glm::vec2 tileCenter = gameMap->gridToNDC(tr, tc);
+
+        if (dir == EnemyDirection::LEFT || dir == EnemyDirection::RIGHT) {
+            float dy = tileCenter.y - position.y;
+            if (std::abs(dy) <= snapMaxDist)
+                position.y += dy * snapStrength;
+        } else if (dir == EnemyDirection::UP || dir == EnemyDirection::DOWN) {
+            float dx = tileCenter.x - position.x;
+            if (std::abs(dx) <= snapMaxDist)
+                position.x += dx * snapStrength;
+        }
     }
-    return false;
+
+    glm::vec2 newPos = position + dirToVec(dir) * stepSize;
+
+    // Sondas de colisión: dos esquinas en el borde frontal.
+    {
+        int r, c;
+        const float eFront = halfTile;          // siempre cae en el tile vecino
+        const float eSide  = halfTile * 0.60f;
+
+        if (dir == EnemyDirection::UP) {
+            gameMap->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+            gameMap->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+        }
+        if (dir == EnemyDirection::DOWN) {
+            gameMap->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+            gameMap->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+        }
+        if (dir == EnemyDirection::LEFT) {
+            gameMap->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+            gameMap->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+        }
+        if (dir == EnemyDirection::RIGHT) {
+            gameMap->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+            gameMap->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
+            if (!gameMap->isWalkable(r, c)) return false;
+        }
+    }
+
+    position = newPos;
+    facing = dir;
+    return true;
 }
 
 bool Enemy::canMoveInDirection(EnemyDirection dir, float lookAhead) const {
