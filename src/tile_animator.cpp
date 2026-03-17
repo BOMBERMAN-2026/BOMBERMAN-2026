@@ -1,11 +1,23 @@
 #include "tile_animator.hpp"
 
+/*
+ * tile_animator.cpp
+ * ---------------
+ * Animación simple de tiles basada en “swap” de IDs.
+ *
+ * Idea:
+ * - El atlas puede definir un intervalo (`animInterval`) y un mapping de swaps (`animSwaps`).
+ * - Cada `interval`, alterna entre estado original/alternativo y `getDisplayId` devuelve
+ *   el ID que se debe renderizar en ese frame.
+ */
+
 TileAnimator::TileAnimator() 
     : interval(0.0f), timer(0.0f), isToggled(false) {
 }
 
 TileAnimator::~TileAnimator() {}
 
+// Inicializa el animador desde el atlas: intervalo y diccionarios original<->alternativo.
 void TileAnimator::setup(const SpriteAtlas& atlas) {
     this->interval = atlas.animInterval;
     this->timer = 0.0f;
@@ -21,6 +33,7 @@ void TileAnimator::setup(const SpriteAtlas& atlas) {
     }
 }
 
+// Avanza el temporizador y alterna el estado cuando toca.
 bool TileAnimator::update(float deltaTime) {
     if (interval <= 0.0f) {
         return false; // No hay animacion configurada
@@ -35,6 +48,7 @@ bool TileAnimator::update(float deltaTime) {
     return false;
 }
 
+// Dado un ID del mapa, devuelve el ID a renderizar según el estado de animación.
 int TileAnimator::getDisplayId(int originalId) const {
     if (interval <= 0.0f) {
         return originalId;

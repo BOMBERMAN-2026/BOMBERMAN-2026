@@ -6,6 +6,19 @@
 #include <string>
 #include <unordered_map>
 
+/*
+ * sprite_atlas.hpp
+ * ---------------
+ * Estructuras y utilidades para cargar un atlas de sprites desde JSON.
+ *
+ * Conceptos:
+ * - `SpriteAtlas`: imagen + dimensiones + mapa de `SpriteFrame` por nombre/ID.
+ * - `getUvRectForSprite(...)`: traduce (x,y,w,h) en píxeles a UV (0..1) para el shader.
+ *
+ * Nota:
+ * - El loader es “mínimo” (solo entiende el formato actual de tus JSONs).
+ */
+
 struct SpriteFrame {
     int x = 0;
     int y = 0;
