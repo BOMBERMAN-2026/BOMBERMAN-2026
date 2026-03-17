@@ -872,8 +872,12 @@ void Game::render() {
     for (auto& inst : gPlayers) {
         if (!inst.player) continue;
 
+        // Escalar el sprite del jugador (al cambiar la escala desplazamos hacia arriba para que los pies no pisen el bloque de abajo)
+        const float playerScaleFactor = 1.8f;
+
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(inst.player->position, 0.0f));
+        glm::vec3 renderPos = glm::vec3(inst.player->position.x, inst.player->position.y + (playerScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
+        model = glm::translate(model, renderPos);
 
         // UV del sprite actual (si falla, se pinta la textura completa)
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
@@ -925,8 +929,7 @@ void Game::render() {
             }
         }
 
-        // Escala en NDC: el jugador ocupa exactamente 1 tile
-        const float playerScaleFactor = 1.0f;
+        // Escala en NDC: adaptada del factor de escala del jugador
         const float sx = halfTile * playerScaleFactor;
         const float sy = halfTile * playerScaleFactor;
         model = glm::scale(model, glm::vec3(sx, sy, 1.0f));
@@ -951,13 +954,15 @@ void Game::render() {
         for (auto& l : gLeons) {
             if (!l.leon || !l.leon->alive) continue;
 
+const float enemyScaleFactor = 1.8f;
             glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(l.leon->position, 0.0f));
+            glm::vec3 renderPos = glm::vec3(l.leon->position.x, l.leon->position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
+            model = glm::translate(model, renderPos);   
 
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-            getUvRectForSprite(gEnemyAtlas, l.currentSpriteName, uvRect);
+            getUvRectForSprite(gEnemyAtlas, l.currentSpriteName, uvRect);       
 
-            model = glm::scale(model, glm::vec3(halfTile, halfTile, 1.0f));
+            model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor, halfTile * enemyScaleFactor, 1.0f));     
 
             glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
             glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
