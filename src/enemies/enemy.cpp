@@ -9,7 +9,8 @@ Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
       hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
       facing(EnemyDirection::LEFT),
-      gameMap(nullptr), playerPos(nullptr), deltaTime(0.0f)
+      gameMap(nullptr), playerPos(nullptr), deltaTime(0.0f),
+      animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
 {}
 
 Enemy::~Enemy() {}

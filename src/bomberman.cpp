@@ -3,6 +3,7 @@
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
 #include "enemies/leon.hpp"
+#include "enemies/bebe_lloron.hpp"
 
 /*
  * bomberman.cpp
@@ -33,21 +34,7 @@
 #include <cstdlib>
 #include <vector>
 
-struct PlayerInstance {
-    Player* player = nullptr;
-    std::string spritePrefix; // p.ej. "jugadorblanco" o "jugadorrojo"
-
-    std::string currentSpriteName;
-    float flipX = 0.0f;
-
-    // Estado de animación (caminar): 0,1,0,2,...
-    GLint facingDirKey = GLFW_KEY_DOWN;
-    bool isWalking = false;
-    float walkTimer = 0.0f;
-    int walkPhase = 0; // 0..3 -> {0,1,0,2}
-};
-
-static std::vector<PlayerInstance> gPlayers;
+static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
 
@@ -93,60 +80,12 @@ void main()
     color = texColor * tintColor; // Apply tint color
 })";
 
-static SpriteAtlas gPlayerAtlas;
-static constexpr float gWalkFrameInterval = 0.12f; // segundos por cambio de fase
+SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
 
-static SpriteAtlas gEnemyAtlas;
+SpriteAtlas gEnemyAtlas; // No estático para usarlo en enemigos .cpp
 GLuint enemyTexture = 0;
 
-struct LeonInstance {
-    Leon* leon = nullptr;
-    float animTimer = 0.0f;
-    int animFrame = 0;          // 0 o 1: alterna entre los dos frames de movimiento
-    std::string currentSpriteName;
-    float flipX = 0.0f;
-};
-static std::vector<LeonInstance> gLeons;
-
-static int walkPhaseToFrameIndex(int phase)
-{
-    switch (phase & 3) {
-        case 0: return 0;
-        case 1: return 1;
-        case 2: return 0;
-        case 3: return 2;
-    }
-    return 0;
-}
-
-// Construye el nombre del sprite a partir de dirección + frame y actualiza flipX.
-static void setPlayerSpriteFromDirAndFrame(PlayerInstance& inst, GLint dirKey, int frameIndex)
-{
-    inst.flipX = 0.0f;
-
-    if (frameIndex < 0) frameIndex = 0;
-    if (frameIndex > 2) frameIndex = 0;
-
-    switch (dirKey) {
-        case GLFW_KEY_UP:
-            inst.currentSpriteName = inst.spritePrefix + ".arriba." + std::to_string(frameIndex);
-            break;
-        case GLFW_KEY_DOWN:
-            inst.currentSpriteName = inst.spritePrefix + ".abajo." + std::to_string(frameIndex);
-            break;
-        case GLFW_KEY_LEFT:
-            // Reutilizamos los frames de la derecha espejando en X
-            inst.currentSpriteName = inst.spritePrefix + ".derecha." + std::to_string(frameIndex);
-            inst.flipX = 1.0f;
-            break;
-        case GLFW_KEY_RIGHT:
-        default:
-            inst.currentSpriteName = inst.spritePrefix + ".derecha." + std::to_string(frameIndex);
-            break;
-    }
-
-    inst.facingDirKey = dirKey;
-}
+static std::vector<Enemy*> gEnemies;
 
 // ============================== OpenGL: helpers ==============================
 
@@ -594,28 +533,14 @@ void Game::init() {
     gPlayers.clear();
 
     {
-        PlayerInstance p1;
-        p1.spritePrefix = "jugadorblanco";
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-        p1.player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f);
-        p1.facingDirKey = GLFW_KEY_DOWN;
-        p1.isWalking = false;
-        p1.walkTimer = 0.0f;
-        p1.walkPhase = 0;
-        setPlayerSpriteFromDirAndFrame(p1, p1.facingDirKey, 0);
+        Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, "jugadorblanco");
         gPlayers.push_back(p1);
     }
 
     if (this->mode == GameMode::TwoPlayers) {
-        PlayerInstance p2;
-        p2.spritePrefix = "jugadorrojo";
         glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
-        p2.player = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f);
-        p2.facingDirKey = GLFW_KEY_DOWN;
-        p2.isWalking = false;
-        p2.walkTimer = 0.0f;
-        p2.walkPhase = 0;
-        setPlayerSpriteFromDirAndFrame(p2, p2.facingDirKey, 0);
+        Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, "jugadorrojo");
         gPlayers.push_back(p2);
     }
 
@@ -636,15 +561,27 @@ void Game::init() {
         }
     }
 
-    // Crear Leon en una posicion cercana al spawn del jugador 1
-    gLeons.clear();
+    for (auto enemy : gEnemies) {
+        delete enemy;
+    }
+    gEnemies.clear();
+
+    // Crear Leon
     {
-        LeonInstance l;
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
-        l.leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
-        l.leon->setContext(gameMap, &gPlayers[0].player->position);
-        l.currentSpriteName = "leon.derecha.0";
-        gLeons.push_back(l);
+        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
+        leon->setContext(gameMap, &gPlayers[0]->position);
+        leon->currentSpriteName = "leon.derecha.0";
+        gEnemies.push_back(leon);
+    }
+
+    // Crear Bebe Lloron
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
+        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
+        bebe->setContext(gameMap, &gPlayers[0]->position);
+        bebe->currentSpriteName = "bebe.derecha.0";
+        gEnemies.push_back(bebe);
     }
 }
 
@@ -652,8 +589,8 @@ void Game::init() {
 void Game::processInput() {
     if (this->state != GAME_PLAYING) return;
 
-    if (gPlayers.empty() || gPlayers[0].player == nullptr) return;
-    PlayerInstance& p1 = gPlayers[0];
+    if (gPlayers.empty() || gPlayers[0] == nullptr) return;
+    Player* p1 = gPlayers[0];
 
     // ======================= Jugador 1 (blanco): Flechas =======================
 
@@ -664,16 +601,11 @@ void Game::processInput() {
 
     const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
     if (pressedCount == 0) {
-        // Al soltar todas las teclas, quedarse SIEMPRE en el frame .0 (idle)
-        p1.isWalking = false;
-        p1.walkTimer = 0.0f;
-        p1.walkPhase = 0;
+        p1->isWalking = false;
 
-        // Mantener la última dirección a la que miraba
         if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-            p1.facingDirKey = this->lastDirKey;
+            p1->facingDirKey = this->lastDirKey;
         }
-        setPlayerSpriteFromDirAndFrame(p1, p1.facingDirKey, 0);
     } else {
         GLint keyToUse = GLFW_KEY_UNKNOWN;
         if (pressedCount == 1) {
@@ -694,42 +626,41 @@ void Game::processInput() {
 
         switch (keyToUse) {
             case GLFW_KEY_UP:
-                p1.player->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
-                if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_UP) {
-                    p1.walkTimer = 0.0f; p1.walkPhase = 0;
+                p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
+                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
+                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
                 }
-                p1.facingDirKey = GLFW_KEY_UP;
+                p1->facingDirKey = GLFW_KEY_UP;
                 break;
             case GLFW_KEY_DOWN:
-                p1.player->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
-                if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_DOWN) {
-                    p1.walkTimer = 0.0f; p1.walkPhase = 0;
+                p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
+                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
+                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
                 }
-                p1.facingDirKey = GLFW_KEY_DOWN;
+                p1->facingDirKey = GLFW_KEY_DOWN;
                 break;
             case GLFW_KEY_LEFT:
-                p1.player->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
-                if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_LEFT) {
-                    p1.walkTimer = 0.0f; p1.walkPhase = 0;
+                p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
+                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
+                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
                 }
-                p1.facingDirKey = GLFW_KEY_LEFT;
+                p1->facingDirKey = GLFW_KEY_LEFT;
                 break;
             case GLFW_KEY_RIGHT:
-                p1.player->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
-                if (!p1.isWalking || p1.facingDirKey != GLFW_KEY_RIGHT) {
-                    p1.walkTimer = 0.0f; p1.walkPhase = 0;
+                p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
+                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
+                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
                 }
-                p1.facingDirKey = GLFW_KEY_RIGHT;
+                p1->facingDirKey = GLFW_KEY_RIGHT;
                 break;
         }
 
-        // Si hay dirección pulsada, consideramos que está caminando
-        p1.isWalking = true;
+        p1->isWalking = true;
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1].player != nullptr) {
-        PlayerInstance& p2 = gPlayers[1];
+    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+        Player* p2 = gPlayers[1];
 
         const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
         const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
@@ -738,20 +669,16 @@ void Game::processInput() {
 
         const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
         if (pressedCount2 == 0) {
-            p2.isWalking = false;
-            p2.walkTimer = 0.0f;
-            p2.walkPhase = 0;
+            p2->isWalking = false;
 
-            // Mantener la última dirección WASD
             if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
                 switch (this->lastDirKeyP2) {
-                    case GLFW_KEY_W: p2.facingDirKey = GLFW_KEY_UP; break;
-                    case GLFW_KEY_S: p2.facingDirKey = GLFW_KEY_DOWN; break;
-                    case GLFW_KEY_A: p2.facingDirKey = GLFW_KEY_LEFT; break;
-                    case GLFW_KEY_D: p2.facingDirKey = GLFW_KEY_RIGHT; break;
+                    case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
+                    case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
+                    case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
+                    case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
                 }
             }
-            setPlayerSpriteFromDirAndFrame(p2, p2.facingDirKey, 0);
         } else {
             GLint keyToUse2 = GLFW_KEY_UNKNOWN;
             if (pressedCount2 == 1) {
@@ -770,7 +697,6 @@ void Game::processInput() {
                 if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
             }
 
-            // Mapear WASD a dirección estándar para sprites (UP/DOWN/LEFT/RIGHT)
             GLint dir2 = GLFW_KEY_DOWN;
             Move mov2 = MOVE_NONE;
             switch (keyToUse2) {
@@ -780,13 +706,13 @@ void Game::processInput() {
                 case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
             }
 
-            p2.player->UpdateSprite(mov2, gameMap, this->deltaTime);
-            if (!p2.isWalking || p2.facingDirKey != dir2) {
-                p2.walkTimer = 0.0f;
-                p2.walkPhase = 0;
+            p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+            if (!p2->isWalking || p2->facingDirKey != dir2) {
+                p2->walkTimer = 0.0f;
+                p2->walkPhase = 0;
             }
-            p2.facingDirKey = dir2;
-            p2.isWalking = true;
+            p2->facingDirKey = dir2;
+            p2->isWalking = true;
         }
     }
 
@@ -801,46 +727,17 @@ void Game::update() {
     }
 
     // Actualizar enemigos (lógica de movimiento + animación)
-    for (auto& l : gLeons) {
-        if (!l.leon || !l.leon->alive) continue;
-        l.leon->setDeltaTime(deltaTime);
-        l.leon->Update();
-
-        // Alternar entre frame 0 y 1 cada 0.2 s
-        l.animTimer += deltaTime;
-        if (l.animTimer >= 0.2f) {
-            l.animTimer = 0.0f;
-            l.animFrame ^= 1;
-        }
-
-        // Elegir sprite según la dirección actual
-        l.flipX = 0.0f;
-        std::string prefix;
-        switch (l.leon->facing) {
-            case EnemyDirection::RIGHT: prefix = "leon.derecha."; break;
-            case EnemyDirection::LEFT:  prefix = "leon.derecha."; l.flipX = 1.0f; break;
-            case EnemyDirection::UP:    prefix = "leon.arriba.";  break;
-            case EnemyDirection::DOWN:  prefix = "leon.abajo.";   break;
-            default:                    prefix = "leon.derecha."; break;
-        }
-        l.currentSpriteName = prefix + std::to_string(l.animFrame);
+    for (auto enemy : gEnemies) {
+        if (!enemy || !enemy->alive) continue;
+        enemy->setDeltaTime(deltaTime);
+        enemy->Update();
     }
 
-    // Animación de caminar por jugador: .0 .1 .0 .2 ...
-    for (auto& inst : gPlayers) {
-        if (!inst.player) continue;
-        if (inst.isWalking) {
-            inst.walkTimer += deltaTime;
-            while (inst.walkTimer >= gWalkFrameInterval) {
-                inst.walkTimer -= gWalkFrameInterval;
-                inst.walkPhase = (inst.walkPhase + 1) & 3;
-            }
-            setPlayerSpriteFromDirAndFrame(inst, inst.facingDirKey, walkPhaseToFrameIndex(inst.walkPhase));
-        } else {
-            inst.walkTimer = 0.0f;
-            inst.walkPhase = 0;
-            setPlayerSpriteFromDirAndFrame(inst, inst.facingDirKey, 0);
-        }
+    // Actualizar jugador
+    for (auto* p : gPlayers) {
+        if (!p) continue;
+        p->deltaTime = deltaTime;
+        p->Update();
     }
 }
 
@@ -866,111 +763,21 @@ void Game::render() {
 
     glBindVertexArray(VAO);
 
-    // Escalar el sprite del jugador para que ocupe ~1 tile del mapa
-    float halfTile = gameMap->getTileSize() / 2.0f;
-
-    for (auto& inst : gPlayers) {
-        if (!inst.player) continue;
-
-        // Escalar el sprite del jugador (al cambiar la escala desplazamos hacia arriba para que los pies no pisen el bloque de abajo)
-        const float playerScaleFactor = 1.8f;
-
-        glm::mat4 model = glm::mat4(1.0f);
-        glm::vec3 renderPos = glm::vec3(inst.player->position.x, inst.player->position.y + (playerScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
-        model = glm::translate(model, renderPos);
-
-        // UV del sprite actual (si falla, se pinta la textura completa)
-        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        bool okUv = getUvRectForSprite(gPlayerAtlas, inst.currentSpriteName, uvRect);
-        if (!okUv) {
-            static bool warnedMissingSprite = false;
-            if (!warnedMissingSprite) {
-                warnedMissingSprite = true;
-                std::cerr << "[SpriteAtlas] Sprite no encontrado: '" << inst.currentSpriteName
-                          << "'. Usando fallback.\n";
-            }
-
-            const std::string fb0 = inst.spritePrefix + ".abajo.0";
-            const std::string fb1 = inst.spritePrefix + ".derecha.0";
-            const std::string fb2 = inst.spritePrefix + ".arriba.0";
-            const std::string fallbacks[] = { fb0, fb1, fb2 };
-
-            for (const auto& fb : fallbacks) {
-                if (gPlayerAtlas.sprites.find(fb) != gPlayerAtlas.sprites.end()) {
-                    inst.currentSpriteName = fb;
-                    inst.facingDirKey = GLFW_KEY_DOWN;
-                    inst.flipX = 0.0f;
-                    if (fb.find("arriba") != std::string::npos) {
-                        inst.facingDirKey = GLFW_KEY_UP;
-                    } else if (fb.find("derecha") != std::string::npos) {
-                        inst.facingDirKey = GLFW_KEY_RIGHT;
-                    } else {
-                        inst.facingDirKey = GLFW_KEY_DOWN;
-                    }
-                    inst.isWalking = false;
-                    inst.walkTimer = 0.0f;
-                    inst.walkPhase = 0;
-                    okUv = getUvRectForSprite(gPlayerAtlas, inst.currentSpriteName, uvRect);
-                    break;
-                }
-            }
-
-            // Último recurso: coger el primer sprite del atlas y calcular UVs a mano
-            if (!okUv && !gPlayerAtlas.sprites.empty() && gPlayerAtlas.imageWidth > 0 && gPlayerAtlas.imageHeight > 0) {
-                const auto& any = *gPlayerAtlas.sprites.begin();
-                inst.currentSpriteName = any.first;
-                const SpriteFrame& f = any.second;
-                float u0 = (static_cast<float>(f.x) + 0.5f) / static_cast<float>(gPlayerAtlas.imageWidth);
-                float v0 = (static_cast<float>(f.y) + 0.5f) / static_cast<float>(gPlayerAtlas.imageHeight);
-                float u1 = (static_cast<float>(f.x + f.w) - 0.5f) / static_cast<float>(gPlayerAtlas.imageWidth);
-                float v1 = (static_cast<float>(f.y + f.h) - 0.5f) / static_cast<float>(gPlayerAtlas.imageHeight);
-                uvRect = glm::vec4(u0, v0, u1, v1);
-                okUv = true;
-            }
-        }
-
-        // Escala en NDC: adaptada del factor de escala del jugador
-        const float sx = halfTile * playerScaleFactor;
-        const float sy = halfTile * playerScaleFactor;
-        model = glm::scale(model, glm::vec3(sx, sy, 1.0f));
-
-        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
-        glUniform1f(uniformFlipX, inst.flipX);
-        glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
-        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
-
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    for (auto* p : gPlayers) {
+        if (!p) continue;
+        p->Draw();
     }
 
     glBindVertexArray(0);
 
-    // === 3. Renderizar enemigos (León) ===
-    if (enemyTexture != 0 && !gLeons.empty()) {
+    // === 3. Renderizar enemigos ===
+    if (enemyTexture != 0 && !gEnemies.empty()) {
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, enemyTexture);
         glBindVertexArray(VAO);
 
-        for (auto& l : gLeons) {
-            if (!l.leon || !l.leon->alive) continue;
-
-const float enemyScaleFactor = 1.8f;
-            glm::mat4 model = glm::mat4(1.0f);
-            glm::vec3 renderPos = glm::vec3(l.leon->position.x, l.leon->position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
-            model = glm::translate(model, renderPos);   
-
-            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-            getUvRectForSprite(gEnemyAtlas, l.currentSpriteName, uvRect);       
-
-            model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor, halfTile * enemyScaleFactor, 1.0f));     
-
-            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
-            glUniform1f(uniformFlipX, l.flipX);
-            glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
-            glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
-
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        for (auto enemy : gEnemies) {
+            enemy->Draw();
         }
 
         glBindVertexArray(0);

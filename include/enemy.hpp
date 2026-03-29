@@ -40,6 +40,12 @@ public:
 
     float deltaTime;        // Tiempo entre frames, actualizado externamente
 
+    // Campos para animación
+    float animTimer = 0.0f;
+    int animFrame = 0;
+    std::string currentSpriteName;
+    float flipX = 0.0f;
+
     Enemy(glm::vec2 pos, glm::vec2 size, float speed,
           int hp, int score, bool passSoftBlocks = false, bool boss = false);
 
