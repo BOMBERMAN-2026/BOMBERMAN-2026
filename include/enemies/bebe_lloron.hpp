@@ -22,6 +22,8 @@ private:
     bool  pursuing;            // Estado actual de persecución
     float patrolTimer;         // Timer para cambios de dirección en patrulla
     float patrolInterval;      // Intervalo de cambio al patrullar
+
+    bool hasLineOfSightToPlayer() const; // Comprueba si no hay bloques bloqueando la visión
 };
 
 #endif // BEBE_LLORON_HPP

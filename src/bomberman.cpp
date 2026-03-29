@@ -570,7 +570,7 @@ void Game::init() {
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
         Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
-        leon->setContext(gameMap, &gPlayers[0]->position);
+        leon->setContext(gameMap, &gPlayers);
         leon->currentSpriteName = "leon.derecha.0";
         gEnemies.push_back(leon);
     }
@@ -579,7 +579,7 @@ void Game::init() {
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
         BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
-        bebe->setContext(gameMap, &gPlayers[0]->position);
+        bebe->setContext(gameMap, &gPlayers);
         bebe->currentSpriteName = "bebe.derecha.0";
         gEnemies.push_back(bebe);
     }

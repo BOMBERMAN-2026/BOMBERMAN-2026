@@ -17,11 +17,15 @@ DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size, float speed)
 DragonJoven::~DragonJoven() {}
 
 EnemyDirection DragonJoven::checkLineOfSight() const {
-    if (!playerPos || !gameMap) return EnemyDirection::NONE;
+    if (!playersList || !gameMap) return EnemyDirection::NONE;
+    
+    float dist;
+    glm::vec2 targetPos = getClosestPlayerPos(dist);
+    if (dist >= 99999.0f) return EnemyDirection::NONE;
 
     int enemyRow, enemyCol, playerRow, playerCol;
     gameMap->ndcToGrid(position, enemyRow, enemyCol);
-    gameMap->ndcToGrid(*playerPos, playerRow, playerCol);
+    gameMap->ndcToGrid(targetPos, playerRow, playerCol);
 
     float tileSize = gameMap->getTileSize();
 

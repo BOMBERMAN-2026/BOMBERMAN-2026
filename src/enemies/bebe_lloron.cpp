@@ -2,6 +2,7 @@
 #include "game_map.hpp"
 #include <cstdlib>
 #include <cmath>
+#include <algorithm>
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -27,6 +28,36 @@ BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size, float speed)
 
 BebeLloron::~BebeLloron() {}
 
+bool BebeLloron::hasLineOfSightToPlayer() const {
+    if (!gameMap) return false;
+    
+    float dist;
+    glm::vec2 targetPos = getClosestPlayerPos(dist);
+    if (dist >= 99999.0f) return false;
+
+    int r1, c1, r2, c2;
+    gameMap->ndcToGrid(this->position, r1, c1);
+    gameMap->ndcToGrid(targetPos, r2, c2);
+
+    // Debe estar en la misma fila o misma columna para verse directo
+    if (r1 != r2 && c1 != c2) return false;
+
+    if (r1 == r2) {
+        int cMin = std::min(c1, c2);
+        int cMax = std::max(c1, c2);
+        for (int c = cMin + 1; c < cMax; ++c) {
+            if (!gameMap->isWalkable(r1, c)) return false;
+        }
+    } else {
+        int rMin = std::min(r1, r2);
+        int rMax = std::max(r1, r2);
+        for (int r = rMin + 1; r < rMax; ++r) {
+            if (!gameMap->isWalkable(r, c1)) return false;
+        }
+    }
+    return true;
+}
+
 void BebeLloron::Update() {
     if (!alive) return;
 
@@ -34,19 +65,45 @@ void BebeLloron::Update() {
     float step = speed * deltaTime;
 
     // Transición entre patrulla y persecución
-    if (!pursuing && dist < pursuitRange) {
+    if (!pursuing && dist < pursuitRange && hasLineOfSightToPlayer()) {
         pursuing = true;
-    } else if (pursuing && dist > pursuitGiveUpRange) {
+    } else if (pursuing && (dist > pursuitGiveUpRange || !hasLineOfSightToPlayer())) {
         pursuing = false;
     }
 
     if (pursuing) {
-        // Persecución ligera: se mueve hacia el jugador pero sin insistir mucho
-        EnemyDirection toPlayer = directionTowardPlayer();
-        if (!tryMove(toPlayer, step)) {
-            // Si no puede ir directo, intenta una dirección perpendicular
-            EnemyDirection alt = randomDirection();
-            tryMove(alt, step);
+        float d;
+        glm::vec2 targetPos = getClosestPlayerPos(d);
+        glm::vec2 diff = targetPos - position;
+
+        EnemyDirection primary, secondary;
+        if (std::abs(diff.x) > std::abs(diff.y)) {
+            primary = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
+            secondary = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
+        } else {
+            primary = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
+            secondary = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
+        }
+
+        // 1. Intentar moverse en el eje principal (línea recta hacia el jugador).
+        if (!tryMove(primary, step)) {
+            // 2. Si choca contra una esquina o un bloque por no estar alienado,
+            // moverse en el eje secundario para "centrarse" en el pasillo.
+            if (!tryMove(secondary, step)) {
+                // 3. Si aún así está completamente atascado en ambas direcciones,
+                // forzar su alineación estricta hacia el centro de su propia casilla.
+                int tr, tc;
+                gameMap->ndcToGrid(position, tr, tc);
+                glm::vec2 center = gameMap->gridToNDC(tr, tc);
+
+                if (primary == EnemyDirection::UP || primary == EnemyDirection::DOWN) {
+                    if (position.x < center.x - 0.02f) tryMove(EnemyDirection::RIGHT, step);
+                    else if (position.x > center.x + 0.02f) tryMove(EnemyDirection::LEFT, step);
+                } else {
+                    if (position.y < center.y - 0.02f) tryMove(EnemyDirection::UP, step);
+                    else if (position.y > center.y + 0.02f) tryMove(EnemyDirection::DOWN, step);
+                }
+            }
         }
     } else {
         // Patrulla: camina en una dirección y cambia periódicamente

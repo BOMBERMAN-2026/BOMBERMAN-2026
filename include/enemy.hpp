@@ -4,8 +4,10 @@
 #include "entity.hpp"
 #include <glm/glm.hpp>
 #include <string>
+#include <vector>
 
 class GameMap;
+class Player;
 
 /*
  * Enumeración con las direcciones posibles para el movimiento de enemigos.
@@ -36,7 +38,7 @@ public:
 
     // Referencias al mundo (NO son propiedad del enemigo, no se hacen delete)
     const GameMap* gameMap;
-    const glm::vec2* playerPos; // Puntero a la posición del jugador
+    const std::vector<Player*>* playersList; // Puntero a la lista de jugadores
 
     float deltaTime;        // Tiempo entre frames, actualizado externamente
 
@@ -59,13 +61,14 @@ public:
     bool takeDamage(int amount = 1);
 
     // Vincula las referencias externas (llamar después de construir)
-    void setContext(const GameMap* map, const glm::vec2* playerPosition);
+    void setContext(const GameMap* map, const std::vector<Player*>* players);
 
     // Actualiza el deltaTime (llamar cada frame antes de Update)
     void setDeltaTime(float dt);
 
 protected:
     // ── Utilidades de IA que pueden usar las subclases ──
+    glm::vec2 getClosestPlayerPos(float& out_dist) const;
 
     // Distancia Manhattan al jugador (en coordenadas NDC)
     float distanceToPlayer() const;

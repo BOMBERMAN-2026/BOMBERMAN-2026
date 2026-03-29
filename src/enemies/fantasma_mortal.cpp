@@ -59,7 +59,9 @@ void FantasmaMortal::Update() {
     if (toPlayer != EnemyDirection::NONE) {
         if (!tryMove(toPlayer, step)) {
             // Intentar dirección secundaria (eje perpendicular)
-            glm::vec2 diff = playerPos ? (*playerPos - position) : glm::vec2(0.0f);
+            float d;
+            glm::vec2 targetPos = getClosestPlayerPos(d);
+            glm::vec2 diff = (d < 99999.0f) ? (targetPos - position) : glm::vec2(0.0f);
             EnemyDirection alt;
             if (std::abs(diff.x) > std::abs(diff.y)) {
                 alt = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;

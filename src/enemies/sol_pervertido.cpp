@@ -72,9 +72,9 @@ std::vector<std::unique_ptr<SolPervertido>> SolPervertido::split() {
             new SolPervertido(position + glm::vec2(-offset, 0.0f), size * 0.7f, speed * 1.3f, Phase::HALF));
         auto half2 = std::unique_ptr<SolPervertido>(
             new SolPervertido(position + glm::vec2( offset, 0.0f), size * 0.7f, speed * 1.3f, Phase::HALF));
-        if (gameMap && playerPos) {
-            half1->setContext(gameMap, playerPos);
-            half2->setContext(gameMap, playerPos);
+        if (gameMap && playersList) {
+            half1->setContext(gameMap, playersList);
+            half2->setContext(gameMap, playersList);
         }
         children.push_back(std::move(half1));
         children.push_back(std::move(half2));
@@ -89,8 +89,8 @@ std::vector<std::unique_ptr<SolPervertido>> SolPervertido::split() {
         for (int i = 0; i < 4; ++i) {
             auto quarter = std::unique_ptr<SolPervertido>(
                 new SolPervertido(position + offsets[i], size * 0.5f, speed * 1.6f, Phase::QUARTER));
-            if (gameMap && playerPos) {
-                quarter->setContext(gameMap, playerPos);
+            if (gameMap && playersList) {
+                quarter->setContext(gameMap, playersList);
             }
             children.push_back(std::move(quarter));
         }
