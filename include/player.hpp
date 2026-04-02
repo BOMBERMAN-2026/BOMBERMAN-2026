@@ -25,17 +25,33 @@ enum Move {
 
 class Player : public Entity {
     public:
-        Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity);
+        // Datos de animación
+        std::string spritePrefix;
+        std::string currentSpriteName;
+        float flipX;
+        GLint facingDirKey;
+        bool isWalking;
+        float walkTimer;
+        int walkPhase;
+        
+        float deltaTime;        // Tiempo entre frames, actualizado externamente
+
+        Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, const std::string& prefix = "jugadorblanco");
         ~Player() override;
 
-        // Tick de lógica (placeholder en este proyecto).
+        // Tick de lógica
         void Update() override;
-        // Render (placeholder: el render real se hace en bomberman.cpp).
-        void Draw()   override;
+        
+        // Tick de render (ahora maneja su propio dibujado)
+        void Draw() override;
 
         // Intenta mover el jugador un paso en la dirección indicada.
         // Aplica colisión con el mapa (`GameMap`) y actualiza `position` si se puede mover.
         void UpdateSprite(Move mov, const GameMap* map, float deltaTime);
+
+    private:
+        void updateAnimation();
+        void setSpriteFromDirAndFrame(GLint dirKey, int frameIndex);
 };
 
 #endif // PLAYER_H

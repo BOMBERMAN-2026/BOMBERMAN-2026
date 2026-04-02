@@ -1,5 +1,6 @@
 #include "enemy.hpp"
 #include "game_map.hpp"
+#include "player.hpp"
 #include <cstdlib>
 #include <cmath>
 
@@ -9,7 +10,8 @@ Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
       hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
       facing(EnemyDirection::LEFT),
-      gameMap(nullptr), playerPos(nullptr), deltaTime(0.0f)
+      gameMap(nullptr), playersList(nullptr), deltaTime(0.0f),
+      animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
 {}
 
 Enemy::~Enemy() {}
@@ -25,9 +27,9 @@ bool Enemy::takeDamage(int amount) {
     return false;
 }
 
-void Enemy::setContext(const GameMap* map, const glm::vec2* playerPosition) {
+void Enemy::setContext(const GameMap* map, const std::vector<Player*>* players) {
     gameMap = map;
-    playerPos = playerPosition;
+    playersList = players;
 }
 
 void Enemy::setDeltaTime(float dt) {
@@ -36,15 +38,35 @@ void Enemy::setDeltaTime(float dt) {
 
 // ── Utilidades de IA ──
 
+glm::vec2 Enemy::getClosestPlayerPos(float& out_dist) const {
+    glm::vec2 bestPos = position;
+    out_dist = 99999.0f;
+    if (!playersList) return bestPos;
+
+    for (Player* p : *playersList) {
+        if (!p) continue;
+        glm::vec2 diff = p->position - position;
+        float d = std::abs(diff.x) + std::abs(diff.y);
+        if (d < out_dist) {
+            out_dist = d;
+            bestPos = p->position;
+        }
+    }
+    return bestPos;
+}
+
 float Enemy::distanceToPlayer() const {
-    if (!playerPos) return 99999.0f;
-    glm::vec2 diff = *playerPos - position;
-    return std::abs(diff.x) + std::abs(diff.y); // Manhattan
+    float d;
+    getClosestPlayerPos(d);
+    return d;
 }
 
 EnemyDirection Enemy::directionTowardPlayer() const {
-    if (!playerPos) return EnemyDirection::NONE;
-    glm::vec2 diff = *playerPos - position;
+    float dist;
+    glm::vec2 target = getClosestPlayerPos(dist);
+    if (dist >= 99999.0f) return EnemyDirection::NONE;
+    
+    glm::vec2 diff = target - position;
     if (std::abs(diff.x) > std::abs(diff.y)) {
         return (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
     } else {

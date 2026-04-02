@@ -2,6 +2,18 @@
 #include "game_map.hpp"
 #include <cstdlib>
 #include <cmath>
+#include <algorithm>
+#include <GL/glew.h>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
+#include "sprite_atlas.hpp"
+
+extern GLuint VAO;
+extern GLuint uniformModel;
+extern GLuint uniformUvRect;
+extern GLuint uniformFlipX;
+extern GLuint uniformTintColor;
+extern SpriteAtlas gEnemyAtlas;
 
 BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size, float speed)
     : Enemy(pos, size, speed, /*hp=*/1, /*score=*/800),
@@ -16,6 +28,36 @@ BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size, float speed)
 
 BebeLloron::~BebeLloron() {}
 
+bool BebeLloron::hasLineOfSightToPlayer() const {
+    if (!gameMap) return false;
+    
+    float dist;
+    glm::vec2 targetPos = getClosestPlayerPos(dist);
+    if (dist >= 99999.0f) return false;
+
+    int r1, c1, r2, c2;
+    gameMap->ndcToGrid(this->position, r1, c1);
+    gameMap->ndcToGrid(targetPos, r2, c2);
+
+    // Debe estar en la misma fila o misma columna para verse directo
+    if (r1 != r2 && c1 != c2) return false;
+
+    if (r1 == r2) {
+        int cMin = std::min(c1, c2);
+        int cMax = std::max(c1, c2);
+        for (int c = cMin + 1; c < cMax; ++c) {
+            if (!gameMap->isWalkable(r1, c)) return false;
+        }
+    } else {
+        int rMin = std::min(r1, r2);
+        int rMax = std::max(r1, r2);
+        for (int r = rMin + 1; r < rMax; ++r) {
+            if (!gameMap->isWalkable(r, c1)) return false;
+        }
+    }
+    return true;
+}
+
 void BebeLloron::Update() {
     if (!alive) return;
 
@@ -23,19 +65,45 @@ void BebeLloron::Update() {
     float step = speed * deltaTime;
 
     // Transición entre patrulla y persecución
-    if (!pursuing && dist < pursuitRange) {
+    if (!pursuing && dist < pursuitRange && hasLineOfSightToPlayer()) {
         pursuing = true;
-    } else if (pursuing && dist > pursuitGiveUpRange) {
+    } else if (pursuing && (dist > pursuitGiveUpRange || !hasLineOfSightToPlayer())) {
         pursuing = false;
     }
 
     if (pursuing) {
-        // Persecución ligera: se mueve hacia el jugador pero sin insistir mucho
-        EnemyDirection toPlayer = directionTowardPlayer();
-        if (!tryMove(toPlayer, step)) {
-            // Si no puede ir directo, intenta una dirección perpendicular
-            EnemyDirection alt = randomDirection();
-            tryMove(alt, step);
+        float d;
+        glm::vec2 targetPos = getClosestPlayerPos(d);
+        glm::vec2 diff = targetPos - position;
+
+        EnemyDirection primary, secondary;
+        if (std::abs(diff.x) > std::abs(diff.y)) {
+            primary = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
+            secondary = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
+        } else {
+            primary = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
+            secondary = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
+        }
+
+        // 1. Intentar moverse en el eje principal (línea recta hacia el jugador).
+        if (!tryMove(primary, step)) {
+            // 2. Si choca contra una esquina o un bloque por no estar alienado,
+            // moverse en el eje secundario para "centrarse" en el pasillo.
+            if (!tryMove(secondary, step)) {
+                // 3. Si aún así está completamente atascado en ambas direcciones,
+                // forzar su alineación estricta hacia el centro de su propia casilla.
+                int tr, tc;
+                gameMap->ndcToGrid(position, tr, tc);
+                glm::vec2 center = gameMap->gridToNDC(tr, tc);
+
+                if (primary == EnemyDirection::UP || primary == EnemyDirection::DOWN) {
+                    if (position.x < center.x - 0.02f) tryMove(EnemyDirection::RIGHT, step);
+                    else if (position.x > center.x + 0.02f) tryMove(EnemyDirection::LEFT, step);
+                } else {
+                    if (position.y < center.y - 0.02f) tryMove(EnemyDirection::UP, step);
+                    else if (position.y > center.y + 0.02f) tryMove(EnemyDirection::DOWN, step);
+                }
+            }
         }
     } else {
         // Patrulla: camina en una dirección y cambia periódicamente
@@ -49,8 +117,43 @@ void BebeLloron::Update() {
             facing = randomDirection();
         }
     }
+
+    animTimer += deltaTime;
+    if (animTimer >= 0.2f) {
+        animTimer = 0.0f;
+        animFrame ^= 1;
+    }
+
+    flipX = 0.0f;
+    std::string prefix;
+    switch (facing) {
+        case EnemyDirection::LEFT:  prefix = "bebe.derecha."; flipX = 1.0f; break;
+        default:                    prefix = "bebe.derecha."; break;
+    }
+    currentSpriteName = prefix + std::to_string(animFrame);
 }
 
 void BebeLloron::Draw() {
-    // TODO: Renderizar sprite del Bebé llorón
+    if (!alive) return;
+
+    // Tamaño más pequeño como soliticado
+    const float enemyScaleFactor = 1.15f; 
+    float halfTile = gameMap->getTileSize() / 2.0f;
+
+    glm::mat4 model = glm::mat4(1.0f);
+    glm::vec3 renderPos = glm::vec3(position.x, position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
+    model = glm::translate(model, renderPos);   
+
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);       
+
+    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor, halfTile * enemyScaleFactor, 1.0f));     
+
+    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+    glUniform1f(uniformFlipX, flipX);
+    glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }

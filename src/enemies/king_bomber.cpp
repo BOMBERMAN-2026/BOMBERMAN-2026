@@ -36,7 +36,9 @@ KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
 KingBomber::~KingBomber() {}
 
 void KingBomber::updateDrones() {
-    if (!playerPos) return;
+    float dist;
+    glm::vec2 targetPos = getClosestPlayerPos(dist);
+    if (dist >= 99999.0f) return;
 
     droneFireTimer -= deltaTime;
 
@@ -44,7 +46,7 @@ void KingBomber::updateDrones() {
         if (!drone.alive) continue;
 
         // Perseguir al jugador
-        glm::vec2 diff = *playerPos - drone.position;
+        glm::vec2 diff = targetPos - drone.position;
         float len = std::sqrt(diff.x * diff.x + diff.y * diff.y);
         if (len > 0.001f) {
             glm::vec2 moveDir = diff / len;
