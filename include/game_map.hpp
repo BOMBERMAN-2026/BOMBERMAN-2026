@@ -35,15 +35,19 @@ struct Block {
     int spriteId;
     BlockType type;
     bool destroyed  = false; // Solo relevante si type == DESTRUCTIBLE
+    bool breaking   = false; // true cuando está reproduciendo la animación de rotura
+    float breakTimer = 0.0f;
+    int breakFrame  = 0;
     bool hasPowerUp = false; // Si al destruirse revela un power-up
 
     bool isWalkable() const {
         if (destroyed) return true; // destructible ya destruido → suelo
+        // Si está rompiéndose, TODAVÍA NO es caminable (foco de fuego)
         return (type == BlockType::FLOOR);
     }
 
     bool isDestructible() const {
-        return (type == BlockType::DESTRUCTIBLE && !destroyed);
+        return (type == BlockType::DESTRUCTIBLE && !destroyed && !breaking);
     }
 };
 
@@ -122,7 +126,7 @@ private:
     
     TileAnimator animator;
 
-    int destroyedFloorId = 5; // sprite a mostrar cuando se destruye
+    int destroyedFloorId = 10; // sprite a mostrar cuando se destruye (por defecto, luego se recalcula dinámico en render)
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);

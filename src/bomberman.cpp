@@ -2,6 +2,7 @@
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
+#include "bomb.hpp"
 #include "enemies/leon.hpp"
 #include "enemies/bebe_lloron.hpp"
 
@@ -85,7 +86,10 @@ SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
 SpriteAtlas gEnemyAtlas; // No estático para usarlo en enemigos .cpp
 GLuint enemyTexture = 0;
 
+SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
+
 static std::vector<Enemy*> gEnemies;
+static std::vector<Bomb*> gBombs;
 
 // ============================== OpenGL: helpers ==============================
 
@@ -583,6 +587,19 @@ void Game::init() {
         bebe->currentSpriteName = "bebe.derecha.0";
         gEnemies.push_back(bebe);
     }
+
+    // Limpiar bombas anteriores
+    for (auto b : gBombs) delete b;
+    gBombs.clear();
+
+    // Cargar atlas de bombas (misma sprite sheet del stage)
+    {
+        const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
+        if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas))
+        {
+            std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+        }
+    }
 }
 
 // Procesa input y aplica movimiento/animación de jugadores.
@@ -716,6 +733,29 @@ void Game::processInput() {
         }
     }
 
+    // ======================= Colocar bomba: Jugador 1 con X =======================
+    if (this->keys[GLFW_KEY_X] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_X] = GLFW_REPEAT; // Evitar colocar múltiples bombas con una sola pulsación
+
+        // Obtener tile actual del jugador
+        int bombRow, bombCol;
+        gameMap->ndcToGrid(p1->position, bombRow, bombCol);
+
+        // Comprobar que no hay ya una bomba en ese tile
+        bool alreadyHasBomb = false;
+        for (auto* b : gBombs) {
+            if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
+                alreadyHasBomb = true;
+                break;
+            }
+        }
+
+        if (!alreadyHasBomb) {
+            glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
+            Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, 0);
+            gBombs.push_back(bomb);
+        }
+    }
 }
 
 // Actualiza timers/animación en función del deltaTime.
@@ -739,6 +779,20 @@ void Game::update() {
         p->deltaTime = deltaTime;
         p->Update();
     }
+
+    // Actualizar bombas
+    for (auto it = gBombs.begin(); it != gBombs.end(); ) {
+        Bomb* b = *it;
+        bool justExploded = b->Update(deltaTime);
+        if (justExploded) {
+            // TODO: Aquí se implementará la lógica de explosión (destruir bloques, dañar enemigos/jugadores)
+            // Por ahora simplemente eliminamos la bomba
+            delete b;
+            it = gBombs.erase(it);
+        } else {
+            ++it;
+        }
+    }
 }
 
 // Renderiza mapa + jugadores (sprites) con un quad y UVs desde el atlas.
@@ -756,6 +810,21 @@ void Game::render() {
 
     // === 1. Renderizar mapa (fondo) ===
     gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
+
+    // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
+    if (!gBombs.empty()) {
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, mapTexture); // Las bombas usan la misma textura que el mapa
+        glBindVertexArray(VAO);
+
+        for (auto* b : gBombs) {
+            if (b && b->state != BombState::DONE) {
+                b->Draw();
+            }
+        }
+
+        glBindVertexArray(0);
+    }
 
     // === 2. Renderizar jugador (encima del mapa) ===
     glActiveTexture(GL_TEXTURE0);

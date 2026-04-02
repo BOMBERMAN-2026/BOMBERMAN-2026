@@ -212,6 +212,24 @@ bool GameMap::loadAtlas(const std::string& jsonPath) {
 // Avanza animaciones de tiles (si el atlas define animaciones).
 void GameMap::update(float deltaTime) {
     animator.update(deltaTime);
+
+    // Actualizar bloques que se están rompiendo
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            Block& b = grid[r][c];
+            if (b.breaking) {
+                b.breakTimer += deltaTime;
+                if (b.breakTimer >= 0.08f) { // misma velocidad rápida que la explosión
+                    b.breakTimer -= 0.08f;
+                    b.breakFrame++;
+                    if (b.breakFrame >= 4) {
+                        b.breaking = false;
+                        b.destroyed = true; // finalmente se destruye y pasa a ser suelo 100% transitable
+                    }
+                }
+            }
+        }
+    }
 }
 
 // Recalcula tileSize/offsets para el aspect ratio actual y centra el mapa en pantalla.
@@ -302,15 +320,18 @@ bool GameMap::isWalkable(int row, int col) const {
     return grid[row][col].isWalkable();
 }
 
-// Marca un bloque destructible como destruido (placeholder para futuros power-ups).
+// Marca un bloque destructible como roto (inicia la animación de destruirse).
 bool GameMap::destroyTile(int row, int col) {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return false;
     Block& b = grid[row][col];
     if (!b.isDestructible())
         return false;
-    b.destroyed = true;
-    // Si tenia un power-up, el sistema de juego deberia spawnearlo aqui
+    // Iniciamos la animación
+    b.breaking = true;
+    b.breakTimer = 0.0f;
+    b.breakFrame = 0;
+    // Si tenia un power-up, el sistema de juego deberia spawnearlo aqui cuando acabe
     return true;
 }
 
@@ -367,14 +388,29 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
         for (int c = 0; c < cols; c++) {
             const Block& block = grid[r][c];
 
-            // Si el bloque fue destruido, pintar suelo
+            // Si el bloque fue destruido o se está rompiendo, el fondo será el suelo
             int originalId = block.spriteId;
             int displayId = animator.getDisplayId(originalId);
             
-            if (block.destroyed)
-                displayId = destroyedFloorId;
+            if (block.destroyed || block.breaking) {
+                // Calcular el sprite de suelo dinámicamente según el entorno
+                bool wallLeft   = (c > 0 && grid[r][c-1].type == BlockType::BARRIER);
+                bool wallUp     = (r > 0 && grid[r-1][c].type == BlockType::BARRIER);
+                bool indestLeft = (c > 0 && grid[r][c-1].type == BlockType::INDESTRUCTIBLE);
+                bool indestUp   = (r > 0 && grid[r-1][c].type == BlockType::INDESTRUCTIBLE);
 
-            // Obtener UV rect del atlas
+                // Por defecto, suelo sombra en medio del mapa
+                int floorId = 10; 
+
+                if (wallLeft && wallUp) floorId = 6;   // Esquina arriba izquierda
+                else if (wallLeft)      floorId = 9;   // Sombra izquierda (por muro/barrera)
+                else if (wallUp)        floorId = 7;   // Sombra arriba (por muro/barrera)
+                else if (indestUp && indestLeft) floorId = 9;  // Arriba e izquierda por indestructible -> Sombra izquierda
+                else if (indestUp)       floorId = 11;  // Sombra arriba (por indestructible)
+                else if (indestLeft)     floorId = 9;   // Sombra izquierda (por indestructible)
+                
+                displayId = floorId;
+            }
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
             float scaleX = scale;
             float scaleY = scale;
@@ -418,6 +454,16 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
             glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
 
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+            // Si se está rompiendo, dibujar la animación de rotura ENCIMA del suelo
+            if (block.breaking && atlasLoaded) {
+                std::string breakStr = "destructible_break." + std::to_string(block.breakFrame);
+                glm::vec4 breakUv(0.0f, 0.0f, 1.0f, 1.0f);
+                if (getUvRectForSprite(atlas, breakStr, breakUv)) {
+                    glUniform4fv(uniformUvRect, 1, glm::value_ptr(breakUv));
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                }
+            }
         }
     }
 
