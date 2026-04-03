@@ -13,7 +13,9 @@ class Player;
  * --------
  * Bomba que el jugador puede colocar en el mapa.
  *
- * - Se coloca en el centro del tile donde está el jugador al pulsar 'X'.
+ * - Controles de colocación (actual):
+ *   - Jugador 1 (flechas): Ctrl derecho.
+ *   - Jugador 2 (WASD): X.
  * - Tiene una animación de 3 frames mientras la mecha está activa.
  * - Tras un temporizador (fuseTime), explota y muestra 4 frames de explosión muy rápidos.
  * - Al terminar la explosión, se elimina.

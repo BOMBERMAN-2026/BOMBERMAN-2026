@@ -733,15 +733,14 @@ void Game::processInput() {
         }
     }
 
-    // ======================= Colocar bomba: Jugador 1 con X =======================
-    if (this->keys[GLFW_KEY_X] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_X] = GLFW_REPEAT; // Evitar colocar múltiples bombas con una sola pulsación
+    // ======================= Colocar bombas =======================
+    // P1 (flechas): Ctrl derecho
+    if (this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
-        // Obtener tile actual del jugador
         int bombRow, bombCol;
         gameMap->ndcToGrid(p1->position, bombRow, bombCol);
 
-        // Comprobar que no hay ya una bomba en ese tile
         bool alreadyHasBomb = false;
         for (auto* b : gBombs) {
             if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
@@ -752,8 +751,33 @@ void Game::processInput() {
 
         if (!alreadyHasBomb) {
             glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
-            Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, 0);
+            Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, /*owner=*/0);
             gBombs.push_back(bomb);
+        }
+    }
+
+    // P2 (WASD): X
+    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+        Player* p2 = gPlayers[1];
+        if (this->keys[GLFW_KEY_X] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_X] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
+
+            int bombRow, bombCol;
+            gameMap->ndcToGrid(p2->position, bombRow, bombCol);
+
+            bool alreadyHasBomb = false;
+            for (auto* b : gBombs) {
+                if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
+                    alreadyHasBomb = true;
+                    break;
+                }
+            }
+
+            if (!alreadyHasBomb) {
+                glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
+                Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, /*owner=*/1);
+                gBombs.push_back(bomb);
+            }
         }
     }
 }
