@@ -26,6 +26,20 @@ Babosa::~Babosa() {}
 void Babosa::Update() {
     if (!alive) return;
 
+    if (isDying) {
+        deathTimer -= deltaTime;
+        animTimer += deltaTime;
+        if (animTimer >= 0.1f) {
+            animTimer = 0.0f;
+            if (animFrame < 9) animFrame++; // Babosa tiene 10 frames de muerte (0 al 9)
+        }
+        currentSpriteName = "babosa.muerto." + std::to_string(animFrame);
+        if (deathTimer <= 0.0f) {
+            alive = false;
+        }
+        return; // No se mueve si se está muriendo
+    }
+
     float step = speed * deltaTime;
 
     if (!tryMove(facing, step)) {

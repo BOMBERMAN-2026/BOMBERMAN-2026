@@ -113,6 +113,20 @@ void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
 void FantasmaMortal::Update() {
     if (!alive) return;
 
+    if (isDying) {
+        deathTimer -= deltaTime;
+        animTimer += deltaTime;
+        if (animTimer >= 0.1f) {
+            animTimer = 0.0f;
+            if (animFrame < 6) animFrame++; // Fantasma tiene 7 frames de muerte (0 al 6)
+        }
+        currentSpriteName = "fantasma.muerto." + std::to_string(animFrame);
+        if (deathTimer <= 0.0f) {
+            alive = false;
+        }
+        return;
+    }
+
     if (retreating) {
         // Retroceso rápido
         retreatTimer -= deltaTime;

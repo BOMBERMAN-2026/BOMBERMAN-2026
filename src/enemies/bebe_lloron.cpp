@@ -61,6 +61,20 @@ bool BebeLloron::hasLineOfSightToPlayer() const {
 void BebeLloron::Update() {
     if (!alive) return;
 
+    if (isDying) {
+        deathTimer -= deltaTime;
+        animTimer += deltaTime;
+        if (animTimer >= 0.15f) {
+            animTimer = 0.0f;
+            if (animFrame < 4) animFrame++; // Bebé tiene 5 frames de muerte (0 al 4)
+        }
+        currentSpriteName = "bebe.muerto." + std::to_string(animFrame);
+        if (deathTimer <= 0.0f) {
+            alive = false;
+        }
+        return;
+    }
+
     float dist = distanceToPlayer();
     float step = speed * deltaTime;
 
