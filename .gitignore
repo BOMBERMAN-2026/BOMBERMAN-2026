@@ -44,6 +44,9 @@ build-*/
 *.dwo
 .vscode/settings.json
 
+# Documentation / reference dumps (large files)
+docs/
+
 # Local build helper scripts (keep repo clean)
 *.ps1
 *.bat

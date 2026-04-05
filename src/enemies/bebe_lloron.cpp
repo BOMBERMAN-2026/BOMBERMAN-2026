@@ -136,18 +136,39 @@ void BebeLloron::Update() {
 void BebeLloron::Draw() {
     if (!alive) return;
 
-    // Tamaño más pequeño como soliticado
-    const float enemyScaleFactor = 1.15f; 
+    if (!gameMap) return;
+
+    // Tamaño visual (en tiles) del enemigo.
+    // El sprite del bebé en el atlas es 16x32, así que con ~2 tiles de alto se verá
+    // "alto y delgado" como en el arcade.
+    const float enemyHeightInTiles = 1.95f;
     float halfTile = gameMap->getTileSize() / 2.0f;
 
-    glm::mat4 model = glm::mat4(1.0f);
-    glm::vec3 renderPos = glm::vec3(position.x, position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
-    model = glm::translate(model, renderPos);   
+    glm::vec3 renderPos = glm::vec3(position.x, position.y, 0.0f);
 
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);       
+    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);
 
-    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor, halfTile * enemyScaleFactor, 1.0f));     
+    // Respetar el aspect ratio real del sprite del atlas (p.ej. bebé: 16x32).
+    const float targetHeightScale = halfTile * enemyHeightInTiles;
+    float scaleX = targetHeightScale;
+    float scaleY = targetHeightScale;
+    {
+        auto it = gEnemyAtlas.sprites.find(currentSpriteName);
+        if (it != gEnemyAtlas.sprites.end()) {
+            const SpriteFrame& frame = it->second;
+            if (frame.h > 0) {
+                scaleX = (targetHeightScale * (float)frame.w) / (float)frame.h;
+                scaleY = targetHeightScale;
+            }
+        }
+    }
+
+    // Ajuste vertical según el tamaño real del sprite (ancla aproximada al suelo).
+    renderPos.y = position.y + (scaleY - halfTile) * 0.8f;
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, renderPos);
+    model = glm::scale(model, glm::vec3(scaleX, scaleY, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
