@@ -1,6 +1,8 @@
 #include "enemies/fantasma_mortal.hpp"
 #include "game_map.hpp"
 #include <cmath>
+#include <queue>
+#include <vector>
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -26,8 +28,75 @@ FantasmaMortal::FantasmaMortal(glm::vec2 pos, glm::vec2 size, float speed)
 
 FantasmaMortal::~FantasmaMortal() {}
 
+EnemyDirection FantasmaMortal::findPathToPlayer() const {
+    if (!gameMap) return EnemyDirection::NONE;
+
+    float dist;
+    glm::vec2 targetPos = getClosestPlayerPos(dist);
+    if (dist >= 99999.0f) return EnemyDirection::NONE;
+
+    int startR, startC, targetR, targetC;
+    gameMap->ndcToGrid(this->position, startR, startC);
+    gameMap->ndcToGrid(targetPos, targetR, targetC);
+
+    if (startR == targetR && startC == targetC) {
+        return directionTowardPlayer();
+    }
+
+    int rows = gameMap->getRows();
+    int cols = gameMap->getCols();
+    std::vector<std::vector<bool>> visited(rows, std::vector<bool>(cols, false));
+
+    struct Node {
+        int r, c;
+        EnemyDirection initialDir;
+    };
+    std::queue<Node> q;
+
+    visited[startR][startC] = true;
+
+    // Expandir vecinos del punto inicial
+    int dr[] = {-1, 1, 0, 0}; // UP (-row), DOWN (+row)
+    int dc[] = {0, 0, -1, 1}; // LEFT (-col), RIGHT (+col)
+    EnemyDirection dirs[] = {EnemyDirection::UP, EnemyDirection::DOWN, EnemyDirection::LEFT, EnemyDirection::RIGHT};
+
+    for (int i = 0; i < 4; ++i) {
+        int nr = startR + dr[i];
+        int nc = startC + dc[i];
+        if (nr >= 0 && nr < rows && nc >= 0 && nc < cols) {
+            if (gameMap->isWalkable(nr, nc) || gameMap->isDestructible(nr, nc)) {
+                visited[nr][nc] = true;
+                q.push({nr, nc, dirs[i]});
+            }
+        }
+    }
+
+    while (!q.empty()) {
+        Node curr = q.front();
+        q.pop();
+
+        if (curr.r == targetR && curr.c == targetC) {
+            return curr.initialDir;
+        }
+
+        for (int i = 0; i < 4; ++i) {
+            int nr = curr.r + dr[i];
+            int nc = curr.c + dc[i];
+            if (nr >= 0 && nr < rows && nc >= 0 && nc < cols && !visited[nr][nc]) {
+                if (gameMap->isWalkable(nr, nc) || gameMap->isDestructible(nr, nc)) {
+                    visited[nr][nc] = true;
+                    q.push({nr, nc, curr.initialDir});
+                }
+            }
+        }
+    }
+
+    // Si no hay camino (ej. jugador completamente encerrado en un muro duro), volver a fallback direccional
+    return directionTowardPlayer();
+}
+
 void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
-    if (!alive) return;
+    if (!alive || retreating) return;
     // Retroceder en dirección opuesta a la bomba
     glm::vec2 away = position - bombPos;
     float len = std::sqrt(away.x * away.x + away.y * away.y);
@@ -37,7 +106,7 @@ void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
         retreatDir = dirToVec(randomDirection());
     }
     retreating = true;
-    retreatTimer = 0.8f; // Retrocede durante 0.8 segundos
+    retreatTimer = 1.2f; // Retrocede durante 1.2 segundos
     speed = retreatSpeed;
 }
 
@@ -63,26 +132,54 @@ void FantasmaMortal::Update() {
         return;
     }
 
-    // Movimiento lento hacia Bomberman
     float step = speed * deltaTime;
-    EnemyDirection toPlayer = directionTowardPlayer();
+    // Pedir camino inteligente calculado por BFS (Atraviesa bloques destructibles)
+    EnemyDirection toPlayer = findPathToPlayer();
 
     if (toPlayer != EnemyDirection::NONE) {
         if (!tryMove(toPlayer, step)) {
-            // Intentar dirección secundaria (eje perpendicular)
-            float d;
-            glm::vec2 targetPos = getClosestPlayerPos(d);
-            glm::vec2 diff = (d < 99999.0f) ? (targetPos - position) : glm::vec2(0.0f);
-            EnemyDirection alt;
-            if (std::abs(diff.x) > std::abs(diff.y)) {
-                alt = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
+            // Si no puede moverse en la dirección óptima (ej. atascado en una esquina), 
+            // forzar la alineación con el centro de la celda actual
+            int tr, tc;
+            gameMap->ndcToGrid(position, tr, tc);
+            glm::vec2 center = gameMap->gridToNDC(tr, tc);
+
+            bool moved = false;
+            // Tolerancia aumentada para que pueda deslizarse bien
+            float margin = 0.02f; 
+            
+            if (toPlayer == EnemyDirection::UP || toPlayer == EnemyDirection::DOWN) {
+                if (position.x < center.x - margin) { 
+                    moved = tryMove(EnemyDirection::RIGHT, step); 
+                    facing = EnemyDirection::RIGHT; 
+                } else if (position.x > center.x + margin) { 
+                    moved = tryMove(EnemyDirection::LEFT, step); 
+                    facing = EnemyDirection::LEFT; 
+                }
             } else {
-                alt = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
+                if (position.y < center.y - margin) { 
+                    moved = tryMove(EnemyDirection::UP, step); 
+                    facing = EnemyDirection::UP; 
+                } else if (position.y > center.y + margin) { 
+                    moved = tryMove(EnemyDirection::DOWN, step); 
+                    facing = EnemyDirection::DOWN; 
+                }
             }
-            tryMove(alt, step);
-            facing = alt;
+
+            if (!moved) {
+                // Si ya está alineado y no puede avanzar, probablemente está contra una 
+                // pared dura o en una colisión atípica. Intentar dirección aleatoria 
+                // para desatascarse momentáneamente.
+                if (!tryMove(facing, step)) {
+                    facing = randomDirection();
+                }
+            }
         } else {
             facing = toPlayer;
+        }
+    } else {
+        if (!tryMove(facing, step)) {
+            facing = randomDirection();
         }
     }
 

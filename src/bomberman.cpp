@@ -814,6 +814,15 @@ void Game::update() {
     for (auto enemy : gEnemies) {
         if (!enemy || !enemy->alive) continue;
         enemy->setDeltaTime(deltaTime);
+
+        // Notificar si hay bombas cercanas
+        for (auto* b : gBombs) {
+            float dist = glm::distance(enemy->position, b->position);
+            if (gameMap && dist < gameMap->getTileSize() * 2.5f) {
+                enemy->notifyBombNearby(b->position);
+            }
+        }
+        
         enemy->Update();
     }
 
