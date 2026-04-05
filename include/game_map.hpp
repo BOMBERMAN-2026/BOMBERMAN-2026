@@ -68,6 +68,9 @@ public:
                 GLuint uniformModel, GLuint uniformUvRect,
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
+    void renderHud(GLuint vao, GLuint hudTexture,
+                   GLuint uniformModel, GLuint uniformUvRect);
+
     int getRows() const { return rows; }
     int getCols() const { return cols; }
 
@@ -124,6 +127,9 @@ private:
     SpriteAtlas atlas;                    // Atlas del stage
     bool atlasLoaded = false;             // true si se cargó el atlas
 
+    // Hud
+    float hudTopSpace = 0.25f; // espacio para los marcadores y otras metricas
+    
     // Animación
     TileAnimator animator;                // Swap de IDs animados
 

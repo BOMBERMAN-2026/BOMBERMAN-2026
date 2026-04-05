@@ -240,8 +240,9 @@ void GameMap::calculateTileMetrics(float aspectRatio) {
     float screenWidthInOrtho = 2.0f * aspectRatio;
     float screenHeightInOrtho = 2.0f;
 
+    float availableHeight = screenHeightInOrtho - hudTopSpace;
     float sizeByWidth  = screenWidthInOrtho / (float)cols;
-    float sizeByHeight = screenHeightInOrtho / (float)rows;
+    float sizeByHeight = availableHeight / (float)rows;
     // Escoger el mínimo para que los tiles sean siempre cuadrados perfectos y entren completos
     tileSize = std::min(sizeByWidth, sizeByHeight);
 
@@ -250,7 +251,7 @@ void GameMap::calculateTileMetrics(float aspectRatio) {
     
     // El mapa siempre lo centramos en medio de la pantalla ortográfica
     offsetX = (screenWidthInOrtho - mapWidth)  / 2.0f;
-    offsetY = (screenHeightInOrtho - mapHeight) / 2.0f;
+    offsetY = hudTopSpace + (availableHeight - mapHeight) / 2.0f;
 }
 
 // ============================== Coordenadas: Grid <-> NDC ==============================
@@ -474,4 +475,25 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
     }
 
     glBindVertexArray(0);
+}
+
+void GameMap::renderHud(GLuint vao, GLuint hudTexture,
+                        GLuint uniformModel, GLuint uniformUvRect) {
+    float hudWidth = cols * tileSize;
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, hudTexture);
+
+    glBindVertexArray(vao);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, 1.0f - hudTopSpace * 0.5f, 0.0f));
+    model = glm::scale(model, glm::vec3(hudWidth * 0.5f, hudTopSpace * 0.5f, 1.0f));
+
+    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }

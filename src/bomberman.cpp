@@ -42,6 +42,7 @@
 static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
+GLuint hudTexture;
 
 // ============================== OpenGL: estado global ==============================
 
@@ -572,6 +573,14 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
+    // Cargar textura del HUD
+    const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
+    hudTexture = LoadTexture(hudTexPath.c_str());
+    if (hudTexture == 0)    {
+        std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
     // Crear jugador(es) en la posición de spawn del mapa
     gPlayers.clear();
 
@@ -977,6 +986,8 @@ void Game::render() {
     // === 1. Renderizar mapa (fondo) ===
     gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
 
+    gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
+
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
         glActiveTexture(GL_TEXTURE0);
@@ -1028,7 +1039,6 @@ void Game::toggleFullscreen(GLFWwindow* window) {
         // Cambiar a fullscreen
         glfwGetWindowPos(window, &windowedXPos, &windowedYPos);
         glfwGetWindowSize(window, &WIDTH, &HEIGHT);
-        std::cout << "Valores de witdth es " <<  WIDTH << " y height es " << HEIGHT << std::endl;
 
         GLFWmonitor* monitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
