@@ -320,6 +320,12 @@ bool GameMap::isWalkable(int row, int col) const {
     return grid[row][col].isWalkable();
 }
 
+bool GameMap::isDestructible(int row, int col) const {
+    if (row < 0 || row >= rows || col < 0 || col >= cols)
+        return false;
+    return grid[row][col].isDestructible();
+}
+
 // Marca un bloque destructible como roto (inicia la animación de destruirse).
 bool GameMap::destroyTile(int row, int col) {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
