@@ -853,6 +853,12 @@ void Game::processInput() {
             }
         }
     }
+
+    // Pasar de windowed a fullscreen: Tab
+    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
+        toggleFullscreen(this->window);
+    }
 }
 
 // Tick de lógica: mapa, enemigos, bombas (daño) y contacto enemigo-jugador.
@@ -1015,3 +1021,23 @@ void Game::render() {
     glUseProgram(0);
 }
 
+// Cambiar pantalla de fullscreen a windowed (y viceversa)
+void Game::toggleFullscreen(GLFWwindow* window) {
+
+    if (glfwGetWindowMonitor(window) == nullptr) {
+        // Cambiar a fullscreen
+        glfwGetWindowPos(window, &windowedXPos, &windowedYPos);
+        glfwGetWindowSize(window, &WIDTH, &HEIGHT);
+        std::cout << "Valores de witdth es " <<  WIDTH << " y height es " << HEIGHT << std::endl;
+
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+    } else {
+        // Pasar a windowed
+        // Valores fixeados para windowed
+        WIDTH = 1280; 
+        HEIGHT = 720;
+        glfwSetWindowMonitor(window, nullptr, windowedXPos, windowedYPos, WIDTH, HEIGHT, 0);
+    }
+}

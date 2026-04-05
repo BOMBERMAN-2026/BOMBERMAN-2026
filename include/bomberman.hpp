@@ -45,8 +45,9 @@ class Game
         GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
 
         // Ventana
-        GLuint WIDTH, HEIGHT;                 // Tamaño ventana
-        GLFWwindow* window;                   // GLFW window
+        GLint WIDTH, HEIGHT;                 // Tamaño ventana
+        int windowedXPos, windowedYPos;      // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
+        GLFWwindow* window;                  // GLFW window
 
         // Timing
         float deltaTime = 0.0f;               // Tiempo entre frames (segundos)
@@ -63,6 +64,9 @@ class Game
         void processInput(); // Lee teclas y aplica acciones (movimiento/bombas).
         void update();       // Tick de lógica (IA, bombas, colisiones).
         void render();       // Renderiza el frame.
+
+        // Alternar entre pantalla completa y ventana
+        void toggleFullscreen(GLFWwindow* window);
 };
 
 
