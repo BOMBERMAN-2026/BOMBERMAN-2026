@@ -221,34 +221,34 @@ bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
 
         if (dir == EnemyDirection::UP) {
             gameMap->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::DOWN) {
             gameMap->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::LEFT) {
             gameMap->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::RIGHT) {
             gameMap->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
-            if (!gameMap->isWalkable(r, c)) return false;
+            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
             if (bombBlocks(r, c)) return false;
         }
     }

@@ -89,6 +89,9 @@ public:
     // Actualiza el deltaTime (llamar cada frame antes de Update)
     void setDeltaTime(float dt);
 
+    // Método virtual para reaccionar a una bomba cercana
+    virtual void notifyBombNearby(glm::vec2 bombPos) {}
+
 protected:
     // ── Utilidades de IA que pueden usar las subclases ──
     glm::vec2 getClosestPlayerPos(float& out_dist) const;

@@ -18,11 +18,14 @@ public:
     void Draw()   override;
 
     // Notifica al fantasma de que hay una bomba cerca para que retroceda
-    void notifyBombNearby(glm::vec2 bombPos);
+    void notifyBombNearby(glm::vec2 bombPos) override;
+
+    EnemyDirection findPathToPlayer() const;
 
 private:
     // IA
     bool  retreating;       // Está retrocediendo de una bomba
+    
     float retreatTimer;     // Tiempo restante de retroceso
     float retreatSpeed;     // Velocidad al retroceder (más rápida)
     float normalSpeed;      // Velocidad normal guardada

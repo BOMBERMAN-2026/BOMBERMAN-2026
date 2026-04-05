@@ -76,6 +76,9 @@ public:
     // True si la celda permite caminar.
     bool isWalkable(int row, int col) const;
 
+    // True si la celda es un bloque destructible.
+    bool isDestructible(int row, int col) const;
+
     // Destruye una celda (si es destructible). Devuelve true si se destruyó.
     bool destroyTile(int row, int col);
 

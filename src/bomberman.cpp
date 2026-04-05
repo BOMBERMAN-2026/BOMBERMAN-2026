@@ -5,6 +5,8 @@
 #include "bomb.hpp"
 #include "enemies/leon.hpp"
 #include "enemies/bebe_lloron.hpp"
+#include "enemies/babosa.hpp"
+#include "enemies/fantasma_mortal.hpp"
 
 /*
  * bomberman.cpp
@@ -616,6 +618,15 @@ void Game::init() {
         gEnemies.push_back(leon);
     }
 
+    // Crear Babosa
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
+        Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
+        babosa->setContext(gameMap, &gPlayers);
+        babosa->currentSpriteName = "babosa.derecha.0";
+        gEnemies.push_back(babosa);
+    }
+
     // Crear Bebe Lloron
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
@@ -623,6 +634,15 @@ void Game::init() {
         bebe->setContext(gameMap, &gPlayers);
         bebe->currentSpriteName = "bebe.derecha.0";
         gEnemies.push_back(bebe);
+    }
+
+    // Crear Fantasma Mortal
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 5.0f);
+        FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
+        fantasma->setContext(gameMap, &gPlayers);
+        fantasma->currentSpriteName = "fantasma.derecha.0";
+        gEnemies.push_back(fantasma);
     }
 
     // Limpiar bombas anteriores
@@ -842,7 +862,16 @@ void Game::update() {
         enemy->setDeltaTime(deltaTime);
 
         if (enemy->lifeState == EnemyLifeState::Alive) {
-            enemy->Update();
+    
+        // Notificar si hay bombas cercanas
+        for (auto* b : gBombs) {
+            float dist = glm::distance(enemy->position, b->position);
+            if (gameMap && dist < gameMap->getTileSize() * 2.5f) {
+                enemy->notifyBombNearby(b->position);
+            }
+        }
+        
+        enemy->Update();
         } else if (enemy->lifeState == EnemyLifeState::Dying) {
             enemy->updateDeath(deltaTime);
         }
