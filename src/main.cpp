@@ -21,6 +21,7 @@
 Game* bomberman;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
 int main() {
 
@@ -57,6 +58,7 @@ int main() {
     }
 
     glfwMakeContextCurrent(mainWindow);
+    glfwSetFramebufferSizeCallback(mainWindow, framebuffer_size_callback);
 
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK)
@@ -126,4 +128,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             }
         }
     }
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    // Actualizamos el Viewport para que ocupe toda la nueva ventana
+    glViewport(0, 0, width, height);
 }
