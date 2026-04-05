@@ -20,25 +20,24 @@ public:
     TileAnimator();
     ~TileAnimator();
 
-    // Configura la animación leyendo el intervalo y los pares de intercambio desde el atlas.
+    // Setup
     void setup(const SpriteAtlas& atlas);
 
-    // Actualiza el temporizador interno.
-    // Devuelve true si cambió el estado (toggle) en este frame.
-    bool update(float deltaTime);
+    // Tick
+    bool update(float deltaTime); // Devuelve true si alterna (toggle) en este frame.
 
-    // Dado el ID del tile (el que viene del .txt), devuelve el ID a renderizar ahora.
-    // Maneja automáticamente la bidireccionalidad (A <-> B).
-    int getDisplayId(int originalId) const;
+    // Render
+    int getDisplayId(int originalId) const; // Traduce ID original -> ID a renderizar.
 
 private:
-    float interval = 0.0f;
-    float timer = 0.0f;
-    bool  isToggled = false; // false = estado original, true = estado alternativo
+    // Estado
+    float interval = 0.0f;      // Segundos entre toggles (0 = sin animación)
+    float timer = 0.0f;         // Acumulador
+    bool  isToggled = false;    // false = original, true = alternativo
 
-    // Guarda los mappings en ambos sentidos para poder resolver facilmente
-    std::unordered_map<int, int> toAlternative;
-    std::unordered_map<int, int> toOriginal;
+    // Mappings (A <-> B)
+    std::unordered_map<int, int> toAlternative; // original -> alternativo
+    std::unordered_map<int, int> toOriginal;    // alternativo -> original
 };
 
 #endif // TILE_ANIMATOR_HPP

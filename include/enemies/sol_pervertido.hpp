@@ -16,6 +16,7 @@
  */
 class SolPervertido : public Enemy {
 public:
+    // Fase actual del boss.
     enum class Phase {
         FULL,    // Forma completa
         HALF,    // Media forma

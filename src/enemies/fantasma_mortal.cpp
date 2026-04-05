@@ -15,8 +15,9 @@ FantasmaMortal::FantasmaMortal(glm::vec2 pos, glm::vec2 size, float speed)
 
 FantasmaMortal::~FantasmaMortal() {}
 
+// Respuesta a bomba cercana: calcula dirección de huida y activa retroceso.
 void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
     // Retroceder en dirección opuesta a la bomba
     glm::vec2 away = position - bombPos;
     float len = std::sqrt(away.x * away.x + away.y * away.y);
@@ -30,8 +31,9 @@ void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
     speed = retreatSpeed;
 }
 
+// IA: si está huyendo retrocede rápido; si no, persigue lento al jugador.
 void FantasmaMortal::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     if (retreating) {
         // Retroceso rápido
@@ -73,6 +75,7 @@ void FantasmaMortal::Update() {
     }
 }
 
+// Render del enemigo (pendiente).
 void FantasmaMortal::Draw() {
     // TODO: Renderizar sprite del Fantasma mortal
 }

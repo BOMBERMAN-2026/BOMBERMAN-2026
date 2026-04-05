@@ -22,23 +22,27 @@
  */
 class Entity {
     public:
-        glm::vec2 position;
-        glm::vec2 direction;
-        glm::vec2 size;
-        glm::vec4 tintColor;
-        float speed;
+        // Transform
+        glm::vec2 position;   // Centro en NDC
+        glm::vec2 direction;  // Dirección normalizada (si aplica)
+        glm::vec2 size;       // Tamaño en NDC
 
-                // Crea una entidad con posición, tamaño (NDC) y velocidad base.
-                Entity(glm::vec2 pos, glm::vec2 size, float speed)
+        // Render
+        glm::vec4 tintColor;  // Tint multiplicativo
+
+        // Movimiento
+        float speed;          // Velocidad base
+
+        Entity(glm::vec2 pos, glm::vec2 size, float speed) // Crea entidad con posición/tamaño (NDC) y velocidad base.
             : position(pos), size(size), speed(speed),
               direction(glm::vec2(0.0f)), tintColor(glm::vec4(1.0f)) {}
 
-        // Destructor virtual: necesario para delete a través de puntero base
+        // Destructor virtual: necesario para delete a través de puntero base.
         virtual ~Entity() {}
 
         // Tick de lógica por frame.
         virtual void Update() = 0;
-        // Render (si se usa el patrón Entity::Draw en el futuro).
+        // Tick de render (algunas entidades se dibujan fuera del patrón Entity::Draw).
         virtual void Draw()   = 0;
 };
 

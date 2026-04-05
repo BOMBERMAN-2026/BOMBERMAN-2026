@@ -28,6 +28,7 @@ BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size, float speed)
 
 BebeLloron::~BebeLloron() {}
 
+// Línea de visión: misma fila/columna sin muros entre medias.
 bool BebeLloron::hasLineOfSightToPlayer() const {
     if (!gameMap) return false;
     
@@ -58,8 +59,9 @@ bool BebeLloron::hasLineOfSightToPlayer() const {
     return true;
 }
 
+// IA: patrulla; persigue si está en rango y con línea de visión.
 void BebeLloron::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float dist = distanceToPlayer();
     float step = speed * deltaTime;
@@ -133,8 +135,9 @@ void BebeLloron::Update() {
     currentSpriteName = prefix + std::to_string(animFrame);
 }
 
+// Render del enemigo (respeta aspecto real del frame).
 void BebeLloron::Draw() {
-    if (!alive) return;
+    if (lifeState == EnemyLifeState::Dead) return;
 
     if (!gameMap) return;
 

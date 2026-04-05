@@ -8,6 +8,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include "sprite_atlas.hpp"
+#include "bomb.hpp"
 #include <iostream>
 
 extern GLuint VAO;
@@ -32,7 +33,7 @@ extern GameMap* gameMap;
 
 // ============================== Ctor / dtor ==============================
 
-Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, const std::string& prefix)
+Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId, const std::string& prefix)
     : Entity(pos, size, velocity),
       spritePrefix(prefix),
       currentSpriteName(prefix + ".abajo.0"),
@@ -42,9 +43,30 @@ Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, const std::strin
       walkTimer(0.0f),
       walkPhase(0),
       deltaTime(0.0f)
-{}
+{
+    this->playerId = playerId;
+    spawnPosition = pos;
+    lifeState = PlayerLifeState::Alive;
+    deathTimer = 0.0f;
+    deathFrame = 0;
+    pendingRespawn = false;
+}
+
+// Colisión con bombas (tile-based): el dueño puede salir una vez; luego también bloquea para él.
+static bool bombBlocksCellForPlayer(int row, int col, int playerId) {
+    for (auto* b : gBombs) {
+        if (!b) continue;
+        if (b->state == BombState::DONE) continue;
+        if (b->gridRow == row && b->gridCol == col) {
+            return b->blocksForPlayer(playerId);
+        }
+    }
+    return false;
+}
 
 Player::~Player() {}
+
+// ============================== Animación ==============================
 
 static int walkPhaseToFrameIndex(int phase)
 {
@@ -95,12 +117,58 @@ void Player::updateAnimation() {
     }
 }
 
-// ============================== API base ==============================
+void Player::updateDeathAnimation() {
+    // Avanza frames de muerte según causa; al terminar respawnea.
+    static constexpr float deathFrameInterval = 0.10f;
 
-void Player::Update() {
-    updateAnimation();
+    int lastFrame = 0;
+    const char* prefix = nullptr;
+    if (lifeState == PlayerLifeState::DyingByEnemy) {
+        prefix = nullptr; // usa spritePrefix
+        lastFrame = 7;    // jugador(color).muerto.0..7
+        flipX = 0.0f;
+    } else if (lifeState == PlayerLifeState::DyingByExplosion) {
+        prefix = "jugador.muerto.quemado.";
+        lastFrame = 10;   // jugador.muerto.quemado.0..10
+        flipX = 0.0f;
+    } else {
+        return;
+    }
+
+    deathTimer += deltaTime;
+    while (deathTimer >= deathFrameInterval) {
+        deathTimer -= deathFrameInterval;
+        deathFrame++;
+        if (deathFrame > lastFrame) {
+            pendingRespawn = true;
+            break;
+        }
+    }
+
+    if (pendingRespawn) {
+        respawn();
+        return;
+    }
+
+    if (prefix) {
+        currentSpriteName = std::string(prefix) + std::to_string(deathFrame);
+    } else {
+        currentSpriteName = spritePrefix + ".muerto." + std::to_string(deathFrame);
+    }
 }
 
+// ============================== API base ==============================
+
+// Tick de lógica: animación de caminar o de muerte.
+void Player::Update() {
+    if (lifeState == PlayerLifeState::Alive) {
+        updateAnimation();
+    } else {
+        updateDeathAnimation();
+    }
+}
+
+// Render del sprite actual (el orden de pintado lo decide `bomberman.cpp`).
 void Player::Draw() {
     const float playerScaleFactor = 1.8f;
     float halfTile = gameMap->getTileSize() / 2.0f;
@@ -141,8 +209,11 @@ void Player::Draw() {
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
 
-// Aplica un paso de movimiento en NDC y realiza colisión contra el grid del mapa.
+// Aplica un paso de movimiento con colisión (mapa + bombas) y “snap” al centro del tile.
 void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
+    if (!map) return;
+    if (lifeState != PlayerLifeState::Alive) return;
+
     const float step     = this->speed * deltaTime;
     const float halfTile = map->getTileSize() / 2.0f;
 
@@ -185,28 +256,82 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
         if (mov == MOVE_UP) {
             map->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_DOWN) {
             map->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_LEFT) {
             map->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_RIGHT) {
             map->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
             if (!map->isWalkable(r, c)) return;
+            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
     }
 
     this->position = newPos;
+}
+
+// Mata al jugador por contacto con enemigo (usa "jugador(color).muerto.N").
+void Player::killByEnemy() {
+    if (lifeState != PlayerLifeState::Alive) return;
+    lifeState = PlayerLifeState::DyingByEnemy;
+    isWalking = false;
+    walkTimer = 0.0f;
+    walkPhase = 0;
+    deathTimer = 0.0f;
+    deathFrame = 0;
+    pendingRespawn = false;
+    flipX = 0.0f;
+    currentSpriteName = spritePrefix + ".muerto.0";
+}
+
+// Mata al jugador por explosión (usa "jugador.muerto.quemado.N").
+void Player::killByExplosion() {
+    if (lifeState != PlayerLifeState::Alive) return;
+    lifeState = PlayerLifeState::DyingByExplosion;
+    isWalking = false;
+    walkTimer = 0.0f;
+    walkPhase = 0;
+    deathTimer = 0.0f;
+    deathFrame = 0;
+    pendingRespawn = false;
+    flipX = 0.0f;
+    currentSpriteName = "jugador.muerto.quemado.0";
+}
+
+// Vuelve al spawn y restaura estado de movimiento/animación.
+void Player::respawn() {
+    position = spawnPosition;
+    lifeState = PlayerLifeState::Alive;
+
+    facingDirKey = GLFW_KEY_DOWN;
+    isWalking = false;
+    walkTimer = 0.0f;
+    walkPhase = 0;
+
+    deathTimer = 0.0f;
+    deathFrame = 0;
+    pendingRespawn = false;
+
+    flipX = 0.0f;
+    currentSpriteName = spritePrefix + ".abajo.0";
 }

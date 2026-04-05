@@ -30,8 +30,7 @@ static bool fileExists(const std::string& path)
     return f.good();
 }
 
-// Resuelve una ruta de asset cuando el ejecutable se lanza desde un subdirectorio
-// (típicamente build/). Primero prueba tal cual, luego prueba con "../".
+// Si el exe corre desde build/, prueba también con "../" + path.
 std::string resolveAssetPath(const std::string& path)
 {
     if (fileExists(path)) return path;
@@ -114,7 +113,7 @@ static size_t findMatchingBrace(const std::string& s, size_t openPos)
     return std::string::npos;
 }
 
-// Carga un SpriteAtlas desde un JSON con el formato generado por tu herramienta.
+// Loader mínimo del JSON (rellena imagePath/imageWidth/imageHeight + sprites).
 bool loadSpriteAtlasMinimal(const std::string& jsonPath, SpriteAtlas& out)
 {
     out = SpriteAtlas{};
@@ -317,8 +316,7 @@ bool loadSpriteAtlasMinimal(const std::string& jsonPath, SpriteAtlas& out)
     return !out.imagePath.empty() && out.imageWidth > 0 && out.imageHeight > 0;
 }
 
-// Devuelve el rectángulo UV (u0,v0,u1,v1) en rango 0..1 para el sprite.
-// Si el sprite no existe, devuelve false.
+// (u0,v0,u1,v1) en 0..1; devuelve false si no existe.
 bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spriteName, glm::vec4& uvRect)
 {
     auto it = atlas.sprites.find(spriteName);

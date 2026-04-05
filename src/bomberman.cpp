@@ -34,6 +34,8 @@
 #include <string>
 #include <cstdlib>
 #include <vector>
+#include <cmath>
+#include <utility>
 
 static std::vector<Player*> gPlayers;
 GameMap* gameMap;
@@ -89,7 +91,42 @@ GLuint enemyTexture = 0;
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 
 static std::vector<Enemy*> gEnemies;
-static std::vector<Bomb*> gBombs;
+std::vector<Bomb*> gBombs;
+
+// ============================== Gameplay: helpers ==============================
+
+// Devuelve true si dos posiciones NDC caen en el mismo tile del mapa.
+static bool isSameTile(const GameMap* map, const glm::vec2& a, const glm::vec2& b) {
+    if (!map) return false;
+    int ar, ac, br, bc;
+    map->ndcToGrid(a, ar, ac);
+    map->ndcToGrid(b, br, bc);
+    return ar == br && ac == bc;
+}
+
+// Colisión enemigo-jugador (AABB simple por tile): detecta contacto.
+static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, const glm::vec2& playerPos) {
+    if (!map) return false;
+    // AABB simple alrededor del centro del tile. Ajustable.
+    const float halfTile = map->getTileSize() / 2.0f;
+    const float r = halfTile * 0.70f;
+    return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
+}
+
+// Devuelve true si el tile donde está la entidad coincide con cualquier segmento
+// de la explosión ya calculada de la bomba.
+static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
+    if (!map || !bomb) return false;
+    int er, ec;
+    map->ndcToGrid(entityPos, er, ec);
+
+    for (const auto& seg : bomb->explosionSegments) {
+        int sr, sc;
+        map->ndcToGrid(seg.pos, sr, sc);
+        if (sr == er && sc == ec) return true;
+    }
+    return false;
+}
 
 // ============================== OpenGL: helpers ==============================
 
@@ -538,13 +575,13 @@ void Game::init() {
 
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-        Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, "jugadorblanco");
+        Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/0, "jugadorblanco");
         gPlayers.push_back(p1);
     }
 
     if (this->mode == GameMode::TwoPlayers) {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
-        Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, "jugadorrojo");
+        Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/1, "jugadorrojo");
         gPlayers.push_back(p2);
     }
 
@@ -602,7 +639,7 @@ void Game::init() {
     }
 }
 
-// Procesa input y aplica movimiento/animación de jugadores.
+// Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
 void Game::processInput() {
     if (this->state != GAME_PLAYING) return;
 
@@ -611,131 +648,140 @@ void Game::processInput() {
 
     // ======================= Jugador 1 (blanco): Flechas =======================
 
-    const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
-    const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
-    const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
-    const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
+    if (p1->isAlive()) {
+        const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
+        const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
+        const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
+        const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
 
-    const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
-    if (pressedCount == 0) {
-        p1->isWalking = false;
+        const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
+        if (pressedCount == 0) {
+            p1->isWalking = false;
 
-        if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-            p1->facingDirKey = this->lastDirKey;
+            if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
+                p1->facingDirKey = this->lastDirKey;
+            }
+        } else {
+            GLint keyToUse = GLFW_KEY_UNKNOWN;
+            if (pressedCount == 1) {
+                if (up) keyToUse = GLFW_KEY_UP;
+                if (down) keyToUse = GLFW_KEY_DOWN;
+                if (left) keyToUse = GLFW_KEY_LEFT;
+                if (right) keyToUse = GLFW_KEY_RIGHT;
+                this->lastDirKey = keyToUse;
+            } else {
+                switch (this->lastDirKey) {
+                    case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
+                    case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
+                    case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
+                    case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
+                }
+                if (keyToUse == GLFW_KEY_UNKNOWN) return;
+            }
+
+            switch (keyToUse) {
+                case GLFW_KEY_UP:
+                    p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_UP;
+                    break;
+                case GLFW_KEY_DOWN:
+                    p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_DOWN;
+                    break;
+                case GLFW_KEY_LEFT:
+                    p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_LEFT;
+                    break;
+                case GLFW_KEY_RIGHT:
+                    p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_RIGHT;
+                    break;
+            }
+
+            p1->isWalking = true;
         }
     } else {
-        GLint keyToUse = GLFW_KEY_UNKNOWN;
-        if (pressedCount == 1) {
-            if (up) keyToUse = GLFW_KEY_UP;
-            if (down) keyToUse = GLFW_KEY_DOWN;
-            if (left) keyToUse = GLFW_KEY_LEFT;
-            if (right) keyToUse = GLFW_KEY_RIGHT;
-            this->lastDirKey = keyToUse;
-        } else {
-            switch (this->lastDirKey) {
-                case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
-                case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
-                case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
-                case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
-            }
-            if (keyToUse == GLFW_KEY_UNKNOWN) return;
-        }
-
-        switch (keyToUse) {
-            case GLFW_KEY_UP:
-                p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_UP;
-                break;
-            case GLFW_KEY_DOWN:
-                p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_DOWN;
-                break;
-            case GLFW_KEY_LEFT:
-                p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_LEFT;
-                break;
-            case GLFW_KEY_RIGHT:
-                p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_RIGHT;
-                break;
-        }
-
-        p1->isWalking = true;
+        p1->isWalking = false;
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
     if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
-        const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
-        const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
-        const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
-        const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
-
-        const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
-        if (pressedCount2 == 0) {
+        if (!p2->isAlive()) {
             p2->isWalking = false;
-
-            if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
-                switch (this->lastDirKeyP2) {
-                    case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
-                    case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
-                    case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
-                    case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
-                }
-            }
         } else {
-            GLint keyToUse2 = GLFW_KEY_UNKNOWN;
-            if (pressedCount2 == 1) {
-                if (up2) keyToUse2 = GLFW_KEY_W;
-                if (down2) keyToUse2 = GLFW_KEY_S;
-                if (left2) keyToUse2 = GLFW_KEY_A;
-                if (right2) keyToUse2 = GLFW_KEY_D;
-                this->lastDirKeyP2 = keyToUse2;
-            } else {
-                switch (this->lastDirKeyP2) {
-                    case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
-                    case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
-                    case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
-                    case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+
+            const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
+            const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
+            const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
+            const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
+
+            const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
+            if (pressedCount2 == 0) {
+                p2->isWalking = false;
+
+                if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
+                    switch (this->lastDirKeyP2) {
+                        case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
+                        case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
+                        case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
+                        case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
+                    }
                 }
-                if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
-            }
+            } else {
+                GLint keyToUse2 = GLFW_KEY_UNKNOWN;
+                if (pressedCount2 == 1) {
+                    if (up2) keyToUse2 = GLFW_KEY_W;
+                    if (down2) keyToUse2 = GLFW_KEY_S;
+                    if (left2) keyToUse2 = GLFW_KEY_A;
+                    if (right2) keyToUse2 = GLFW_KEY_D;
+                    this->lastDirKeyP2 = keyToUse2;
+                } else {
+                    switch (this->lastDirKeyP2) {
+                        case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
+                        case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
+                        case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
+                        case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+                    }
+                    if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
+                }
 
-            GLint dir2 = GLFW_KEY_DOWN;
-            Move mov2 = MOVE_NONE;
-            switch (keyToUse2) {
-                case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
-                case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
-                case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
-                case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
-            }
+                GLint dir2 = GLFW_KEY_DOWN;
+                Move mov2 = MOVE_NONE;
+                switch (keyToUse2) {
+                    case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
+                    case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
+                    case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
+                    case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
+                }
 
-            p2->UpdateSprite(mov2, gameMap, this->deltaTime);
-            if (!p2->isWalking || p2->facingDirKey != dir2) {
-                p2->walkTimer = 0.0f;
-                p2->walkPhase = 0;
+                p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+                if (!p2->isWalking || p2->facingDirKey != dir2) {
+                    p2->walkTimer = 0.0f;
+                    p2->walkPhase = 0;
+                }
+                p2->facingDirKey = dir2;
+                p2->isWalking = true;
             }
-            p2->facingDirKey = dir2;
-            p2->isWalking = true;
         }
     }
 
     // ======================= Colocar bombas =======================
     // P1 (flechas): Ctrl derecho
-    if (this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
+    if (p1->isAlive() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
         this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
         int bombRow, bombCol;
@@ -759,7 +805,7 @@ void Game::processInput() {
     // P2 (WASD): X
     if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
-        if (this->keys[GLFW_KEY_X] == GLFW_PRESS) {
+        if (p2->isAlive() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
             this->keys[GLFW_KEY_X] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
             int bombRow, bombCol;
@@ -782,7 +828,7 @@ void Game::processInput() {
     }
 }
 
-// Actualiza timers/animación en función del deltaTime.
+// Tick de lógica: mapa, enemigos, bombas (daño) y contacto enemigo-jugador.
 void Game::update() {
     float deltaTime = this->deltaTime;
 
@@ -790,11 +836,27 @@ void Game::update() {
         gameMap->update(deltaTime);
     }
 
-    // Actualizar enemigos (lógica de movimiento + animación)
-    for (auto enemy : gEnemies) {
-        if (!enemy || !enemy->alive) continue;
+    // Actualizar enemigos (lógica o animación de muerte)
+    for (auto* enemy : gEnemies) {
+        if (!enemy) continue;
         enemy->setDeltaTime(deltaTime);
-        enemy->Update();
+
+        if (enemy->lifeState == EnemyLifeState::Alive) {
+            enemy->Update();
+        } else if (enemy->lifeState == EnemyLifeState::Dying) {
+            enemy->updateDeath(deltaTime);
+        }
+    }
+
+    // Limpiar enemigos que ya terminaron de morir
+    for (auto it = gEnemies.begin(); it != gEnemies.end(); ) {
+        Enemy* e = *it;
+        if (e && e->lifeState == EnemyLifeState::Dead) {
+            delete e;
+            it = gEnemies.erase(it);
+        } else {
+            ++it;
+        }
     }
 
     // Actualizar jugador
@@ -804,22 +866,60 @@ void Game::update() {
         p->Update();
     }
 
-    // Actualizar bombas
+    // Actualizar bombas + aplicar daño por explosión
     for (auto it = gBombs.begin(); it != gBombs.end(); ) {
         Bomb* b = *it;
+
+        // Marcar si el dueño ya abandonó la casilla (entonces bloquea también para él)
+        if (b && !b->ownerLeftTile) {
+            Player* owner = nullptr;
+            if (b->ownerIndex >= 0 && (std::size_t)b->ownerIndex < gPlayers.size()) {
+                owner = gPlayers[b->ownerIndex];
+            }
+            if (!owner || !owner->isAlive() || !isSameTile(gameMap, owner->position, b->position)) {
+                b->ownerLeftTile = true;
+            }
+        }
+
         bool justExploded = b->Update(deltaTime);
+
+        if (b->state == BombState::EXPLODING) {
+            // Explosión: si el fuego toca a una entidad, muere.
+            for (auto* p : gPlayers) {
+                if (!p || !p->isAlive()) continue;
+                if (explosionHitsEntity(gameMap, b, p->position)) {
+                    p->killByExplosion();
+                }
+            }
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+                if (explosionHitsEntity(gameMap, b, enemy->position)) {
+                    enemy->takeDamage(gEnemyAtlas, 999);
+                }
+            }
+        }
+
         if (justExploded) {
-            // TODO: Aquí se implementará la lógica de explosión (destruir bloques, dañar enemigos/jugadores)
-            // Por ahora simplemente eliminamos la bomba
             delete b;
             it = gBombs.erase(it);
         } else {
             ++it;
         }
     }
+
+    // Colisión enemigo ↔ jugador: el jugador muere y respawnea.
+    for (auto* enemy : gEnemies) {
+        if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+        for (auto* p : gPlayers) {
+            if (!p || !p->isAlive()) continue;
+            if (overlapsEnemyPlayer(gameMap, enemy->position, p->position)) {
+                p->killByEnemy();
+            }
+        }
+    }
 }
 
-// Renderiza mapa + jugadores (sprites) con un quad y UVs desde el atlas.
+// Renderiza mapa, bombas, jugadores y enemigos.
 void Game::render() {
 
     glUseProgram(shader);

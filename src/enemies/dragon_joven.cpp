@@ -16,6 +16,7 @@ DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size, float speed)
 
 DragonJoven::~DragonJoven() {}
 
+// Devuelve la dirección de disparo si el jugador está en línea y en rango.
 EnemyDirection DragonJoven::checkLineOfSight() const {
     if (!playersList || !gameMap) return EnemyDirection::NONE;
     
@@ -69,8 +70,9 @@ EnemyDirection DragonJoven::checkLineOfSight() const {
     return EnemyDirection::NONE;
 }
 
+// IA: patrulla; si ve al jugador en línea, intenta escupir fuego (pendiente de proyectil).
 void DragonJoven::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float step = speed * deltaTime;
 
@@ -107,6 +109,7 @@ void DragonJoven::Update() {
     }
 }
 
+// Render del enemigo (pendiente).
 void DragonJoven::Draw() {
     // TODO: Renderizar sprite del Dragón joven (con animación de fuego si isFiring)
 }

@@ -17,9 +17,10 @@ public:
     void Draw()   override;
 
 private:
-    float dirChangeTimer;           // Tiempo acumulado desde el último cambio
-    float dirChangeInterval;        // Intervalo mínimo entre cambios de dirección
-    float dirChangeChance;          // Probabilidad de cambiar al chocar (baja)
+    // IA
+    float dirChangeTimer;     // Tiempo acumulado desde el último cambio
+    float dirChangeInterval;  // Intervalo mínimo entre cambios de dirección
+    float dirChangeChance;    // Probabilidad de cambiar al chocar (baja)
 };
 
 #endif // LEON_HPP

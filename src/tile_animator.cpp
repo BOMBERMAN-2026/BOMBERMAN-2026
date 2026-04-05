@@ -17,7 +17,7 @@ TileAnimator::TileAnimator()
 
 TileAnimator::~TileAnimator() {}
 
-// Inicializa el animador desde el atlas: intervalo y diccionarios original<->alternativo.
+// Setup: inicializa el animador desde el atlas.
 void TileAnimator::setup(const SpriteAtlas& atlas) {
     this->interval = atlas.animInterval;
     this->timer = 0.0f;
@@ -33,7 +33,7 @@ void TileAnimator::setup(const SpriteAtlas& atlas) {
     }
 }
 
-// Avanza el temporizador y alterna el estado cuando toca.
+// Tick: devuelve true si alterna (toggle) en este frame.
 bool TileAnimator::update(float deltaTime) {
     if (interval <= 0.0f) {
         return false; // No hay animacion configurada
@@ -48,7 +48,7 @@ bool TileAnimator::update(float deltaTime) {
     return false;
 }
 
-// Dado un ID del mapa, devuelve el ID a renderizar según el estado de animación.
+// Render: traduce ID original -> ID a renderizar.
 int TileAnimator::getDisplayId(int originalId) const {
     if (interval <= 0.0f) {
         return originalId;

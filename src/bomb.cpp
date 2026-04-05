@@ -41,13 +41,29 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, int owner)
       explodeInterval(0.08f), // Muy rápido: cada 80ms cambia frame de explosión
       currentSpriteName("bomb.1"),
       ownerIndex(owner),
+            ownerLeftTile(false),
       power(3) // Longitud 3: 1 sitio (centro) + 2 tiles extendidos (mid y end)
 {}
 
 Bomb::~Bomb() {}
 
+// Devuelve si la bomba bloquea el tile para ese jugador (regla: el dueño puede salir una vez).
+bool Bomb::blocksForPlayer(int playerId) const {
+    if (state == BombState::DONE) return false;
+    if (playerId < 0) return true;
+
+    // Regla del Bomberman clásico:
+    // el dueño puede SALIR del tile en el que puso la bomba, pero no puede
+    // volver a ENTRAR una vez ha abandonado esa casilla.
+    if (ownerIndex == playerId && !ownerLeftTile) {
+        return false; // el dueño puede salir de su propia bomba
+    }
+    return true;
+}
+
 // ============================== Lógica ==============================
 
+// Avanza mecha/explosión; devuelve true cuando termina para borrarla.
 bool Bomb::Update(float deltaTime) {
 
     if (state == BombState::FUSE) {
@@ -132,6 +148,7 @@ bool Bomb::Update(float deltaTime) {
 
 // ============================== Render ==============================
 
+// Renderiza la bomba o sus segmentos de explosión (usa textura del mapa/atlas de stage).
 void Bomb::Draw() {
     if (state == BombState::DONE || !gameMap) return;
 

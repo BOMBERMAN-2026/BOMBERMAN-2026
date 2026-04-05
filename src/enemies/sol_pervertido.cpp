@@ -34,6 +34,7 @@ SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase p
 
 SolPervertido::~SolPervertido() {}
 
+// Rebote tipo pinball contra los límites del mapa.
 void SolPervertido::bounce() {
     if (!gameMap) return;
     float halfTile = gameMap->getTileSize() / 2.0f;
@@ -51,17 +52,20 @@ void SolPervertido::bounce() {
     }
 }
 
+// Tick de IA/movimiento (rebote + avance).
 void SolPervertido::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     bounce();
     position += velocity * deltaTime;
 }
 
+// Render del enemigo (pendiente).
 void SolPervertido::Draw() {
     // TODO: Renderizar sprite del Sol pervertido según la fase actual
 }
 
+// Divide el boss en fases menores y devuelve los hijos.
 std::vector<std::unique_ptr<SolPervertido>> SolPervertido::split() {
     std::vector<std::unique_ptr<SolPervertido>> children;
 
@@ -97,6 +101,7 @@ std::vector<std::unique_ptr<SolPervertido>> SolPervertido::split() {
     }
     // Phase::QUARTER → no se subdivide más, simplemente muere
 
+    lifeState = EnemyLifeState::Dead;
     alive = false;
     return children;
 }

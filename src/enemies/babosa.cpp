@@ -12,8 +12,9 @@ Babosa::Babosa(glm::vec2 pos, glm::vec2 size, float speed)
 
 Babosa::~Babosa() {}
 
+// IA: se mueve de forma errática y cambia de dirección muy a menudo.
 void Babosa::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float step = speed * deltaTime;
 
@@ -30,6 +31,7 @@ void Babosa::Update() {
     }
 }
 
+// Render del enemigo (pendiente).
 void Babosa::Draw() {
     // TODO: Renderizar sprite de la Babosa
 }

@@ -23,6 +23,7 @@ DronBombardero::DronBombardero(glm::vec2 pos, glm::vec2 size, float speed)
 
 DronBombardero::~DronBombardero() {}
 
+// Entra en modo fuego (inmunidad temporal) y lanza una ráfaga inicial.
 void DronBombardero::enterFireMode() {
     onFire = true;
     fireTimer = fireDuration;
@@ -30,6 +31,7 @@ void DronBombardero::enterFireMode() {
     shootFireballAllDirections();
 }
 
+// Mantiene el modo fuego y lo desactiva al terminar.
 void DronBombardero::updateFireMode() {
     fireTimer -= deltaTime;
     if (fireTimer <= 0.0f) {
@@ -38,16 +40,19 @@ void DronBombardero::updateFireMode() {
     }
 }
 
+// Coloca una bomba en la posición actual (pendiente).
 void DronBombardero::dropBomb() {
     // TODO: Instanciar una bomba en la posición actual con explosionRange = bombExplosionRange
     bombCooldown = bombCooldownMax;
 }
 
+// Dispara una bola de fuego en la dirección dada (pendiente).
 void DronBombardero::shootFireball(EnemyDirection dir) {
     // TODO: Instanciar un proyectil de bola de fuego en la dirección dada con rango infinito
     (void)dir;
 }
 
+// Dispara bolas de fuego en las 4 direcciones (pendiente).
 void DronBombardero::shootFireballAllDirections() {
     shootFireball(EnemyDirection::UP);
     shootFireball(EnemyDirection::DOWN);
@@ -55,8 +60,9 @@ void DronBombardero::shootFireballAllDirections() {
     shootFireball(EnemyDirection::RIGHT);
 }
 
+// IA: mantiene distancia preferida, suelta bombas en rango y dispara fuego.
 void DronBombardero::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float step = speed * deltaTime;
     float dist = distanceToPlayer();
@@ -108,6 +114,7 @@ void DronBombardero::Update() {
     }
 }
 
+// Render del enemigo (pendiente).
 void DronBombardero::Draw() {
     // TODO: Renderizar sprite del Dron bombardero (con efecto de fuego si onFire)
 }

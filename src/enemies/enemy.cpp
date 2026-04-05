@@ -1,6 +1,8 @@
 #include "enemy.hpp"
 #include "game_map.hpp"
 #include "player.hpp"
+#include "sprite_atlas.hpp"
+#include "bomb.hpp"
 #include <cstdlib>
 #include <cmath>
 
@@ -9,22 +11,87 @@ Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
     : Entity(pos, size, speed),
       hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
-      facing(EnemyDirection::LEFT),
+            lifeState(EnemyLifeState::Alive),
+            facing(EnemyDirection::LEFT),
       gameMap(nullptr), playersList(nullptr), deltaTime(0.0f),
-      animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
+            animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
 {}
 
 Enemy::~Enemy() {}
 
-bool Enemy::takeDamage(int amount) {
-    if (!alive) return false;
+static std::string baseIdFromSpriteName(const std::string& spriteName) {
+    // Extrae "leon" de "leon.derecha.0".
+    const std::size_t dot = spriteName.find('.');
+    if (dot == std::string::npos) return spriteName;
+    return spriteName.substr(0, dot);
+}
+
+static int countDeathFrames(const SpriteAtlas& atlas, const std::string& deathPrefix) {
+    // Cuenta frames consecutivos desde 0: deathPrefix + "0", "1", ...
+    int count = 0;
+    while (true) {
+        const std::string key = deathPrefix + std::to_string(count);
+        if (atlas.sprites.find(key) == atlas.sprites.end()) break;
+        ++count;
+        if (count > 128) break; // seguridad
+    }
+    return count;
+}
+
+// Devuelve true si pasa de Alive -> Dying.
+bool Enemy::takeDamage(const SpriteAtlas& atlas, int amount) {
+    if (lifeState != EnemyLifeState::Alive) return false;
+
     hitPoints -= amount;
     if (hitPoints <= 0) {
         hitPoints = 0;
-        alive = false;
-        return true; // murió
+        startDying(atlas);
+        return true;
     }
     return false;
+}
+
+// Fuerza estado Dying e inicializa contador de frames.
+void Enemy::startDying(const SpriteAtlas& atlas) {
+    if (lifeState != EnemyLifeState::Alive) return;
+
+    lifeState = EnemyLifeState::Dying;
+    alive = true; // se queda en escena mientras anima
+
+    if (spriteBaseId.empty()) {
+        if (!currentSpriteName.empty()) spriteBaseId = baseIdFromSpriteName(currentSpriteName);
+    }
+    if (spriteBaseId.empty()) spriteBaseId = "enemy";
+
+    deathSpritePrefix = spriteBaseId + ".muerto.";
+    deathFrameCount = countDeathFrames(atlas, deathSpritePrefix);
+    if (deathFrameCount <= 0) {
+        // Fallback: al menos un frame para no desaparecer sin feedback.
+        deathFrameCount = 1;
+    }
+
+    deathTimer = 0.0f;
+    deathFrame = 0;
+    flipX = 0.0f;
+    currentSpriteName = deathSpritePrefix + "0";
+}
+
+// Avanza animación; al terminar marca Dead.
+void Enemy::updateDeath(float dt) {
+    if (lifeState != EnemyLifeState::Dying) return;
+
+    deathTimer += dt;
+    while (deathTimer >= deathFrameInterval) {
+        deathTimer -= deathFrameInterval;
+        ++deathFrame;
+        if (deathFrame >= deathFrameCount) {
+            lifeState = EnemyLifeState::Dead;
+            alive = false;
+            return;
+        }
+    }
+
+    currentSpriteName = deathSpritePrefix + std::to_string(deathFrame);
 }
 
 void Enemy::setContext(const GameMap* map, const std::vector<Player*>* players) {
@@ -32,6 +99,7 @@ void Enemy::setContext(const GameMap* map, const std::vector<Player*>* players) 
     playersList = players;
 }
 
+// Actualiza el deltaTime (llamar cada frame antes de Update).
 void Enemy::setDeltaTime(float dt) {
     deltaTime = dt;
 }
@@ -55,12 +123,14 @@ glm::vec2 Enemy::getClosestPlayerPos(float& out_dist) const {
     return bestPos;
 }
 
+// Distancia Manhattan al jugador (en coordenadas NDC).
 float Enemy::distanceToPlayer() const {
     float d;
     getClosestPlayerPos(d);
     return d;
 }
 
+// Dirección general hacia el jugador (eje dominante).
 EnemyDirection Enemy::directionTowardPlayer() const {
     float dist;
     glm::vec2 target = getClosestPlayerPos(dist);
@@ -74,6 +144,7 @@ EnemyDirection Enemy::directionTowardPlayer() const {
     }
 }
 
+// Dirección opuesta.
 EnemyDirection Enemy::oppositeDirection(EnemyDirection dir) {
     switch (dir) {
         case EnemyDirection::UP:    return EnemyDirection::DOWN;
@@ -84,6 +155,7 @@ EnemyDirection Enemy::oppositeDirection(EnemyDirection dir) {
     }
 }
 
+// Convierte EnemyDirection a un vector unitario.
 glm::vec2 Enemy::dirToVec(EnemyDirection dir) {
     switch (dir) {
         case EnemyDirection::UP:    return glm::vec2( 0.0f,  1.0f);
@@ -94,6 +166,7 @@ glm::vec2 Enemy::dirToVec(EnemyDirection dir) {
     }
 }
 
+// Elige una dirección aleatoria entre las 4 cardinales.
 EnemyDirection Enemy::randomDirection() {
     int r = std::rand() % 4;
     switch (r) {
@@ -104,6 +177,7 @@ EnemyDirection Enemy::randomDirection() {
     }
 }
 
+// Intenta moverse en la dirección dada; devuelve true si pudo avanzar.
 bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
     if (!gameMap) return false;
     const float halfTile = gameMap->getTileSize() / 2.0f;
@@ -135,29 +209,47 @@ bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
         const float eFront = halfTile;          // siempre cae en el tile vecino
         const float eSide  = halfTile * 0.60f;
 
+        // Las bombas activas ocupan tile completo y bloquean a los enemigos.
+        auto bombBlocks = [&](int rr, int cc) {
+            for (auto* b : gBombs) {
+                if (!b) continue;
+                if (b->state == BombState::DONE) continue;
+                if (b->gridRow == rr && b->gridCol == cc) return true;
+            }
+            return false;
+        };
+
         if (dir == EnemyDirection::UP) {
             gameMap->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::DOWN) {
             gameMap->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::LEFT) {
             gameMap->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::RIGHT) {
             gameMap->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
             if (!gameMap->isWalkable(r, c)) return false;
+            if (bombBlocks(r, c)) return false;
         }
     }
 
@@ -166,6 +258,7 @@ bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
     return true;
 }
 
+// Comprueba si la casilla en esa dirección es transitable.
 bool Enemy::canMoveInDirection(EnemyDirection dir, float lookAhead) const {
     if (!gameMap) return false;
     glm::vec2 probe = position + dirToVec(dir) * lookAhead;

@@ -24,32 +24,30 @@ struct SpriteFrame {
     int y = 0;
     int w = 0;
     int h = 0;
-    bool walkable = true;        // leido del campo "walkable" del JSON
-    std::string type = "floor";  // leido del campo "type" del JSON (floor, barrier, indestructible, destructible)
-    std::string align = "center"; // leido del campo "align" del JSON (center, left, right)
+    bool walkable = true;          // Campo "walkable" del JSON
+    std::string type = "floor";    // Campo "type" (floor, barrier, indestructible, destructible)
+    std::string align = "center";  // Campo "align" (center, left, right)
 };
 
 struct SpriteAtlas {
-    std::string imagePath;
-    int imageWidth = 0;
-    int imageHeight = 0;
-    std::unordered_map<std::string, SpriteFrame> sprites;
+    // Datos
+    std::string imagePath;                              // Ruta a la sprite sheet
+    int imageWidth = 0;                                 // Ancho de la imagen
+    int imageHeight = 0;                                // Alto de la imagen
+    std::unordered_map<std::string, SpriteFrame> sprites; // Nombre -> frame
 
-    // Animacion de tiles (opcional)
-    float animInterval = 0.0f; // 0 = sin animacion
-    std::unordered_map<int, int> animSwaps; // ID original -> ID alternativo
+    // Animación de tiles (opcional)
+    float animInterval = 0.0f;                          // 0 = sin animación
+    std::unordered_map<int, int> animSwaps;             // ID original -> ID alternativo
 };
 
-// Intenta resolver rutas cuando el exe se ejecuta desde build/.
-// Si existe tal cual, devuelve path. Si no, prueba con "../" + path.
-std::string resolveAssetPath(const std::string& path);
+// Rutas
+std::string resolveAssetPath(const std::string& path); // Si el exe corre desde build/, prueba también con "../" + path.
 
-// Loader mínimo para el formato que generas en SpriteAtlasPlayer.json.
-// Devuelve true si pudo leer el JSON y llenar imagePath/imageWidth/imageHeight y sprites.
+// Loader mínimo del JSON (rellena imagePath/imageWidth/imageHeight + sprites).
 bool loadSpriteAtlasMinimal(const std::string& jsonPath, SpriteAtlas& out);
 
-// Devuelve (u0, v0, u1, v1) para el sprite, en coordenadas 0..1.
-// Convención: (x,y) del JSON se asume desde arriba-izquierda.
-bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spriteName, glm::vec4& uvRect);
+// UV
+bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spriteName, glm::vec4& uvRect); // (u0,v0,u1,v1) en 0..1.
 
 #endif // SPRITE_ATLAS_HPP

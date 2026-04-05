@@ -32,12 +32,12 @@ enum class BlockType {
 };
 
 struct Block {
-    int spriteId;
-    BlockType type;
+    int spriteId;            // ID del sprite en el atlas (según el .txt)
+    BlockType type;          // Tipo lógico del bloque
     bool destroyed  = false; // Solo relevante si type == DESTRUCTIBLE
     bool breaking   = false; // true cuando está reproduciendo la animación de rotura
-    float breakTimer = 0.0f;
-    int breakFrame  = 0;
+    float breakTimer = 0.0f; // Acumulador de animación de rotura
+    int breakFrame  = 0;     // Frame actual de rotura
     bool hasPowerUp = false; // Si al destruirse revela un power-up
 
     bool isWalkable() const {
@@ -82,14 +82,9 @@ public:
     // Convierte posición NDC a celda (row, col) del grid.
     void ndcToGrid(glm::vec2 ndc, int& row, int& col) const;
 
-    // Devuelve true si un AABB centrado en `center` con semilado `halfSize`
-    // no solapa ningún tile no caminable.
-    bool canMoveTo(glm::vec2 center, float halfSize) const;
+    bool canMoveTo(glm::vec2 center, float halfSize) const; // True si un AABB no solapa ningún tile no caminable.
 
-    // Spawn de jugador por índice.
-    // - Si el nivel define `spawn` para ese índice, se usa (si es walkable).
-    // - Si no, cae a un spawn automático (primera casilla walkable desde una esquina).
-    glm::vec2 getSpawnPosition(int playerIndex) const;
+    glm::vec2 getSpawnPosition(int playerIndex) const; // Usa spawn del nivel o fallback automático.
 
     // Convierte una celda (row,col) al centro en NDC.
     glm::vec2 gridToNDC(int row, int col) const;
@@ -104,29 +99,32 @@ public:
 
 private:
     struct SpawnCell {
-        int row = -1;
-        int col = -1;
+        int row = -1; // Fila en grid
+        int col = -1; // Columna en grid
     };
 
-    std::vector<std::vector<Block>> grid;
-    int rows = 0;
-    int cols = 0;
+    // Grid
+    std::vector<std::vector<Block>> grid; // Tiles del mapa
+    int rows = 0;                         // Nº filas
+    int cols = 0;                         // Nº columnas
 
-    // Spawns opcionales definidos por nivel (por índice de jugador).
-    // Si no existe o es inválido, se usa el fallback de buscar primera casilla walkable.
-    std::vector<SpawnCell> spawnCells;
+    // Spawns (opcional): si no existe/vale, se usa fallback automático.
+    std::vector<SpawnCell> spawnCells;    // Spawns por índice de jugador
 
-    float tileSize = 0.0f;
-    float offsetX  = 0.0f;
-    float offsetY  = 0.0f;
-    float currentAspectRatio = 1.0f;
+    // Layout
+    float tileSize = 0.0f;                // Tamaño de tile en NDC
+    float offsetX  = 0.0f;                // Offset para centrar mapa
+    float offsetY  = 0.0f;                // Offset para centrar mapa
+    float currentAspectRatio = 1.0f;      // Aspect ratio usado en calculateTileMetrics
 
-    SpriteAtlas atlas;
-    bool atlasLoaded = false;
-    
-    TileAnimator animator;
+    // Atlas
+    SpriteAtlas atlas;                    // Atlas del stage
+    bool atlasLoaded = false;             // true si se cargó el atlas
 
-    int destroyedFloorId = 10; // sprite a mostrar cuando se destruye (por defecto, luego se recalcula dinámico en render)
+    // Animación
+    TileAnimator animator;                // Swap de IDs animados
+
+    int destroyedFloorId = 10;            // Sprite al destruir (por defecto; se recalcula dinámico en render)
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);

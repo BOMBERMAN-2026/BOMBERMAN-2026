@@ -24,8 +24,9 @@ Leon::Leon(glm::vec2 pos, glm::vec2 size, float speed)
 
 Leon::~Leon() {}
 
+// IA: patrulla básica con cambios de dirección poco frecuentes.
 void Leon::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float step = speed * deltaTime;
 
@@ -69,8 +70,9 @@ void Leon::Update() {
     currentSpriteName = prefix + std::to_string(animFrame);
 }
 
+// Render del enemigo (sprite según dirección + flip).
 void Leon::Draw() {
-    if (!alive) return;
+    if (lifeState == EnemyLifeState::Dead) return;
 
     const float enemyScaleFactor = 1.8f;
     float halfTile = gameMap->getTileSize() / 2.0f;

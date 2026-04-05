@@ -21,6 +21,7 @@ public:
     void notifyBombNearby(glm::vec2 bombPos);
 
 private:
+    // IA
     bool  retreating;       // Está retrocediendo de una bomba
     float retreatTimer;     // Tiempo restante de retroceso
     float retreatSpeed;     // Velocidad al retroceder (más rápida)
