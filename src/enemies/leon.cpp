@@ -16,47 +16,33 @@ extern SpriteAtlas gEnemyAtlas;
 Leon::Leon(glm::vec2 pos, glm::vec2 size, float speed)
     : Enemy(pos, size, speed, /*hp=*/1, /*score=*/100),
       dirChangeTimer(0.0f),
-      dirChangeInterval(3.0f),  // Tarda bastante en plantearse cambiar
-      dirChangeChance(0.15f)    // Solo 15 % de probabilidad al chocar
+      dirChangeInterval(3.0f),  // Intervalo de reconsideración de dirección.
+      dirChangeChance(0.15f)    // Probabilidad de cambio tras colisión.
 {
     facing = randomDirection();
 }
 
 Leon::~Leon() {}
 
-// IA: patrulla básica con cambios de dirección poco frecuentes.
+// Lógica de IA: patrulla básica con cambios de dirección poco frecuentes.
 void Leon::Update() {
     if (lifeState != EnemyLifeState::Alive) return;
-
-    if (isDying) {
-        deathTimer -= deltaTime;
-        animTimer += deltaTime;
-        if (animTimer >= 0.1f) {
-            animTimer = 0.0f;
-            if (animFrame < 6) animFrame++; // Leon tiene 7 frames de muerte (0 al 6)
-        }
-        currentSpriteName = "leon.muerto." + std::to_string(animFrame);
-        if (deathTimer <= 0.0f) {
-            alive = false; // Desaparece o muere
-        }
-        return;
-    }
 
     float step = speed * deltaTime;
 
     // Intentar avanzar en la dirección actual
     if (!tryMove(facing, step)) {
-        // Chocó: cambiar de dirección con probabilidad baja
+        // Colisión: cambiar de dirección con probabilidad baja.
         float roll = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
         if (roll < dirChangeChance) {
             facing = randomDirection();
         } else {
-            // Si no cambia al azar, simplemente dar la vuelta
+            // Si no se elige una dirección aleatoria, invertir la dirección actual.
             facing = oppositeDirection(facing);
         }
     }
 
-    // Temporizador: ocasionalmente cambia de dirección sin chocar
+    // Temporizador: ocasionalmente cambia de dirección sin colisión.
     dirChangeTimer += deltaTime;
     if (dirChangeTimer >= dirChangeInterval) {
         dirChangeTimer = 0.0f;

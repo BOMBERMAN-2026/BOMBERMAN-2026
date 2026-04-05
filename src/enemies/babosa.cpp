@@ -16,25 +16,25 @@ extern SpriteAtlas gEnemyAtlas;
 Babosa::Babosa(glm::vec2 pos, glm::vec2 size, float speed)
     : Enemy(pos, size, speed, /*hp=*/1, /*score=*/400),
       dirChangeTimer(0.0f),
-      dirChangeInterval(1.0f) // Cambia de dirección frecuentemente
+      dirChangeInterval(1.0f) // Intervalo de cambio de dirección.
 {
     facing = randomDirection();
 }
 
 Babosa::~Babosa() {}
 
-// IA: se mueve de forma errática y cambia de dirección muy a menudo.
+// Lógica de IA: movimiento errático con cambios de dirección frecuentes.
 void Babosa::Update() {
     if (lifeState != EnemyLifeState::Alive) return;
 
     float step = speed * deltaTime;
 
     if (!tryMove(facing, step)) {
-        // Chocó: elige nueva dirección al azar
+        // Colisión: elige una nueva dirección aleatoria.
         facing = randomDirection();
     }
 
-    // Cambio frecuente de dirección incluso sin chocar
+    // Cambio periódico de dirección, incluso sin colisión.
     dirChangeTimer += deltaTime;
     if (dirChangeTimer >= dirChangeInterval) {
         dirChangeTimer = 0.0f;
@@ -59,7 +59,7 @@ void Babosa::Update() {
     currentSpriteName = prefix + std::to_string(animFrame);
 }
 
-// Render del enemigo (pendiente).
+// Renderiza el enemigo.
 void Babosa::Draw() {
     if (!alive) return;
 
@@ -71,9 +71,15 @@ void Babosa::Draw() {
     model = glm::translate(model, renderPos);   
 
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);       
+    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);
 
-    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor, halfTile * enemyScaleFactor, 1.0f));     
+    float aspect = 1.0f;
+    auto it = gEnemyAtlas.sprites.find(currentSpriteName);
+    if (it != gEnemyAtlas.sprites.end() && it->second.h > 0) {
+        aspect = static_cast<float>(it->second.w) / static_cast<float>(it->second.h);
+    }
+
+    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor * aspect, halfTile * enemyScaleFactor, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));

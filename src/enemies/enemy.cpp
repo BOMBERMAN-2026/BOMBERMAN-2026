@@ -11,10 +11,10 @@ Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
     : Entity(pos, size, speed),
       hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
-            lifeState(EnemyLifeState::Alive),
-            facing(EnemyDirection::LEFT),
+    lifeState(EnemyLifeState::Alive),
+    facing(EnemyDirection::LEFT),
       gameMap(nullptr), playersList(nullptr), deltaTime(0.0f),
-            animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
+    animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
 {}
 
 Enemy::~Enemy() {}
@@ -219,37 +219,35 @@ bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
             return false;
         };
 
+        auto tileBlocks = [&](int rr, int cc) {
+            const bool blockedByMap =
+                !gameMap->isWalkable(rr, cc) && !(canPassSoftBlocks && gameMap->isDestructible(rr, cc));
+            return blockedByMap || bombBlocks(rr, cc);
+        };
+
         if (dir == EnemyDirection::UP) {
             gameMap->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::DOWN) {
             gameMap->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::LEFT) {
             gameMap->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
         }
         if (dir == EnemyDirection::RIGHT) {
             gameMap->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
             gameMap->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
-            if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
-            if (bombBlocks(r, c)) return false;
+            if (tileBlocks(r, c)) return false;
         }
     }
 
@@ -262,6 +260,17 @@ bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
 bool Enemy::canMoveInDirection(EnemyDirection dir, float lookAhead) const {
     if (!gameMap) return false;
     glm::vec2 probe = position + dirToVec(dir) * lookAhead;
-    float halfTile = gameMap->getTileSize() / 2.0f;
-    return gameMap->canMoveTo(probe, halfTile);
+
+    int r, c;
+    gameMap->ndcToGrid(probe, r, c);
+
+    if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
+
+    for (auto* b : gBombs) {
+        if (!b) continue;
+        if (b->state == BombState::DONE) continue;
+        if (b->gridRow == r && b->gridCol == c) return false;
+    }
+
+    return true;
 }

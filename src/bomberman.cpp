@@ -21,7 +21,7 @@
  * - Render: mapa primero, jugadores encima (sprites desde SpriteAtlasPlayer).
  *
  * Nota:
- * - Este archivo es deliberadamente “monolítico” por ahora. Se organizan secciones
+ * - Este archivo es deliberadamente "monolítico" por ahora. Se organizan secciones
  *   para facilitar lectura sin introducir demasiadas clases nuevas.
  */
 
@@ -257,7 +257,7 @@ GLuint LoadTexture(const char* filePath)
 // ============================== Utilidades (debug/keys) ==============================
 
 
-// Copiada de Pengu, por si sirve
+// Convierte un código de tecla GLFW en una etiqueta corta (utilidad de depuración).
 static std::string getKeyName(GLint key){
     std::string str;
     switch(key) {
@@ -525,7 +525,7 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Sanity check: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON)
+    // Comprobación básica: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON).
     if (gPlayerAtlas.sprites.find("jugadorblanco.abajo.0") == gPlayerAtlas.sprites.end()) {
         std::cerr << "[SpriteAtlas] Aviso: no existe 'jugadorblanco.abajo.0' en el atlas."
                   << " Total sprites: " << gPlayerAtlas.sprites.size() << "\n";
@@ -559,7 +559,7 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Calcular metricas del mapa (ahora que tenemos cols, rows y aspectRatio)
+    // Calcular métricas del mapa (ahora que tenemos cols, rows y aspectRatio)
     float aspectRatio = (float)WIDTH / (float)HEIGHT;
     gameMap->calculateTileMetrics(aspectRatio);
 
@@ -572,7 +572,7 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Crear jugador(es) en la posicion de spawn del mapa
+    // Crear jugador(es) en la posición de spawn del mapa
     gPlayers.clear();
 
     {
@@ -638,7 +638,14 @@ void Game::init() {
 
     // Crear Fantasma Mortal
     {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 5.0f);
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 2.0f);
+        {
+            int r, c;
+            gameMap->ndcToGrid(spawnPos, r, c);
+            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols() || !gameMap->isWalkable(r, c)) {
+                spawnPos = gameMap->getSpawnPosition(0);
+            }
+        }
         FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
         fantasma->setContext(gameMap, &gPlayers);
         fantasma->currentSpriteName = "fantasma.derecha.0";
