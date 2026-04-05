@@ -33,9 +33,6 @@ public:
     bool alive;             // Si el enemigo sigue vivo
     bool canPassSoftBlocks; // Puede atravesar bloques destructibles
     bool isBoss;            // Es un jefe
-    
-    bool isDying;           // Si el enemigo está en secuencia de muerte
-    float deathTimer;       // Temporizador de muerte
 
     EnemyDirection facing;  // Dirección actual de movimiento
 
@@ -60,11 +57,8 @@ public:
     void Update() override = 0;
     void Draw()   override = 0;
 
-    // Recibe daño; devuelve true si muere instantáneamente (si no hay animación)
+    // Recibe daño; devuelve true si muere
     bool takeDamage(int amount = 1);
-
-    // Iniciar secuencia de muerte
-    virtual void die();
 
     // Vincula las referencias externas (llamar después de construir)
     void setContext(const GameMap* map, const std::vector<Player*>* players);

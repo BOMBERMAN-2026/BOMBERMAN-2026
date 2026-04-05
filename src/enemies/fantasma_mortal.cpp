@@ -113,20 +113,6 @@ void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
 void FantasmaMortal::Update() {
     if (!alive) return;
 
-    if (isDying) {
-        deathTimer -= deltaTime;
-        animTimer += deltaTime;
-        if (animTimer >= 0.1f) {
-            animTimer = 0.0f;
-            if (animFrame < 6) animFrame++; // Fantasma tiene 7 frames de muerte (0 al 6)
-        }
-        currentSpriteName = "fantasma.muerto." + std::to_string(animFrame);
-        if (deathTimer <= 0.0f) {
-            alive = false;
-        }
-        return;
-    }
-
     if (retreating) {
         // Retroceso rápido
         retreatTimer -= deltaTime;
@@ -152,41 +138,39 @@ void FantasmaMortal::Update() {
 
     if (toPlayer != EnemyDirection::NONE) {
         if (!tryMove(toPlayer, step)) {
-            // Si no puede moverse en la dirección óptima (ej. atascado en una esquina), 
-            // forzar la alineación con el centro de la celda actual
-            int tr, tc;
-            gameMap->ndcToGrid(position, tr, tc);
-            glm::vec2 center = gameMap->gridToNDC(tr, tc);
-
-            bool moved = false;
-            // Tolerancia aumentada para que pueda deslizarse bien
-            float margin = 0.02f; 
-            
-            if (toPlayer == EnemyDirection::UP || toPlayer == EnemyDirection::DOWN) {
-                if (position.x < center.x - margin) { 
-                    moved = tryMove(EnemyDirection::RIGHT, step); 
-                    facing = EnemyDirection::RIGHT; 
-                } else if (position.x > center.x + margin) { 
-                    moved = tryMove(EnemyDirection::LEFT, step); 
-                    facing = EnemyDirection::LEFT; 
-                }
+            // Intentar dirección secundaria (eje perpendicular)
+            float d;
+            glm::vec2 targetPos = getClosestPlayerPos(d);
+            glm::vec2 diff = (d < 99999.0f) ? (targetPos - position) : glm::vec2(0.0f);
+            EnemyDirection alt;
+            if (std::abs(diff.x) > std::abs(diff.y)) {
+                alt = (diff.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
             } else {
-                if (position.y < center.y - margin) { 
-                    moved = tryMove(EnemyDirection::UP, step); 
-                    facing = EnemyDirection::UP; 
-                } else if (position.y > center.y + margin) { 
-                    moved = tryMove(EnemyDirection::DOWN, step); 
-                    facing = EnemyDirection::DOWN; 
-                }
+                alt = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
             }
 
-            if (!moved) {
-                // Si ya está alineado y no puede avanzar, probablemente está contra una 
-                // pared dura o en una colisión atípica. Intentar dirección aleatoria 
-                // para desatascarse momentáneamente.
-                if (!tryMove(facing, step)) {
-                    facing = randomDirection();
+            if (!tryMove(alt, step)) {
+                // forzar alineación
+                int tr, tc;
+                gameMap->ndcToGrid(position, tr, tc);
+                glm::vec2 center = gameMap->gridToNDC(tr, tc);
+
+                bool moved = false;
+                if (toPlayer == EnemyDirection::UP || toPlayer == EnemyDirection::DOWN) {
+                    if (position.x < center.x - 0.02f) { moved = tryMove(EnemyDirection::RIGHT, step); facing = EnemyDirection::RIGHT; }
+                    else if (position.x > center.x + 0.02f) { moved = tryMove(EnemyDirection::LEFT, step); facing = EnemyDirection::LEFT; }
+                } else {
+                    if (position.y < center.y - 0.02f) { moved = tryMove(EnemyDirection::UP, step); facing = EnemyDirection::UP; }
+                    else if (position.y > center.y + 0.02f) { moved = tryMove(EnemyDirection::DOWN, step); facing = EnemyDirection::DOWN; }
                 }
+
+                if (!moved) {
+                     if (!tryMove(facing, step)) {
+                         facing = randomDirection();
+                     }
+                }
+            } else {
+                facing = alt;
             }
         } else {
             facing = toPlayer;

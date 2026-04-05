@@ -9,29 +9,20 @@ Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
     : Entity(pos, size, speed),
       hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
-        isDying(false), deathTimer(0.0f),
-        facing(EnemyDirection::LEFT),
-        gameMap(nullptr), playersList(nullptr), deltaTime(0.0f),
-        animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
+      facing(EnemyDirection::LEFT),
+      gameMap(nullptr), playersList(nullptr), deltaTime(0.0f),
+      animTimer(0.0f), animFrame(0), currentSpriteName(""), flipX(0.0f)
 {}
 
 Enemy::~Enemy() {}
 
-void Enemy::die() {
-    if (isDying || !alive) return;
-    isDying = true;
-    animFrame = 0;
-    animTimer = 0.0f;
-    deathTimer = 1.0f;
-}
-
 bool Enemy::takeDamage(int amount) {
-    if (!alive || isDying) return false;
+    if (!alive) return false;
     hitPoints -= amount;
     if (hitPoints <= 0) {
         hitPoints = 0;
-        die();
-        return false;
+        alive = false;
+        return true; // murió
     }
     return false;
 }

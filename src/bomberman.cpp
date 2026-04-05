@@ -837,27 +837,9 @@ void Game::update() {
     for (auto it = gBombs.begin(); it != gBombs.end(); ) {
         Bomb* b = *it;
         bool justExploded = b->Update(deltaTime);
-
-        // Procesar daño de la explosión mientras está en curso
-        if (b->state == BombState::EXPLODING) {
-            for (auto* enemy : gEnemies) {
-                if (enemy && enemy->alive && !enemy->isDying) {
-                    int eR, eC;
-                    gameMap->ndcToGrid(enemy->position, eR, eC);
-
-                    for (const auto& seg : b->explosionSegments) {
-                        int sR, sC;
-                        gameMap->ndcToGrid(seg.pos, sR, sC);
-                        if (eR == sR && eC == sC) {
-                            enemy->takeDamage(1);
-                            break; // El enemigo ya tomó el daño de esta bomba en este frame
-                        }
-                    }
-                }
-            }
-        } // Fin daño explosión
-
         if (justExploded) {
+            // TODO: Aquí se implementará la lógica de explosión (destruir bloques, dañar enemigos/jugadores)
+            // Por ahora simplemente eliminamos la bomba
             delete b;
             it = gBombs.erase(it);
         } else {
