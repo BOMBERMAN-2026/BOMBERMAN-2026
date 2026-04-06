@@ -368,7 +368,7 @@ void Player::respawn() {
 
     // === Castigo Arcade: reset total de stats ===
     maxBombs = 1;
-    explosionPower = 3;
+    explosionPower = 2;
     speed = 0.4f;
     baseSpeed = 0.4f;
     hasRemoteControl = false;

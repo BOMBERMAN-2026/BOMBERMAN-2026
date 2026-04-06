@@ -139,24 +139,30 @@ void Bomb::detonate() {
     float angles[] = {glm::radians(-90.0f), 0.0f, glm::radians(90.0f), glm::radians(180.0f)};
 
     for (int i = 0; i < 4; i++) {
-        for (int d = 1; d < power; d++) {
+        for (int d = 1; d <= power; d++) {
             int r = gridRow + dr[i] * d;
             int c = gridCol + dc[i] * d;
 
             if (!gameMap->isWalkable(r, c)) {
+                // Muro: destruirlo si es destructible (su propia animación se encarga),
+                // pero NO dibujar fuego encima del bloque.
                 gameMap->destroyTile(r, c);
                 break;
             }
 
-            bool isLast = (d == power - 1);
-            if (!isLast && !gameMap->isWalkable(r + dr[i], c + dc[i])) {
-                isLast = true;
+            // Tile libre: determinar si es el último segmento visible
+            bool isLast = (d == power);
+            if (!isLast) {
+                // Lookahead: si la siguiente celda es muro, este es el "end" visual
+                int nr = r + dr[i];
+                int nc = c + dc[i];
+                if (!gameMap->isWalkable(nr, nc)) {
+                    isLast = true;
+                }
             }
 
             std::string baseName = isLast ? "explosion_end" : "explosion_mid";
             explosionSegments.push_back({ gameMap->gridToNDC(r, c), baseName, angles[i] });
-
-            if (isLast) break;
         }
     }
 }
