@@ -818,6 +818,10 @@ void Game::init() {
             std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
         }
     }
+
+    // === Power-Ups ===
+    gameMap->loadPowerUpTextures();
+    gameMap->placePowerUps();
 }
 
 // Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
@@ -970,38 +974,16 @@ void Game::processInput() {
         }
     }
 
-    // ======================= Colocar bombas =======================
-    // P1 (flechas): Ctrl derecho
-    if (p1->isAlive() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
+    // ======================= Colocar bombas (Botón 1) =======================
+    // P1 (flechas): Ctrl derecho — poner bomba
+    if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
         this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
-        int bombRow, bombCol;
-        gameMap->ndcToGrid(p1->position, bombRow, bombCol);
-
-        bool alreadyHasBomb = false;
-        for (auto* b : gBombs) {
-            if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
-                alreadyHasBomb = true;
-                break;
-            }
-        }
-
-        if (!alreadyHasBomb) {
-            glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
-            Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, /*owner=*/0);
-            gBombs.push_back(bomb);
-        }
-    }
-
-    // P2 (WASD): X
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
-        Player* p2 = gPlayers[1];
-        if (p2->isAlive() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_X] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
-
+        if (p1->canPlaceBomb()) {
             int bombRow, bombCol;
-            gameMap->ndcToGrid(p2->position, bombRow, bombCol);
+            gameMap->ndcToGrid(p1->position, bombRow, bombCol);
 
+            // Comprobar que no hay ya una bomba en este tile
             bool alreadyHasBomb = false;
             for (auto* b : gBombs) {
                 if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
@@ -1012,8 +994,66 @@ void Game::processInput() {
 
             if (!alreadyHasBomb) {
                 glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
-                Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, /*owner=*/1);
+                Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
+                                      /*owner=*/p1,
+                                      /*power=*/p1->explosionPower,
+                                      /*remote=*/p1->hasRemoteControl);
                 gBombs.push_back(bomb);
+                p1->activeBombs++;
+            }
+        }
+    }
+
+    // P1: Detonar (Botón 2) — Alt derecho
+    if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
+        // Detonar la bomba MÁS ANTIGUA del jugador (una por una, estilo Arcade)
+        for (auto* b : gBombs) {
+            if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
+                b->detonate();
+                break; // Solo una por pulsación
+            }
+        }
+    }
+
+    // P2 (WASD): X — poner bomba
+    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+        Player* p2 = gPlayers[1];
+        if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_X] = GLFW_REPEAT;
+
+            if (p2->canPlaceBomb()) {
+                int bombRow, bombCol;
+                gameMap->ndcToGrid(p2->position, bombRow, bombCol);
+
+                bool alreadyHasBomb = false;
+                for (auto* b : gBombs) {
+                    if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
+                        alreadyHasBomb = true;
+                        break;
+                    }
+                }
+
+                if (!alreadyHasBomb) {
+                    glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
+                    Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
+                                          /*owner=*/p2,
+                                          /*power=*/p2->explosionPower,
+                                          /*remote=*/p2->hasRemoteControl);
+                    gBombs.push_back(bomb);
+                    p2->activeBombs++;
+                }
+            }
+        }
+
+        // P2: Detonar (Botón 2) — Z
+        if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
+            for (auto* b : gBombs) {
+                if (b && b->ownerIndex == p2->playerId && b->state == BombState::FUSE) {
+                    b->detonate();
+                    break;
+                }
             }
         }
     }
@@ -1070,6 +1110,13 @@ void Game::update() {
         if (!p) continue;
         p->deltaTime = deltaTime;
         p->Update();
+
+        // Comprobar si el jugador recoge un power-up
+        if (p->isAlive() && gameMap) {
+            int pr, pc;
+            gameMap->ndcToGrid(p->position, pr, pc);
+            gameMap->tryCollectPowerUp(pr, pc, p);
+        }
     }
 
     // Actualizar bombas + aplicar daño por explosión
@@ -1275,6 +1322,9 @@ void Game::render() {
 
     // === 1. Renderizar mapa (fondo) ===
     gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
+
+    // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
+    gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
 
     gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
 

@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include "sprite_atlas.hpp"
 #include "tile_animator.hpp"
+#include "power_up.hpp"
 
 #include <string>
 #include <vector>
@@ -39,6 +40,9 @@ struct Block {
     float breakTimer = 0.0f; // Acumulador de animación de rotura
     int breakFrame  = 0;     // Frame actual de rotura
     bool hasPowerUp = false; // Si al destruirse revela un power-up
+    PowerUpType powerUpType = PowerUpType::ExtraLife; // Tipo de power-up escondido
+    bool powerUpRevealed = false; // El power-up está visible pero no recogido
+    bool powerUpCollected = false; // El power-up ya fue recogido
 
     bool isWalkable() const {
         if (destroyed) return true; // destructible ya destruido → suelo
@@ -103,6 +107,23 @@ public:
     // Calcula tamaño de tile y offsets para centrar el mapa en pantalla.
     void calculateTileMetrics(float aspectRatio);
 
+    // === Power-Ups ===
+    // Coloca power-ups aleatoriamente debajo de bloques destructibles.
+    // stackeables (BombUp, FireUp, SpeedUp): 2 de cada uno
+    // no stackeables (ExtraLife, Invincibility, RemoteControl): 1 de cada uno
+    void placePowerUps();
+
+    // Renderiza los power-ups revelados (bloques destruidos con power-up visible).
+    void renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
+                        GLuint uniformTintColor, GLuint uniformFlipX);
+
+    // Carga las texturas de los power-ups.
+    void loadPowerUpTextures();
+
+    // Comprueba si un jugador está sobre un power-up revelado y lo recoge.
+    // Devuelve true si recogió un power-up (y lo aplica al player).
+    bool tryCollectPowerUp(int row, int col, class Player* player);
+
 private:
     struct SpawnCell {
         int row = -1; // Fila en grid
@@ -137,6 +158,11 @@ private:
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);
+
+    // === Power-Ups ===
+    static constexpr int POWER_UP_TYPE_COUNT = 6;
+    GLuint powerUpTextures[POWER_UP_TYPE_COUNT] = {0}; // Texturas indexadas por PowerUpType
+    bool powerUpTexturesLoaded = false;
 };
 
 #endif // GAME_MAP_HPP

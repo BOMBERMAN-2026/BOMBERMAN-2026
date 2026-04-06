@@ -46,6 +46,7 @@ Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId, co
 {
     this->playerId = playerId;
     spawnPosition = pos;
+    baseSpeed = velocity;
     lifeState = PlayerLifeState::Alive;
     deathTimer = 0.0f;
     deathFrame = 0;
@@ -159,9 +160,17 @@ void Player::updateDeathAnimation() {
 
 // ============================== API base ==============================
 
-// Tick de lógica: animación de caminar o de muerte.
+// Tick de lógica: animación de caminar o de muerte + invincibilidad.
 void Player::Update() {
     if (lifeState == PlayerLifeState::Alive) {
+        // Invincibilidad: decrementar temporizador
+        if (invincible) {
+            invincibilityTimer -= deltaTime;
+            if (invincibilityTimer <= 0.0f) {
+                invincible = false;
+                invincibilityTimer = 0.0f;
+            }
+        }
         updateAnimation();
     } else {
         updateDeathAnimation();
@@ -204,6 +213,19 @@ void Player::Draw() {
     glUniform1f(uniformFlipX, flipX);
 
     glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+
+    // Parpadeo visual cuando la invincibilidad está a punto de acabar (< 3s)
+    if (invincible && invincibilityTimer < 3.0f) {
+        // Parpadeo rápido: invisible en frames alternos
+        int flickerPhase = (int)(invincibilityTimer * 10.0f);
+        if (flickerPhase % 2 == 0) {
+            tint.a = 0.3f;
+        }
+    } else if (invincible) {
+        // Efecto de brillo sutil mientras es invencible
+        tint = glm::vec4(1.2f, 1.2f, 1.0f, 1.0f);
+    }
+
     glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -293,6 +315,8 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
 // Mata al jugador por contacto con enemigo (usa "jugador(color).muerto.N").
 void Player::killByEnemy() {
     if (lifeState != PlayerLifeState::Alive) return;
+    if (invincible) return; // Invencible: ignorar muerte
+    lives--;
     lifeState = PlayerLifeState::DyingByEnemy;
     isWalking = false;
     walkTimer = 0.0f;
@@ -307,6 +331,8 @@ void Player::killByEnemy() {
 // Mata al jugador por explosión (usa "jugador.muerto.quemado.N").
 void Player::killByExplosion() {
     if (lifeState != PlayerLifeState::Alive) return;
+    if (invincible) return; // Invencible: ignorar muerte
+    lives--;
     lifeState = PlayerLifeState::DyingByExplosion;
     isWalking = false;
     walkTimer = 0.0f;
@@ -318,8 +344,13 @@ void Player::killByExplosion() {
     currentSpriteName = "jugador.muerto.quemado.0";
 }
 
-// Vuelve al spawn y restaura estado de movimiento/animación.
+// Vuelve al spawn y restaura estado. Castigo Arcade: pierde TODOS los power-ups.
 void Player::respawn() {
+    if (lives <= 0) {
+        // Game Over: no respawnear
+        return;
+    }
+
     position = spawnPosition;
     lifeState = PlayerLifeState::Alive;
 
@@ -334,4 +365,46 @@ void Player::respawn() {
 
     flipX = 0.0f;
     currentSpriteName = spritePrefix + ".abajo.0";
+
+    // === Castigo Arcade: reset total de stats ===
+    maxBombs = 1;
+    explosionPower = 2;
+    speed = 0.4f;
+    baseSpeed = 0.4f;
+    hasRemoteControl = false;
+    invincible = false;
+    invincibilityTimer = 0.0f;
+    // activeBombs no se resetea: las bombas en el mapa siguen existiendo
+    // y decrementarán activeBombs cuando exploten.
+}
+
+// Aplica un power-up al jugador (respeta ArcadeCaps).
+void Player::applyPowerUp(PowerUpType type) {
+    switch (type) {
+        case PowerUpType::ExtraLife:
+            lives += 1;
+            break;
+
+        case PowerUpType::BombUp:
+            maxBombs = std::min(maxBombs + 1, ArcadeCaps::MAX_BOMBS);
+            break;
+
+        case PowerUpType::FireUp:
+            explosionPower = std::min(explosionPower + 1, ArcadeCaps::MAX_FIRE_POWER);
+            break;
+
+        case PowerUpType::SpeedUp:
+            baseSpeed = std::min(baseSpeed + ArcadeCaps::SPEED_INCREMENT, ArcadeCaps::MAX_SPEED);
+            speed = baseSpeed;
+            break;
+
+        case PowerUpType::Invincibility:
+            invincible = true;
+            invincibilityTimer = ArcadeCaps::INVINCIBILITY_TIME;
+            break;
+
+        case PowerUpType::RemoteControl:
+            hasRemoteControl = true;
+            break;
+    }
 }

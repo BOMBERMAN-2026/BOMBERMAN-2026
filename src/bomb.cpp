@@ -1,4 +1,5 @@
 #include "bomb.hpp"
+#include "player.hpp"
 #include "game_map.hpp"
 #include "sprite_atlas.hpp"
 
@@ -27,7 +28,7 @@ extern SpriteAtlas gBombAtlas;
 
 // ============================== Ctor / dtor ==============================
 
-Bomb::Bomb(glm::vec2 pos, int row, int col, int owner)
+Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, bool remote)
     : position(pos),
       gridRow(row),
       gridCol(col),
@@ -40,12 +41,20 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, int owner)
       animInterval(0.3f),     // Intervalo constante de la mecha
       explodeInterval(0.08f), // Muy rápido: cada 80ms cambia frame de explosión
       currentSpriteName("bomb.1"),
-      ownerIndex(owner),
-            ownerLeftTile(false),
-      power(3) // Longitud 3: 1 sitio (centro) + 2 tiles extendidos (mid y end)
+      ownerIndex(ownerPlayer ? ownerPlayer->playerId : 0),
+      ownerLeftTile(false),
+      power(bombPower),
+      owner(ownerPlayer),
+      remoteControlled(remote)
 {}
 
-Bomb::~Bomb() {}
+Bomb::~Bomb() {
+    // Asegurar que activeBombs se decrementa si la bomba se destruye sin explotar
+    if (owner && state != BombState::DONE) {
+        owner->activeBombs--;
+        owner = nullptr;
+    }
+}
 
 // Devuelve si la bomba bloquea el tile para ese jugador (regla: el dueño puede salir una vez).
 bool Bomb::blocksForPlayer(int playerId) const {
@@ -68,53 +77,13 @@ bool Bomb::Update(float deltaTime) {
 
     if (state == BombState::FUSE) {
         // --- Mecha ---
-        fuseTimer += deltaTime;
-        if (fuseTimer >= fuseTime) {
-            // Explosión: resetear animación
-            state = BombState::EXPLODING;
-            animTimer = 0.0f;
-            animFrame = 0;
-
-            explosionSegments.clear();
-            // 1. Centro
-            explosionSegments.push_back({ position, "explosion", 0.0f });
-
-            // 2. Expandir en 4 direcciones
-            // Asumimos que los sprites ext/mid apuntan hacia ARRIBA por defecto (según las pruebas).
-            // Direcciones: 0=DERECHA, 1=ARRIBA, 2=IZQUIERDA, 3=ABAJO
-            int dr[] = {0, -1, 0, 1};
-            int dc[] = {1, 0, -1, 0};
-            // Rotaciones necesarias para un sprite que apunta hacia ARRIBA:
-            // DERECHA: -90, ARRIBA: 0, IZQUIERDA: 90, ABAJO: 180
-            float angles[] = {glm::radians(-90.0f), 0.0f, glm::radians(90.0f), glm::radians(180.0f)};
-
-            for (int i = 0; i < 4; i++) {
-                for (int d = 1; d < power; d++) {
-                    int r = gridRow + dr[i] * d;
-                    int c = gridCol + dc[i] * d;
-
-                    if (!gameMap->isWalkable(r, c)) {
-                        // Choca con un obstáculo.
-                        // Si es destructible, se destruirá, pero la explosión gráfica no avanza más allá ni pinta encima.
-                        gameMap->destroyTile(r, c);
-                        break;
-                    }
-
-                    // Si la celda es caminable, es un segmento de la explosión.
-                    // Si es el final del recorrido (d == power - 1) o la siguiente celda es muro, usamos "end".
-                    bool isLast = (d == power - 1);
-                    if (!isLast && !gameMap->isWalkable(r + dr[i], c + dc[i])) {
-                        isLast = true;
-                    }
-
-                    std::string baseName = isLast ? "explosion_end" : "explosion_mid";
-                    explosionSegments.push_back({ gameMap->gridToNDC(r, c), baseName, angles[i] });
-
-                    if (isLast) break; // Terminar esta dirección si forzamos el 'end'
-                }
+        // Si tiene Remote Control, la mecha no avanza sola
+        if (!remoteControlled) {
+            fuseTimer += deltaTime;
+            if (fuseTimer >= fuseTime) {
+                detonate();
+                return false;
             }
-
-            return false;
         }
 
         // Animación de mecha: secuencia 1,2,1,0,1,2,1,0
@@ -144,6 +113,52 @@ bool Bomb::Update(float deltaTime) {
     }
 
     return false;
+}
+
+// Fuerza la explosión inmediata (Remote Control o temporizador agotado).
+void Bomb::detonate() {
+    if (state != BombState::FUSE) return;
+
+    // Decrementar contador de bombas activas del dueño
+    if (owner) {
+        owner->activeBombs--;
+        owner = nullptr; // Evitar doble decremento
+    }
+
+    state = BombState::EXPLODING;
+    animTimer = 0.0f;
+    animFrame = 0;
+
+    explosionSegments.clear();
+    // 1. Centro
+    explosionSegments.push_back({ position, "explosion", 0.0f });
+
+    // 2. Expandir en 4 direcciones
+    int dr[] = {0, -1, 0, 1};
+    int dc[] = {1, 0, -1, 0};
+    float angles[] = {glm::radians(-90.0f), 0.0f, glm::radians(90.0f), glm::radians(180.0f)};
+
+    for (int i = 0; i < 4; i++) {
+        for (int d = 1; d < power; d++) {
+            int r = gridRow + dr[i] * d;
+            int c = gridCol + dc[i] * d;
+
+            if (!gameMap->isWalkable(r, c)) {
+                gameMap->destroyTile(r, c);
+                break;
+            }
+
+            bool isLast = (d == power - 1);
+            if (!isLast && !gameMap->isWalkable(r + dr[i], c + dc[i])) {
+                isLast = true;
+            }
+
+            std::string baseName = isLast ? "explosion_end" : "explosion_mid";
+            explosionSegments.push_back({ gameMap->gridToNDC(r, c), baseName, angles[i] });
+
+            if (isLast) break;
+        }
+    }
 }
 
 // ============================== Render ==============================

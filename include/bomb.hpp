@@ -64,10 +64,14 @@ public:
     int power;              // Longitud total de la explosión (ej. 3 -> centro + mid + end)
     std::vector<ExplosionSegment> explosionSegments; // Segmentos calculados al inicio de la explosión
 
-    Bomb(glm::vec2 pos, int row, int col, int owner = 0);
+    Player* owner;           // Puntero al jugador dueño (para decrementar activeBombs al explotar)
+    bool remoteControlled;   // Si true, la mecha no avanza sola (se detona manualmente)
+
+    Bomb(glm::vec2 pos, int row, int col, Player* owner, int power = 2, bool remote = false);
     ~Bomb();
 
     bool Update(float deltaTime); // Devuelve true cuando termina (lista para eliminar).
+    void detonate();              // Fuerza explosión inmediata (Remote Control).
 
     // Dibuja la bomba/explosión usando la textura del mapa (sprites-Stage1).
     void Draw();
