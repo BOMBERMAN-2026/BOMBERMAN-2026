@@ -314,6 +314,49 @@ int GameMap::getSpriteId(int row, int col) const {
     return animator.getDisplayId(rawId);
 }
 
+BlockType GameMap::getBlockType(int row, int col) const {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) {
+        return BlockType::BARRIER;
+    }
+    return grid[row][col].type;
+}
+
+bool GameMap::getUvRectForTile(int row, int col, glm::vec4& uvRect) const {
+    uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    if (!atlasLoaded) return false;
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+
+    const Block& block = grid[row][col];
+    int displayId = animator.getDisplayId(block.spriteId);
+
+    if (block.destroyed || block.breaking) {
+        const bool wallLeft = (col > 0 && grid[row][col - 1].type == BlockType::BARRIER);
+        const bool wallUp = (row > 0 && grid[row - 1][col].type == BlockType::BARRIER);
+        const bool indestLeft = (col > 0 && grid[row][col - 1].type == BlockType::INDESTRUCTIBLE);
+        const bool indestUp = (row > 0 && grid[row - 1][col].type == BlockType::INDESTRUCTIBLE);
+
+        int floorId = 10;
+        if (wallLeft && wallUp) floorId = 6;
+        else if (wallLeft) floorId = 9;
+        else if (wallUp) floorId = 7;
+        else if (indestUp && indestLeft) floorId = 9;
+        else if (indestUp) floorId = 11;
+        else if (indestLeft) floorId = 9;
+
+        displayId = floorId;
+    }
+
+    const std::string idStr = std::to_string(displayId);
+    return getUvRectForSprite(atlas, idStr, uvRect);
+}
+
+bool GameMap::getUvRectForSpriteId(int spriteId, glm::vec4& uvRect) const {
+    uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+    if (!atlasLoaded) return false;
+    const std::string idStr = std::to_string(spriteId);
+    return getUvRectForSprite(atlas, idStr, uvRect);
+}
+
 // Walkable lógico (según `BlockType` + flags del bloque).
 bool GameMap::isWalkable(int row, int col) const {
     if (row < 0 || row >= rows || col < 0 || col >= cols)

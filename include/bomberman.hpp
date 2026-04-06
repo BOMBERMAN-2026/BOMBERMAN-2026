@@ -45,6 +45,10 @@ enum class Camera3DType {
 class Game
 {
     private:
+    void render2D();
+    void render3D();
+    void refreshWindowTitle() const;
+
     public:
 
         // Input
@@ -56,7 +60,7 @@ class Game
         GameState state;
         GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
         ViewMode viewMode = ViewMode::Mode2D;
-        Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
+        Camera3DType camera3DType = Camera3DType::OrthographicFixed;
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
@@ -84,6 +88,9 @@ class Game
 
         // Alternar entre pantalla completa y ventana
         void toggleFullscreen(GLFWwindow* window);
+
+        // Mantiene dimensiones internas y proyecciones al cambiar tamaño de ventana.
+        void onResize(int width, int height);
 };
 
 

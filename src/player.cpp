@@ -214,26 +214,37 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     if (!map) return;
     if (lifeState != PlayerLifeState::Alive) return;
 
-    const float step     = this->speed * deltaTime;
     const float halfTile = map->getTileSize() / 2.0f;
+    const float rawStep  = std::max(0.0f, this->speed * deltaTime);
+    const float step     = std::min(rawStep, halfTile * 0.45f);
 
     // --- Snap perpendicular al movimiento hacia el centro del tile actual ---
     // Impide que el jugador se cuele por las esquinas en pasillos de 1 tile.
     {
-        const float snapStrength = 0.25f;         // fracción de corrección por frame
-        const float snapMaxDist  = halfTile * 0.45f; // umbral máximo para aplicar
+        const float snapSpeed = 11.0f; // corrección por segundo, estable entre FPS
+        const float snapAlpha = std::min(1.0f, std::max(0.0f, snapSpeed * deltaTime));
+        const float snapMaxDist  = halfTile * 0.40f; // umbral máximo para aplicar
+        const float snapEpsilon = halfTile * 0.03f;  // snap final para evitar micro-jitter
         int tr, tc;
         map->ndcToGrid(this->position, tr, tc);
         glm::vec2 tileCenter = map->gridToNDC(tr, tc);
 
         if (mov == MOVE_LEFT || mov == MOVE_RIGHT) {
             float dy = tileCenter.y - this->position.y;
-            if (std::abs(dy) <= snapMaxDist)
-                this->position.y += dy * snapStrength;
+            if (std::abs(dy) <= snapMaxDist) {
+                this->position.y += dy * snapAlpha;
+                if (std::abs(tileCenter.y - this->position.y) <= snapEpsilon) {
+                    this->position.y = tileCenter.y;
+                }
+            }
         } else {
             float dx = tileCenter.x - this->position.x;
-            if (std::abs(dx) <= snapMaxDist)
-                this->position.x += dx * snapStrength;
+            if (std::abs(dx) <= snapMaxDist) {
+                this->position.x += dx * snapAlpha;
+                if (std::abs(tileCenter.x - this->position.x) <= snapEpsilon) {
+                    this->position.x = tileCenter.x;
+                }
+            }
         }
     }
 

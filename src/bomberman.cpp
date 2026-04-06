@@ -7,6 +7,7 @@
 #include "enemies/bebe_lloron.hpp"
 #include "enemies/babosa.hpp"
 #include "enemies/fantasma_mortal.hpp"
+#include "resource_manager.hpp"
 
 /*
  * bomberman.cpp
@@ -36,6 +37,7 @@
 #include <string>
 #include <cstdlib>
 #include <vector>
+#include <algorithm>
 #include <cmath>
 #include <utility>
 #include <fstream>
@@ -62,6 +64,11 @@ static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
 GLuint cubeVAO = 0;
 GLuint cubeVBO = 0;
 GLuint cubeEBO = 0;
+GLsizei cubeIndexCount = 0;
+GLuint sphereVAO = 0;
+GLuint sphereVBO = 0;
+GLuint sphereEBO = 0;
+GLsizei sphereIndexCount = 0;
 GLuint shader3D = 0;
 GLuint uniform3DModel = 0;
 GLuint uniform3DView = 0;
@@ -84,12 +91,34 @@ static const char* viewModeToString(ViewMode mode) {
 
 static const char* camera3DTypeToString(Camera3DType type) {
     switch (type) {
-        case Camera3DType::OrthographicFixed: return "OrthographicFixed";
-        case Camera3DType::PerspectiveFixed: return "PerspectiveFixed";
-        case Camera3DType::PerspectiveMobile: return "PerspectiveMobile";
-        case Camera3DType::FirstPerson: return "FirstPerson";
+        case Camera3DType::OrthographicFixed: return "AereaFija";
+        case Camera3DType::PerspectiveFixed: return "IsometricaFija";
+        case Camera3DType::PerspectiveMobile: return "Seguimiento";
+        case Camera3DType::FirstPerson: return "PrimeraPersona";
         default: return "Unknown";
     }
+}
+
+static glm::vec3 facingKeyToForward(int facingKey)
+{
+    switch (facingKey) {
+        case GLFW_KEY_UP: return glm::vec3(0.0f, 0.0f, -1.0f);
+        case GLFW_KEY_DOWN: return glm::vec3(0.0f, 0.0f, 1.0f);
+        case GLFW_KEY_LEFT: return glm::vec3(-1.0f, 0.0f, 0.0f);
+        case GLFW_KEY_RIGHT: return glm::vec3(1.0f, 0.0f, 0.0f);
+        default: return glm::vec3(0.0f, 0.0f, 1.0f);
+    }
+}
+
+static std::string buildWindowTitle(ViewMode viewMode, Camera3DType camera3DType)
+{
+    std::ostringstream title;
+    title << "BOMBERMAN 2026 - Vista " << viewModeToString(viewMode);
+    if (viewMode == ViewMode::Mode3D) {
+        title << " | Camara: " << camera3DTypeToString(camera3DType);
+    }
+    title << " | F1 Vista | F2 Camara";
+    return title.str();
 }
 
 // ============================== Gameplay: helpers ==============================
@@ -178,80 +207,139 @@ void CreateRectangle()
 
 void CreateCube()
 {
-    const GLfloat vertices[] = {
-        -0.5f, -0.5f, -0.5f,
-         0.5f, -0.5f, -0.5f,
-         0.5f,  0.5f, -0.5f,
-        -0.5f,  0.5f, -0.5f,
-        -0.5f, -0.5f,  0.5f,
-         0.5f, -0.5f,  0.5f,
-         0.5f,  0.5f,  0.5f,
-        -0.5f,  0.5f,  0.5f
-    };
+    MeshResource* cubeMesh = ResourceManager::createMesh("cube", []() -> MeshResource {
+        MeshResource mesh;
 
-    const GLuint indices[] = {
-        0, 1, 2, 2, 3, 0, // back
-        4, 5, 6, 6, 7, 4, // front
-        0, 4, 7, 7, 3, 0, // left
-        1, 5, 6, 6, 2, 1, // right
-        3, 2, 6, 6, 7, 3, // top
-        0, 1, 5, 5, 4, 0  // bottom
-    };
+        const GLfloat vertices[] = {
+            -0.5f, -0.5f, -0.5f,
+             0.5f, -0.5f, -0.5f,
+             0.5f,  0.5f, -0.5f,
+            -0.5f,  0.5f, -0.5f,
+            -0.5f, -0.5f,  0.5f,
+             0.5f, -0.5f,  0.5f,
+             0.5f,  0.5f,  0.5f,
+            -0.5f,  0.5f,  0.5f
+        };
 
-    glGenVertexArrays(1, &cubeVAO);
-    glBindVertexArray(cubeVAO);
+        const GLuint indices[] = {
+            0, 1, 2, 2, 3, 0,
+            4, 5, 6, 6, 7, 4,
+            0, 4, 7, 7, 3, 0,
+            1, 5, 6, 6, 2, 1,
+            3, 2, 6, 6, 7, 3,
+            0, 1, 5, 5, 4, 0
+        };
 
-    glGenBuffers(1, &cubeVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+        glGenVertexArrays(1, &mesh.vao);
+        glBindVertexArray(mesh.vao);
 
-    glGenBuffers(1, &cubeEBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+        glGenBuffers(1, &mesh.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
+        glGenBuffers(1, &mesh.ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-    glBindVertexArray(0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0);
+        mesh.indexCount = 36;
+        return mesh;
+    });
+
+    if (!cubeMesh) {
+        return;
+    }
+
+    cubeVAO = cubeMesh->vao;
+    cubeVBO = cubeMesh->vbo;
+    cubeEBO = cubeMesh->ebo;
+    cubeIndexCount = cubeMesh->indexCount;
+}
+
+void CreateSphere()
+{
+    MeshResource* sphereMesh = ResourceManager::createMesh("sphere", []() -> MeshResource {
+        MeshResource mesh;
+
+        const unsigned int stacks = 12;
+        const unsigned int slices = 16;
+        const float kPi = 3.14159265359f;
+
+        std::vector<GLfloat> vertices;
+        std::vector<GLuint> indices;
+        vertices.reserve((stacks + 1) * (slices + 1) * 3);
+        indices.reserve(stacks * slices * 6);
+
+        for (unsigned int i = 0; i <= stacks; ++i) {
+            const float v = (float)i / (float)stacks;
+            const float phi = v * kPi;
+            const float y = std::cos(phi) * 0.5f;
+            const float ringRadius = std::sin(phi) * 0.5f;
+
+            for (unsigned int j = 0; j <= slices; ++j) {
+                const float u = (float)j / (float)slices;
+                const float theta = u * (2.0f * kPi);
+                vertices.push_back(ringRadius * std::cos(theta));
+                vertices.push_back(y);
+                vertices.push_back(ringRadius * std::sin(theta));
+            }
+        }
+
+        for (unsigned int i = 0; i < stacks; ++i) {
+            for (unsigned int j = 0; j < slices; ++j) {
+                const GLuint first = i * (slices + 1) + j;
+                const GLuint second = first + slices + 1;
+
+                indices.push_back(first);
+                indices.push_back(second);
+                indices.push_back(first + 1);
+
+                indices.push_back(first + 1);
+                indices.push_back(second);
+                indices.push_back(second + 1);
+            }
+        }
+
+        glGenVertexArrays(1, &mesh.vao);
+        glBindVertexArray(mesh.vao);
+
+        glGenBuffers(1, &mesh.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+        glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GLfloat), vertices.data(), GL_STATIC_DRAW);
+
+        glGenBuffers(1, &mesh.ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+        glEnableVertexAttribArray(0);
+
+        glBindVertexArray(0);
+        mesh.indexCount = static_cast<GLsizei>(indices.size());
+        return mesh;
+    });
+
+    if (!sphereMesh) {
+        return;
+    }
+
+    sphereVAO = sphereMesh->vao;
+    sphereVBO = sphereMesh->vbo;
+    sphereEBO = sphereMesh->ebo;
+    sphereIndexCount = sphereMesh->indexCount;
 }
 
 void Compile3DShaders()
 {
-    std::string vertexShaderCode;
-    std::string fragmentShaderCode;
-
     const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
     const std::string resolvedFragmentPath = resolveAssetPath(kModel3DFragmentShaderPath);
-    if (!readTextFile(resolvedVertexPath, vertexShaderCode))
-    {
-        std::cerr << "No se pudo leer shader 3D de vertice: " << resolvedVertexPath << "\n";
-        return;
-    }
-    if (!readTextFile(resolvedFragmentPath, fragmentShaderCode))
-    {
-        std::cerr << "No se pudo leer shader 3D de fragmento: " << resolvedFragmentPath << "\n";
-        return;
-    }
 
-    shader3D = glCreateProgram();
-    if (!shader3D)
-    {
-        std::cerr << "Error creando programa shader 3D\n";
-        return;
-    }
-
-    AddShader(shader3D, vertexShaderCode.c_str(), GL_VERTEX_SHADER);
-    AddShader(shader3D, fragmentShaderCode.c_str(), GL_FRAGMENT_SHADER);
-
-    GLint result = 0;
-    GLchar errorLog[1024] = { 0 };
-
-    glLinkProgram(shader3D);
-    glGetProgramiv(shader3D, GL_LINK_STATUS, &result);
-    if (!result)
-    {
-        glGetProgramInfoLog(shader3D, sizeof(errorLog), nullptr, errorLog);
-        std::cerr << "Error link shader 3D: '" << errorLog << "'\n";
+    shader3D = ResourceManager::loadShader("model3D", resolvedVertexPath, resolvedFragmentPath);
+    if (shader3D == 0) {
+        std::cerr << "Error creando/cargando programa shader 3D\n";
         return;
     }
 
@@ -266,6 +354,153 @@ static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
     const float worldX = (float)col - ((float)map->getCols() * 0.5f) + 0.5f;
     const float worldZ = (float)row - ((float)map->getRows() * 0.5f) + 0.5f;
     return glm::vec3(worldX, y, worldZ);
+}
+
+static glm::vec3 ndcToWorld3D(const GameMap* map, const glm::vec2& ndc, float y)
+{
+    if (!map) {
+        return glm::vec3(0.0f, y, 0.0f);
+    }
+
+    const glm::vec2 cell00 = map->gridToNDC(0, 0);
+    const glm::vec2 cell01 = (map->getCols() > 1)
+        ? map->gridToNDC(0, 1)
+        : glm::vec2(cell00.x + map->getTileSize(), cell00.y);
+    const glm::vec2 cell10 = (map->getRows() > 1)
+        ? map->gridToNDC(1, 0)
+        : glm::vec2(cell00.x, cell00.y - map->getTileSize());
+
+    const float dx = (std::abs(cell01.x - cell00.x) > 0.0001f) ? (cell01.x - cell00.x) : map->getTileSize();
+    const float dy = (std::abs(cell10.y - cell00.y) > 0.0001f) ? (cell10.y - cell00.y) : -map->getTileSize();
+
+    const float col = (ndc.x - cell00.x) / dx;
+    const float row = (ndc.y - cell00.y) / dy;
+
+    const float worldX = col - ((float)map->getCols() * 0.5f) + 0.5f;
+    const float worldZ = row - ((float)map->getRows() * 0.5f) + 0.5f;
+    return glm::vec3(worldX, y, worldZ);
+}
+
+static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height)
+{
+    if (!map || shader == 0 || VAO == 0 || mapTexture == 0) {
+        return;
+    }
+
+    const int rows = map->getRows();
+    const int cols = map->getCols();
+    if (rows <= 0 || cols <= 0) {
+        return;
+    }
+
+    const float safeHeight = (height > 0) ? (float)height : 1.0f;
+    const float aspect = std::max(0.01f, (float)width / safeHeight);
+    const float mapRatio = (float)cols / (float)rows;
+
+    const float margin = 0.06f;
+    float panelHeight = 0.56f;
+    float panelWidth = panelHeight * mapRatio;
+
+    const float maxPanelWidth = std::max(0.40f, aspect * 0.65f);
+    if (panelWidth > maxPanelWidth) {
+        panelWidth = maxPanelWidth;
+        panelHeight = panelWidth / std::max(0.2f, mapRatio);
+    }
+
+    const float panelRight = aspect - margin;
+    const float panelTop = 1.0f - margin;
+    const float panelLeft = panelRight - panelWidth;
+    const float panelBottom = panelTop - panelHeight;
+
+    const float panelCenterX = (panelLeft + panelRight) * 0.5f;
+    const float panelCenterY = (panelTop + panelBottom) * 0.5f;
+
+    glm::vec4 panelUv(0.0f, 0.0f, 1.0f, 1.0f);
+    if (!map->getUvRectForSpriteId(10, panelUv)) {
+        map->getUvRectForTile(0, 0, panelUv);
+    }
+
+    auto drawQuadNdc = [&](float centerX,
+                           float centerY,
+                           float halfW,
+                           float halfH,
+                           GLuint texId,
+                           const glm::vec4& uvRect,
+                           const glm::vec4& tint) {
+        if (texId == 0) {
+            return;
+        }
+
+        glm::mat4 model(1.0f);
+        model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
+        model = glm::scale(model, glm::vec3(halfW, halfH, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texId);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    };
+
+    glDisable(GL_DEPTH_TEST);
+    glUseProgram(shader);
+
+    const glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform1i(uniformTexture, 0);
+    glUniform1f(uniformFlipX, 0.0f);
+    glBindVertexArray(VAO);
+
+    // Marco y fondo del mini-mapa.
+    drawQuadNdc(panelCenterX,
+                panelCenterY,
+                panelWidth * 0.5f + 0.02f,
+                panelHeight * 0.5f + 0.02f,
+                mapTexture,
+                panelUv,
+                glm::vec4(0.04f, 0.05f, 0.06f, 0.92f));
+
+    drawQuadNdc(panelCenterX,
+                panelCenterY,
+                panelWidth * 0.5f,
+                panelHeight * 0.5f,
+                mapTexture,
+                panelUv,
+                glm::vec4(0.15f, 0.18f, 0.21f, 0.86f));
+
+    auto drawMarker = [&](const glm::vec2& ndcPos, const glm::vec4& tint, float halfScale) {
+        int row = 0;
+        int col = 0;
+        map->ndcToGrid(ndcPos, row, col);
+        if (row < 0 || row >= rows || col < 0 || col >= cols) {
+            return;
+        }
+
+        const float xNorm = ((float)col + 0.5f) / (float)cols;
+        const float yNorm = ((float)row + 0.5f) / (float)rows;
+
+        const float x = panelLeft + xNorm * panelWidth;
+        const float y = panelTop - yNorm * panelHeight;
+
+        const float halfSize = std::max(0.010f, panelHeight * halfScale);
+        drawQuadNdc(x, y, halfSize, halfSize, mapTexture, panelUv, tint);
+    };
+
+    if (!gPlayers.empty() && gPlayers[0] != nullptr && gPlayers[0]->isAlive()) {
+        drawMarker(gPlayers[0]->position, glm::vec4(0.23f, 0.90f, 1.00f, 1.00f), 0.030f);
+    }
+
+    for (auto* enemy : gEnemies) {
+        if (!enemy || enemy->lifeState != EnemyLifeState::Alive) {
+            continue;
+        }
+        drawMarker(enemy->position, glm::vec4(1.00f, 0.28f, 0.18f, 1.00f), 0.024f);
+    }
+
+    glBindVertexArray(0);
+    glUseProgram(0);
 }
 
 void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
@@ -291,50 +526,13 @@ void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
 
 void CompileShaders()
 {
-    std::string vertexShaderCode;
-    std::string fragmentShaderCode;
-
     const std::string resolvedVertexPath = resolveAssetPath(kSpriteVertexShaderPath);
     const std::string resolvedFragmentPath = resolveAssetPath(kSpriteFragmentShaderPath);
-    if (!readTextFile(resolvedVertexPath, vertexShaderCode))
-    {
-        std::cerr << "No se pudo leer shader de vertice: " << resolvedVertexPath << "\n";
-        return;
-    }
-    if (!readTextFile(resolvedFragmentPath, fragmentShaderCode))
-    {
-        std::cerr << "No se pudo leer shader de fragmento: " << resolvedFragmentPath << "\n";
-        return;
-    }
 
-    shader = glCreateProgram();
-    if (!shader)
+    shader = ResourceManager::loadShader("sprite2D", resolvedVertexPath, resolvedFragmentPath);
+    if (shader == 0)
     {
-        printf("Error creating shader program!\n");
-        return;
-    }
-
-    AddShader(shader, vertexShaderCode.c_str(), GL_VERTEX_SHADER);
-    AddShader(shader, fragmentShaderCode.c_str(), GL_FRAGMENT_SHADER);
-
-    GLint result = 0;
-    GLchar errorLog[1024] = { 0 };
-
-    glLinkProgram(shader);
-    glGetProgramiv(shader, GL_LINK_STATUS, &result);
-    if (!result)
-    {
-        glGetProgramInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
-        printf("Error linking program: '%s'\n", errorLog);
-        return;
-    }
-
-    glValidateProgram(shader);
-    glGetProgramiv(shader, GL_VALIDATE_STATUS, &result);
-    if (!result)
-    {
-        glGetProgramInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
-        printf("Error validating program: '%s'\n", errorLog);
+        std::cerr << "Error creating shader program!\n";
         return;
     }
 
@@ -632,6 +830,7 @@ static std::string getKeyName(GLint key){
 
 void Game::toggleViewMode() {
     viewMode = (viewMode == ViewMode::Mode2D) ? ViewMode::Mode3D : ViewMode::Mode2D;
+    refreshWindowTitle();
     std::cout << "[Render] View mode -> " << viewModeToString(viewMode) << "\n";
 }
 
@@ -650,7 +849,65 @@ void Game::cycleCamera3DType() {
             camera3DType = Camera3DType::OrthographicFixed;
             break;
     }
+    refreshWindowTitle();
     std::cout << "[Render] 3D camera -> " << camera3DTypeToString(camera3DType) << "\n";
+}
+
+void Game::refreshWindowTitle() const {
+    if (window == nullptr) {
+        return;
+    }
+    const std::string title = buildWindowTitle(viewMode, camera3DType);
+    glfwSetWindowTitle(window, title.c_str());
+}
+
+Game::~Game() {
+    for (auto* b : gBombs) {
+        delete b;
+    }
+    gBombs.clear();
+
+    for (auto* enemy : gEnemies) {
+        delete enemy;
+    }
+    gEnemies.clear();
+
+    for (auto* p : gPlayers) {
+        delete p;
+    }
+    gPlayers.clear();
+
+    if (gameMap != nullptr) {
+        delete gameMap;
+        gameMap = nullptr;
+    }
+
+    if (EBO != 0) {
+        glDeleteBuffers(1, &EBO);
+        EBO = 0;
+    }
+    if (VBO != 0) {
+        glDeleteBuffers(1, &VBO);
+        VBO = 0;
+    }
+    if (VAO != 0) {
+        glDeleteVertexArrays(1, &VAO);
+        VAO = 0;
+    }
+
+    ResourceManager::clear();
+
+    texture = 0;
+    mapTexture = 0;
+    hudTexture = 0;
+    enemyTexture = 0;
+
+    shader = 0;
+    shader3D = 0;
+    cubeVAO = cubeVBO = cubeEBO = 0;
+    cubeIndexCount = 0;
+    sphereVAO = sphereVBO = sphereEBO = 0;
+    sphereIndexCount = 0;
 }
 
 void Game::init() {
@@ -658,13 +915,14 @@ void Game::init() {
     CreateRectangle();
     CompileShaders();
     CreateCube();
+    CreateSphere();
     Compile3DShaders();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
     // Cargar atlas + textura del jugador (alpha) desde JSON
-    const std::string atlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasPlayer.json");
+    const std::string atlasPath = resolveAssetPath("img/atlases/SpriteAtlasPlayer.json");
     if (!loadSpriteAtlasMinimal(atlasPath, gPlayerAtlas))
     {
         std::cerr << "Error cargando atlas: " << atlasPath << std::endl;
@@ -683,7 +941,7 @@ void Game::init() {
     }
 
     const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
-    texture = LoadTexture(texturePath.c_str());
+    texture = ResourceManager::loadTexture("player2D", texturePath, LoadTexture);
     if (texture == 0)
     {
         std::cerr << "Error cargando textura: " << texturePath << std::endl;
@@ -699,7 +957,7 @@ void Game::init() {
     }
 
     // Cargar atlas del mapa (coordenadas de sprites)
-    if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json"))
+    if (!gameMap->loadAtlas("img/atlases/SpriteAtlasStage1.json"))
     {
         std::cerr << "Error cargando atlas del mapa" << std::endl;
         std::exit(EXIT_FAILURE);
@@ -710,8 +968,8 @@ void Game::init() {
     gameMap->calculateTileMetrics(aspectRatio);
 
     // Cargar textura de la sprite sheet del mapa
-    const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
-    mapTexture = LoadTexture(mapTexPath.c_str());
+    const std::string mapTexPath = resolveAssetPath("img/mapas/Stage1/sprites-Stage1.png");
+    mapTexture = ResourceManager::loadTexture("map2D", mapTexPath, LoadTexture);
     if (mapTexture == 0)
     {
         std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
@@ -720,7 +978,7 @@ void Game::init() {
 
     // Cargar textura del HUD
     const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
-    hudTexture = LoadTexture(hudTexPath.c_str());
+    hudTexture = ResourceManager::loadTexture("hud2D", hudTexPath, LoadTexture);
     if (hudTexture == 0)    {
         std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
         std::exit(EXIT_FAILURE);
@@ -743,14 +1001,14 @@ void Game::init() {
 
     // Cargar atlas + textura de enemigos
     {
-        const std::string enemyAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasEnemy.json");
+        const std::string enemyAtlasPath = resolveAssetPath("img/atlases/SpriteAtlasEnemy.json");
         if (!loadSpriteAtlasMinimal(enemyAtlasPath, gEnemyAtlas))
         {
             std::cerr << "Error cargando atlas enemigos: " << enemyAtlasPath << std::endl;
             std::exit(EXIT_FAILURE);
         }
         const std::string enemyTexPath = resolveAssetPath(gEnemyAtlas.imagePath);
-        enemyTexture = LoadTexture(enemyTexPath.c_str());
+        enemyTexture = ResourceManager::loadTexture("enemy2D", enemyTexPath, LoadTexture);
         if (enemyTexture == 0)
         {
             std::cerr << "Error cargando textura enemigos: " << enemyTexPath << std::endl;
@@ -812,27 +1070,19 @@ void Game::init() {
 
     // Cargar atlas de bombas (misma sprite sheet del stage)
     {
-        const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
+        const std::string bombAtlasPath = resolveAssetPath("img/atlases/SpriteAtlasStage1.json");
         if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas))
         {
             std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
         }
     }
+
+    refreshWindowTitle();
 }
 
 // Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
 void Game::processInput() {
     if (this->state != GAME_PLAYING) return;
-
-    // Controles de visualizacion.
-    if (this->keys[GLFW_KEY_F1] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
-        toggleViewMode();
-    }
-    if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
-        cycleCamera3DType();
-    }
 
     if (gPlayers.empty() || gPlayers[0] == nullptr) return;
     Player* p1 = gPlayers[0];
@@ -867,41 +1117,50 @@ void Game::processInput() {
                     case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
                     case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
                 }
-                if (keyToUse == GLFW_KEY_UNKNOWN) return;
+                if (keyToUse == GLFW_KEY_UNKNOWN) {
+                    if (up) keyToUse = GLFW_KEY_UP;
+                    else if (down) keyToUse = GLFW_KEY_DOWN;
+                    else if (left) keyToUse = GLFW_KEY_LEFT;
+                    else if (right) keyToUse = GLFW_KEY_RIGHT;
+                }
             }
 
-            switch (keyToUse) {
-                case GLFW_KEY_UP:
-                    p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_UP;
-                    break;
-                case GLFW_KEY_DOWN:
-                    p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_DOWN;
-                    break;
-                case GLFW_KEY_LEFT:
-                    p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_LEFT;
-                    break;
-                case GLFW_KEY_RIGHT:
-                    p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_RIGHT;
-                    break;
-            }
+            if (keyToUse != GLFW_KEY_UNKNOWN) {
+                switch (keyToUse) {
+                    case GLFW_KEY_UP:
+                        p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_UP;
+                        break;
+                    case GLFW_KEY_DOWN:
+                        p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_DOWN;
+                        break;
+                    case GLFW_KEY_LEFT:
+                        p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_LEFT;
+                        break;
+                    case GLFW_KEY_RIGHT:
+                        p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_RIGHT;
+                        break;
+                }
 
-            p1->isWalking = true;
+                p1->isWalking = true;
+            } else {
+                p1->isWalking = false;
+            }
         }
     } else {
         p1->isWalking = false;
@@ -947,25 +1206,34 @@ void Game::processInput() {
                         case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
                         case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
                     }
-                    if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
+                    if (keyToUse2 == GLFW_KEY_UNKNOWN) {
+                        if (up2) keyToUse2 = GLFW_KEY_W;
+                        else if (down2) keyToUse2 = GLFW_KEY_S;
+                        else if (left2) keyToUse2 = GLFW_KEY_A;
+                        else if (right2) keyToUse2 = GLFW_KEY_D;
+                    }
                 }
 
-                GLint dir2 = GLFW_KEY_DOWN;
-                Move mov2 = MOVE_NONE;
-                switch (keyToUse2) {
-                    case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
-                    case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
-                    case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
-                    case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
-                }
+                if (keyToUse2 != GLFW_KEY_UNKNOWN) {
+                    GLint dir2 = GLFW_KEY_DOWN;
+                    Move mov2 = MOVE_NONE;
+                    switch (keyToUse2) {
+                        case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
+                        case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
+                        case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
+                        case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
+                    }
 
-                p2->UpdateSprite(mov2, gameMap, this->deltaTime);
-                if (!p2->isWalking || p2->facingDirKey != dir2) {
-                    p2->walkTimer = 0.0f;
-                    p2->walkPhase = 0;
+                    p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+                    if (!p2->isWalking || p2->facingDirKey != dir2) {
+                        p2->walkTimer = 0.0f;
+                        p2->walkPhase = 0;
+                    }
+                    p2->facingDirKey = dir2;
+                    p2->isWalking = true;
+                } else {
+                    p2->isWalking = false;
                 }
-                p2->facingDirKey = dir2;
-                p2->isWalking = true;
             }
         }
     }
@@ -1125,148 +1393,365 @@ void Game::update() {
     }
 }
 
-// Renderiza mapa, bombas, jugadores y enemigos.
-void Game::render() {
+// Renderiza mapa, bombas, jugadores y enemigos en 3D.
+void Game::render3D() {
+    glEnable(GL_DEPTH_TEST);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
-        glEnable(GL_DEPTH_TEST);
-        glUseProgram(shader3D);
+    glUseProgram(shader3D);
 
-        const float aspect = (float)WIDTH / (float)HEIGHT;
-        glm::vec3 cameraPos(0.0f, 16.0f, 12.0f);
-        glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
-        glm::vec3 up(0.0f, 1.0f, 0.0f);
+    const float safeHeight = (HEIGHT > 0) ? (float)HEIGHT : 1.0f;
+    const float aspect = std::max(0.01f, (float)WIDTH / safeHeight);
+    const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+    const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+    const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+    const glm::vec3 mapCenter(0.0f, 0.0f, 0.0f);
 
-        if (camera3DType == Camera3DType::OrthographicFixed) {
-            cameraPos = glm::vec3(0.0f, 20.0f, 0.01f);
-            up = glm::vec3(0.0f, 0.0f, -1.0f);
-        } else if (camera3DType == Camera3DType::PerspectiveMobile) {
-            const float t = (float)glfwGetTime();
-            cameraPos = glm::vec3(std::sin(t * 0.35f) * 10.0f, 14.0f, std::cos(t * 0.35f) * 10.0f);
-        } else if (camera3DType == Camera3DType::FirstPerson && !gPlayers.empty() && gPlayers[0] != nullptr) {
-            int playerRow = 0;
-            int playerCol = 0;
-            gameMap->ndcToGrid(gPlayers[0]->position, playerRow, playerCol);
-            if (playerRow >= 0 && playerCol >= 0 && playerRow < gameMap->getRows() && playerCol < gameMap->getCols()) {
-                cameraPos = gridToWorld3D(gameMap, playerRow, playerCol, 0.75f);
-                glm::vec3 forward(0.0f, 0.0f, 1.0f);
-                switch (gPlayers[0]->facingDirKey) {
-                    case GLFW_KEY_UP:    forward = glm::vec3(0.0f, 0.0f, -1.0f); break;
-                    case GLFW_KEY_DOWN:  forward = glm::vec3(0.0f, 0.0f, 1.0f); break;
-                    case GLFW_KEY_LEFT:  forward = glm::vec3(-1.0f, 0.0f, 0.0f); break;
-                    case GLFW_KEY_RIGHT: forward = glm::vec3(1.0f, 0.0f, 0.0f); break;
-                }
-                cameraTarget = cameraPos + forward * 2.0f;
-            }
-        }
-
-        const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
-        glm::mat4 projection(1.0f);
-        if (camera3DType == Camera3DType::OrthographicFixed) {
-            const float halfW = (float)gameMap->getCols() * 0.55f;
-            const float halfH = (float)gameMap->getRows() * 0.55f;
-            projection = glm::ortho(-halfW, halfW, -halfH, halfH, 0.1f, 100.0f);
-        } else {
-            projection = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 100.0f);
-        }
-
-        glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
-        glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
-
-        auto drawCube3D = [&](const glm::vec3& center, const glm::vec3& scale, const glm::vec3& color) {
-            glm::mat4 model(1.0f);
-            model = glm::translate(model, center);
-            model = glm::scale(model, scale);
-            glUniformMatrix4fv(uniform3DModel, 1, GL_FALSE, glm::value_ptr(model));
-            glUniform3fv(uniform3DColor, 1, glm::value_ptr(color));
-            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
-        };
-
-        glBindVertexArray(cubeVAO);
-
-        // Mapa: cubos por tile.
-        for (int r = 0; r < gameMap->getRows(); ++r) {
-            for (int c = 0; c < gameMap->getCols(); ++c) {
-                const bool walkable = gameMap->isWalkable(r, c);
-                const bool destructible = gameMap->isDestructible(r, c);
-
-                float h = 0.10f;
-                glm::vec3 color(0.24f, 0.26f, 0.27f);
-                if (!walkable) {
-                    h = destructible ? 0.70f : 1.00f;
-                    color = destructible ? glm::vec3(0.75f, 0.45f, 0.20f)
-                                        : glm::vec3(0.35f, 0.35f, 0.40f);
-                }
-
-                const glm::vec3 center = gridToWorld3D(gameMap, r, c, h * 0.5f);
-                drawCube3D(center, glm::vec3(0.95f, h, 0.95f), color);
-            }
-        }
-
-        // Jugadores como cajas 3D.
-        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
-            Player* p = gPlayers[i];
-            if (!p) continue;
-
-            int r = 0;
-            int c = 0;
-            gameMap->ndcToGrid(p->position, r, c);
-            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
-
-            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.55f);
-            const glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
-                                             : glm::vec3(0.88f, 0.18f, 0.18f);
-            drawCube3D(center, glm::vec3(0.60f, 1.10f, 0.60f), color);
-        }
-
-        // Enemigos como cajas 3D.
-        for (auto* enemy : gEnemies) {
-            if (!enemy || enemy->lifeState == EnemyLifeState::Dead) continue;
-
-            int r = 0;
-            int c = 0;
-            gameMap->ndcToGrid(enemy->position, r, c);
-            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
-
-            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.45f);
-            drawCube3D(center, glm::vec3(0.60f, 0.90f, 0.60f), glm::vec3(0.19f, 0.68f, 0.27f));
-        }
-
-        // Bombas y explosiones como primitivas 3D.
-        for (auto* b : gBombs) {
-            if (!b || b->state == BombState::DONE) continue;
-
-            if (b->state == BombState::FUSE) {
-                const glm::vec3 center = gridToWorld3D(gameMap, b->gridRow, b->gridCol, 0.30f);
-                drawCube3D(center, glm::vec3(0.45f, 0.45f, 0.45f), glm::vec3(0.10f, 0.10f, 0.10f));
-            } else {
-                for (std::size_t i = 0; i < b->explosionSegments.size(); ++i) {
-                    const ExplosionSegment& seg = b->explosionSegments[i];
-                    int r = 0;
-                    int c = 0;
-                    gameMap->ndcToGrid(seg.pos, r, c);
-                    if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
-
-                    const bool warmColor = (((int)i + b->animFrame) % 2 == 0);
-                    const glm::vec3 color = warmColor ? glm::vec3(1.00f, 0.15f, 0.10f)
-                                                      : glm::vec3(1.00f, 0.92f, 0.10f);
-                    const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.35f);
-                    drawCube3D(center, glm::vec3(0.50f, 0.50f, 0.50f), color);
-                }
-            }
-        }
-
-        glBindVertexArray(0);
-        glUseProgram(0);
-        return;
+    glm::vec3 trackedPlayerCenter = mapCenter + glm::vec3(0.0f, 0.55f, 0.0f);
+    glm::vec3 trackedPlayerForward(0.0f, 0.0f, 1.0f);
+    if (!gPlayers.empty() && gPlayers[0] != nullptr) {
+        trackedPlayerCenter = ndcToWorld3D(gameMap, gPlayers[0]->position, 0.55f);
+        trackedPlayerForward = facingKeyToForward(gPlayers[0]->facingDirKey);
     }
 
+    glm::vec3 cameraPos(mapRadius * 0.70f, mapRadius * 1.55f + 3.0f, mapRadius * 1.25f + 2.5f);
+    glm::vec3 cameraTarget(mapCenter);
+    glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+    if (camera3DType == Camera3DType::OrthographicFixed) {
+        cameraPos = glm::vec3(0.0f, mapRadius * 2.4f + 2.0f, 0.01f);
+        cameraTarget = mapCenter;
+        up = glm::vec3(0.0f, 0.0f, -1.0f);
+    } else if (camera3DType == Camera3DType::PerspectiveFixed) {
+        cameraPos = glm::vec3(mapRadius * 0.75f, mapRadius * 1.45f + 3.0f, mapRadius * 1.05f + 2.0f);
+        cameraTarget = mapCenter;
+    } else if (camera3DType == Camera3DType::PerspectiveMobile) {
+        // Camara de seguimiento con orientacion fija: no gira segun direccion del jugador.
+        const glm::vec3 followOffset(0.0f, 4.2f, 6.8f);
+        cameraPos = trackedPlayerCenter + followOffset;
+        cameraTarget = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
+    } else if (camera3DType == Camera3DType::FirstPerson) {
+        const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.82f, 0.0f) - trackedPlayerForward * 0.15f;
+        cameraPos = eye;
+        cameraTarget = eye + trackedPlayerForward * 3.0f + glm::vec3(0.0f, -0.15f, 0.0f);
+    }
+
+    const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
+    glm::mat4 projection(1.0f);
+    if (camera3DType == Camera3DType::OrthographicFixed) {
+        const float safeAspect = std::max(aspect, 0.01f);
+        float halfH = std::max(4.0f, (float)gameMap->getRows() * 0.38f);
+        float halfW = halfH * safeAspect;
+        const float minHalfW = std::max(4.0f, (float)gameMap->getCols() * 0.38f);
+        if (halfW < minHalfW) {
+            halfW = minHalfW;
+            halfH = halfW / safeAspect;
+        }
+        projection = glm::ortho(-halfW, halfW, -halfH, halfH, 0.1f, 100.0f);
+    } else {
+        float fovDegrees = 55.0f;
+        if (camera3DType == Camera3DType::PerspectiveFixed) {
+            fovDegrees = 50.0f;
+        } else if (camera3DType == Camera3DType::PerspectiveMobile) {
+            fovDegrees = 62.0f;
+        } else if (camera3DType == Camera3DType::FirstPerson) {
+            fovDegrees = 72.0f;
+        }
+        projection = glm::perspective(glm::radians(fovDegrees), aspect, 0.05f, 140.0f);
+    }
+
+    glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+
+    auto drawMesh3D = [&](GLuint vao, GLsizei indexCount, const glm::vec3& center, const glm::vec3& scale, const glm::vec3& color) {
+        if (vao == 0 || indexCount <= 0) {
+            return;
+        }
+
+        glm::mat4 model(1.0f);
+        model = glm::translate(model, center);
+        model = glm::scale(model, scale);
+        glUniformMatrix4fv(uniform3DModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform3fv(uniform3DColor, 1, glm::value_ptr(color));
+        glBindVertexArray(vao);
+        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+    };
+
+    auto drawSpriteBillboard3D = [&](GLuint texId,
+                                     const glm::vec4& uvRect,
+                                     const glm::vec3& feetPos,
+                                     float width,
+                                     float height,
+                                     float flipX,
+                                     const glm::vec4& tint) {
+        if (texId == 0 || shader == 0 || VAO == 0) {
+            return;
+        }
+
+        const glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+        glm::vec3 toCamera = cameraPos - feetPos;
+        if (glm::length(toCamera) < 0.0001f) {
+            toCamera = glm::vec3(0.0f, 0.0f, 1.0f);
+        }
+
+        const glm::vec3 viewDir = glm::normalize(toCamera);
+        glm::vec3 right = glm::cross(worldUp, viewDir);
+        if (glm::length(right) < 0.0001f) {
+            right = glm::vec3(1.0f, 0.0f, 0.0f);
+        } else {
+            right = glm::normalize(right);
+        }
+        const glm::vec3 forward = glm::normalize(glm::cross(right, worldUp));
+
+        const float halfW = width * 0.5f;
+        const float halfH = height * 0.5f;
+
+        glm::mat4 model(1.0f);
+        model[0] = glm::vec4(right * halfW, 0.0f);
+        model[1] = glm::vec4(worldUp * halfH, 0.0f);
+        model[2] = glm::vec4(forward * 0.5f, 0.0f);
+        model[3] = glm::vec4(feetPos + worldUp * halfH, 1.0f);
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glUniform1f(uniformFlipX, flipX);
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texId);
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    };
+
+    // Mapa: cubos por tile.
+    for (int r = 0; r < gameMap->getRows(); ++r) {
+        for (int c = 0; c < gameMap->getCols(); ++c) {
+            const bool walkable = gameMap->isWalkable(r, c);
+            const bool destructible = gameMap->isDestructible(r, c);
+            const bool checker = (((r + c) % 2) == 0);
+
+            float h = 0.08f;
+            glm::vec3 color = checker ? glm::vec3(0.20f, 0.22f, 0.24f)
+                                      : glm::vec3(0.23f, 0.25f, 0.27f);
+            if (!walkable) {
+                h = 1.00f;
+                color = destructible
+                    ? (checker ? glm::vec3(0.78f, 0.47f, 0.22f) : glm::vec3(0.72f, 0.42f, 0.18f))
+                    : (checker ? glm::vec3(0.36f, 0.37f, 0.43f) : glm::vec3(0.32f, 0.33f, 0.39f));
+            }
+
+            const glm::vec3 center = gridToWorld3D(gameMap, r, c, h * 0.5f);
+            drawMesh3D(cubeVAO, cubeIndexCount, center, glm::vec3(0.95f, h, 0.95f), color);
+        }
+    }
+
+    auto drawSpriteTileQuad3D = [&](const glm::vec3& center,
+                                    float halfW,
+                                    float halfH,
+                                    float yawDegrees,
+                                    const glm::vec4& uvRect,
+                                    const glm::vec4& tint) {
+        glm::mat4 model(1.0f);
+        model = glm::translate(model, center);
+        model = glm::rotate(model, glm::radians(yawDegrees), glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::scale(model, glm::vec3(halfW, halfH, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    };
+
+    // Decal de sprite Stage1 sobre suelos, techos y laterales de bloques del mapa.
+    glUseProgram(shader);
+    const glm::mat4 spriteProjection3DMap = projection * view;
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(spriteProjection3DMap));
+    glUniform1i(uniformTexture, 0);
+    glUniform1f(uniformFlipX, 0.0f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, mapTexture);
+    glBindVertexArray(VAO);
+
+    glm::vec4 indestructibleSideUv(0.0f, 0.0f, 1.0f, 1.0f);
+    const bool hasIndestructibleSideUv = gameMap->getUvRectForSpriteId(8, indestructibleSideUv);
+
+    const int mapRows = gameMap->getRows();
+    const int mapCols = gameMap->getCols();
+    const float topHalfSize = 0.475f;
+    const float sideOutward = 0.0035f;
+
+    auto sideIsVisible = [&](int row, int col) {
+        if (row < 0 || row >= mapRows || col < 0 || col >= mapCols) {
+            return true;
+        }
+        return gameMap->isWalkable(row, col);
+    };
+
+    for (int r = 0; r < gameMap->getRows(); ++r) {
+        for (int c = 0; c < gameMap->getCols(); ++c) {
+            const bool walkable = gameMap->isWalkable(r, c);
+            const BlockType blockType = gameMap->getBlockType(r, c);
+            const bool isBorderTile = (r == 0 || c == 0 || r == mapRows - 1 || c == mapCols - 1);
+            const float h = walkable ? 0.08f : 1.00f;
+
+            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            if (!gameMap->getUvRectForTile(r, c, uvRect)) {
+                continue;
+            }
+
+            // Cara superior (incluye suelos en 3D).
+            {
+                const glm::vec3 centerTop = gridToWorld3D(gameMap, r, c, h + sideOutward);
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, centerTop);
+                model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(topHalfSize, topHalfSize, 1.0f));
+
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+
+            // Caras laterales para bloques no walkable.
+            if (!walkable) {
+                glm::vec4 sideUv = uvRect;
+                if (blockType == BlockType::BARRIER && isBorderTile && hasIndestructibleSideUv) {
+                    sideUv = indestructibleSideUv;
+                }
+
+                const float halfH = h * 0.5f;
+                const glm::vec3 tileCenter = gridToWorld3D(gameMap, r, c, halfH);
+                const glm::vec4 sideTint(1.0f, 1.0f, 1.0f, 0.98f);
+
+                if (sideIsVisible(r - 1, c)) {
+                    drawSpriteTileQuad3D(tileCenter + glm::vec3(0.0f, 0.0f, -topHalfSize - sideOutward), topHalfSize, halfH, 180.0f, sideUv, sideTint);
+                }
+                if (sideIsVisible(r + 1, c)) {
+                    drawSpriteTileQuad3D(tileCenter + glm::vec3(0.0f, 0.0f, topHalfSize + sideOutward), topHalfSize, halfH, 0.0f, sideUv, sideTint);
+                }
+                if (sideIsVisible(r, c - 1)) {
+                    drawSpriteTileQuad3D(tileCenter + glm::vec3(-topHalfSize - sideOutward, 0.0f, 0.0f), topHalfSize, halfH, 90.0f, sideUv, sideTint);
+                }
+                if (sideIsVisible(r, c + 1)) {
+                    drawSpriteTileQuad3D(tileCenter + glm::vec3(topHalfSize + sideOutward, 0.0f, 0.0f), topHalfSize, halfH, -90.0f, sideUv, sideTint);
+                }
+            }
+        }
+    }
+
+    glUseProgram(shader3D);
+    glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
+    glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+
+    const bool hasSphereMesh = (sphereVAO != 0 && sphereIndexCount > 0);
+    const GLuint sphereOrCubeVAO = hasSphereMesh ? sphereVAO : cubeVAO;
+    const GLsizei sphereOrCubeIndexCount = hasSphereMesh ? sphereIndexCount : cubeIndexCount;
+
+    // Jugadores: sombra en suelo (el sprite real se dibuja después como billboard 2.5D).
+    for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+        Player* p = gPlayers[i];
+        if (!p || !p->isAlive()) continue;
+
+        const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
+        drawMesh3D(sphereOrCubeVAO, sphereOrCubeIndexCount, glm::vec3(feet.x, 0.03f, feet.z), glm::vec3(0.46f, 0.02f, 0.46f), glm::vec3(0.05f, 0.05f, 0.05f));
+    }
+
+    // Enemigos: sombra en suelo (el sprite real se dibuja después como billboard 2.5D).
+    for (auto* enemy : gEnemies) {
+        if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+        const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.02f);
+        drawMesh3D(sphereOrCubeVAO, sphereOrCubeIndexCount, glm::vec3(feet.x, 0.03f, feet.z), glm::vec3(0.44f, 0.02f, 0.44f), glm::vec3(0.05f, 0.05f, 0.05f));
+    }
+
+    const GLuint fuseMesh = sphereOrCubeVAO;
+    const GLsizei fuseMeshIndexCount = sphereOrCubeIndexCount;
+
+    // Bombas y explosiones en 3D.
+    for (auto* b : gBombs) {
+        if (!b || b->state == BombState::DONE) continue;
+
+        if (b->state == BombState::FUSE) {
+            const glm::vec3 center = ndcToWorld3D(gameMap, b->position, 0.30f);
+            drawMesh3D(fuseMesh, fuseMeshIndexCount, center, glm::vec3(0.45f, 0.45f, 0.45f), glm::vec3(0.08f, 0.08f, 0.08f));
+            drawMesh3D(cubeVAO, cubeIndexCount, center + glm::vec3(0.0f, 0.34f, 0.0f), glm::vec3(0.06f, 0.18f, 0.06f), glm::vec3(0.95f, 0.70f, 0.20f));
+        } else {
+            for (std::size_t i = 0; i < b->explosionSegments.size(); ++i) {
+                const ExplosionSegment& seg = b->explosionSegments[i];
+                const bool warmColor = (((int)i + b->animFrame) % 2 == 0);
+                const glm::vec3 color = warmColor ? glm::vec3(1.00f, 0.15f, 0.10f)
+                                                  : glm::vec3(1.00f, 0.92f, 0.10f);
+                const glm::vec3 center = ndcToWorld3D(gameMap, seg.pos, 0.35f);
+                const float pulse = 0.44f + 0.08f * std::sin(((float)b->animFrame * 1.15f) + ((float)i * 0.70f));
+                drawMesh3D(fuseMesh, fuseMeshIndexCount, center, glm::vec3(pulse, pulse, pulse), color);
+            }
+        }
+    }
+
+    // Sprites reales sobre el mundo 3D (billboards): mejora de legibilidad de jugador/enemigos.
+    glUseProgram(shader);
+    const glm::mat4 spriteProjection3D = projection * view;
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(spriteProjection3D));
+    glUniform1i(uniformTexture, 0);
+
+    for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+        Player* p = gPlayers[i];
+        if (!p || !p->isAlive()) continue;
+
+        if (camera3DType == Camera3DType::FirstPerson && i == 0) {
+            continue;
+        }
+
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        bool hasUv = getUvRectForSprite(gPlayerAtlas, p->currentSpriteName, uvRect);
+        if (!hasUv) {
+            const std::string fallback = p->spritePrefix + ".abajo.0";
+            hasUv = getUvRectForSprite(gPlayerAtlas, fallback, uvRect);
+        }
+
+        if (hasUv) {
+            const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
+            drawSpriteBillboard3D(texture, uvRect, feet, 0.92f, 1.38f, p->flipX, glm::vec4(1.0f));
+        }
+    }
+
+    for (auto* enemy : gEnemies) {
+        if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        bool hasUv = getUvRectForSprite(gEnemyAtlas, enemy->currentSpriteName, uvRect);
+        if (!hasUv && !enemy->spriteBaseId.empty()) {
+            hasUv = getUvRectForSprite(gEnemyAtlas, enemy->spriteBaseId + ".derecha.0", uvRect);
+        }
+        if (!hasUv && !enemy->spriteBaseId.empty()) {
+            hasUv = getUvRectForSprite(gEnemyAtlas, enemy->spriteBaseId + ".abajo.0", uvRect);
+        }
+
+        if (hasUv) {
+            const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.02f);
+            drawSpriteBillboard3D(enemyTexture, uvRect, feet, 0.96f, 1.30f, enemy->flipX, glm::vec4(1.0f));
+        }
+    }
+
+    glBindVertexArray(0);
+    glUseProgram(0);
+
+    if (camera3DType == Camera3DType::FirstPerson) {
+        renderFirstPersonMiniMap2D(gameMap, WIDTH, HEIGHT);
+    }
+}
+
+// Renderiza mapa, bombas, jugadores y enemigos en 2D.
+void Game::render2D() {
     glDisable(GL_DEPTH_TEST);
+    glClear(GL_COLOR_BUFFER_BIT);
 
     glUseProgram(shader);
 
     // Calcular proyeccion ortografica para mantener el aspect ratio en NDC original
-    float aspect = (float)WIDTH / (float)HEIGHT;
+    const float safeHeight = (HEIGHT > 0) ? (float)HEIGHT : 1.0f;
+    float aspect = (float)WIDTH / safeHeight;
     glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
@@ -1322,22 +1807,43 @@ void Game::render() {
     glUseProgram(0);
 }
 
+void Game::render() {
+    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+
+    if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
+        render3D();
+    } else {
+        render2D();
+    }
+}
+
+void Game::onResize(int width, int height) {
+    WIDTH = std::max(1, width);
+    HEIGHT = std::max(1, height);
+
+    if (gameMap) {
+        float aspect = (float)WIDTH / (float)HEIGHT;
+        gameMap->calculateTileMetrics(aspect);
+    }
+}
+
 // Cambiar pantalla de fullscreen a windowed (y viceversa)
 void Game::toggleFullscreen(GLFWwindow* window) {
 
     if (glfwGetWindowMonitor(window) == nullptr) {
         // Cambiar a fullscreen
         glfwGetWindowPos(window, &windowedXPos, &windowedYPos);
-        glfwGetWindowSize(window, &WIDTH, &HEIGHT);
 
         GLFWmonitor* monitor = glfwGetPrimaryMonitor();
         const GLFWvidmode* mode = glfwGetVideoMode(monitor);
         glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+        onResize(mode->width, mode->height);
     } else {
         // Pasar a windowed
         // Valores fixeados para windowed
         WIDTH = 1280; 
         HEIGHT = 720;
         glfwSetWindowMonitor(window, nullptr, windowedXPos, windowedYPos, WIDTH, HEIGHT, 0);
+        onResize(WIDTH, HEIGHT);
     }
 }
