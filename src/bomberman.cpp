@@ -50,7 +50,7 @@ GLuint hudTexture;
 // ============================== OpenGL: estado global ==============================
 
 // Global variables for OpenGL
-GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX;
+GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX, uniformWhiteFlash;
 
 GLuint texture;
 
@@ -361,6 +361,7 @@ void CompileShaders()
     uniformProjection = glGetUniformLocation(shader, "projection");
     uniformTexture = glGetUniformLocation(shader, "ourTexture");
     uniformTintColor = glGetUniformLocation(shader, "tintColor");
+    uniformWhiteFlash = glGetUniformLocation(shader, "whiteFlash");
     uniformUvRect = glGetUniformLocation(shader, "uvRect");
     uniformFlipX = glGetUniformLocation(shader, "flipX");
 }
@@ -1300,8 +1301,19 @@ void Game::render() {
             if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
 
             const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.55f);
-            const glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
-                                             : glm::vec3(0.88f, 0.18f, 0.18f);
+            glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
+                                        : glm::vec3(0.88f, 0.18f, 0.18f);
+            if (p->invincible) {
+                float hz = 8.0f;
+                if (p->invincibilityFromPowerUp) {
+                    hz = (p->invincibilityTimer > 4.0f) ? 6.0f : 18.0f;
+                }
+                const float t = (float)glfwGetTime();
+                const int phase = (int)(t * hz);
+                if (phase % 2 == 0) {
+                    color = glm::vec3(1.0f, 1.0f, 1.0f);
+                }
+            }
             drawCube3D(center, glm::vec3(0.60f, 1.10f, 0.60f), color);
         }
 
@@ -1359,12 +1371,14 @@ void Game::render() {
     // Texture unit 0
     glUniform1i(uniformTexture, 0);
 
+    // Por defecto, no aplicar flash blanco (solo lo usa el jugador en invulnerabilidad).
+    glUniform1f(uniformWhiteFlash, 0.0f);
+
     // === 1. Renderizar mapa (fondo) ===
     gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-
     gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
@@ -1392,6 +1406,10 @@ void Game::render() {
         if (!p) continue;
         p->Draw();
     }
+
+    // Importante: `Player::Draw()` puede dejar `whiteFlash=1` (parpadeo).
+    // Reseteamos antes de dibujar otros sprites con el mismo shader.
+    glUniform1f(uniformWhiteFlash, 0.0f);
 
     glBindVertexArray(0);
 

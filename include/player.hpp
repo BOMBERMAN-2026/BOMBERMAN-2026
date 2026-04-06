@@ -53,9 +53,11 @@ class Player : public Entity {
         float baseSpeed;                 // Velocidad base actual (cap: 0.8f)
         int lives = 3;                   // Vidas
 
-        // Invincibility
-        bool invincible = false;
-        float invincibilityTimer = 0.0f;
+        // Invulnerabilidad ("Armadura" o spawn/respawn)
+        bool invincible = false;                 // Si true, el jugador no puede morir por contacto/explosión
+        float invincibilityTimer = 0.0f;         // Tiempo restante (segundos)
+        float invincibilityTotalSeconds = 0.0f;  // Duración total activada (segundos). Útil para VFX/UI.
+        bool invincibilityFromPowerUp = false;   // true si viene del power-up "Armadura" (16s)
 
         // Remote Control
         bool hasRemoteControl = false;
@@ -73,7 +75,7 @@ class Player : public Entity {
         // Tick de lógica
         void Update() override;
         
-        // Tick de render (placeholder). El render real se hace desde `bomberman.cpp`.
+        // Render del jugador (llamado desde `bomberman.cpp`).
         void Draw() override;
 
         // Intenta mover el jugador un paso en la dirección indicada.
