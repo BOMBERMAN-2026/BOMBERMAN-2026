@@ -45,6 +45,7 @@ static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
 GLuint hudTexture;
+GLuint introTexture;
 
 // ============================== OpenGL: estado global ==============================
 
@@ -663,369 +664,351 @@ void Game::init() {
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // Cargar atlas + textura del jugador (alpha) desde JSON
-    const std::string atlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasPlayer.json");
-    if (!loadSpriteAtlasMinimal(atlasPath, gPlayerAtlas))
-    {
-        std::cerr << "Error cargando atlas: " << atlasPath << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    // Comprobación básica: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON).
-    if (gPlayerAtlas.sprites.find("jugadorblanco.abajo.0") == gPlayerAtlas.sprites.end()) {
-        std::cerr << "[SpriteAtlas] Aviso: no existe 'jugadorblanco.abajo.0' en el atlas."
-                  << " Total sprites: " << gPlayerAtlas.sprites.size() << "\n";
-        int shown = 0;
-        for (const auto& p : gPlayerAtlas.sprites) {
-            std::cerr << "  - " << p.first << "\n";
-            if (++shown >= 10) break;
+    // ========== INTRO ==========
+    if (this->state == GAME_INTRO) {
+        // Cargar solo la textura de intro
+        const std::string introPath = resolveAssetPath("resources/sprites/intro_menu/Title_Screen.png");
+        introTexture = LoadTexture(introPath.c_str());
+        if (introTexture == 0) {
+            std::cerr << "Aviso: No se pudo cargar intro: " << introPath << std::endl;
         }
+        return;
     }
 
-    const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
-    texture = LoadTexture(texturePath.c_str());
-    if (texture == 0)
-    {
-        std::cerr << "Error cargando textura: " << texturePath << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    // Cargar mapa
-    gameMap = new GameMap();
-    if (!gameMap->loadFromFile("levels/level_01.txt"))
-    {
-        std::cerr << "Error cargando mapa" << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    // Cargar atlas del mapa (coordenadas de sprites)
-    if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json"))
-    {
-        std::cerr << "Error cargando atlas del mapa" << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    // Calcular métricas del mapa (ahora que tenemos cols, rows y aspectRatio)
-    float aspectRatio = (float)WIDTH / (float)HEIGHT;
-    gameMap->calculateTileMetrics(aspectRatio);
-
-    // Cargar textura de la sprite sheet del mapa
-    const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
-    mapTexture = LoadTexture(mapTexPath.c_str());
-    if (mapTexture == 0)
-    {
-        std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    // Cargar textura del HUD
-    const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
-    hudTexture = LoadTexture(hudTexPath.c_str());
-    if (hudTexture == 0)    {
-        std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
-
-    // Crear jugador(es) en la posición de spawn del mapa
-    gPlayers.clear();
-
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-        Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/0, "jugadorblanco");
-        gPlayers.push_back(p1);
-    }
-
-    if (this->mode == GameMode::TwoPlayers) {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
-        Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/1, "jugadorrojo");
-        gPlayers.push_back(p2);
-    }
-
-    // Cargar atlas + textura de enemigos
-    {
-        const std::string enemyAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasEnemy.json");
-        if (!loadSpriteAtlasMinimal(enemyAtlasPath, gEnemyAtlas))
+    // ========== JUEGO ==========
+    if (this->state == GAME_PLAYING) {
+        // Cargar atlas + textura del jugador (alpha) desde JSON
+        const std::string atlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasPlayer.json");
+        if (!loadSpriteAtlasMinimal(atlasPath, gPlayerAtlas))
         {
-            std::cerr << "Error cargando atlas enemigos: " << enemyAtlasPath << std::endl;
+            std::cerr << "Error cargando atlas: " << atlasPath << std::endl;
             std::exit(EXIT_FAILURE);
         }
-        const std::string enemyTexPath = resolveAssetPath(gEnemyAtlas.imagePath);
-        enemyTexture = LoadTexture(enemyTexPath.c_str());
-        if (enemyTexture == 0)
-        {
-            std::cerr << "Error cargando textura enemigos: " << enemyTexPath << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-    }
 
-    for (auto enemy : gEnemies) {
-        delete enemy;
-    }
-    gEnemies.clear();
-
-    // Crear Leon
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
-        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
-        leon->setContext(gameMap, &gPlayers);
-        leon->currentSpriteName = "leon.derecha.0";
-        gEnemies.push_back(leon);
-    }
-
-    // Crear Babosa
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
-        Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
-        babosa->setContext(gameMap, &gPlayers);
-        babosa->currentSpriteName = "babosa.derecha.0";
-        gEnemies.push_back(babosa);
-    }
-
-    // Crear Bebe Lloron
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
-        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
-        bebe->setContext(gameMap, &gPlayers);
-        bebe->currentSpriteName = "bebe.derecha.0";
-        gEnemies.push_back(bebe);
-    }
-
-    // Crear Fantasma Mortal
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 2.0f);
-        {
-            int r, c;
-            gameMap->ndcToGrid(spawnPos, r, c);
-            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols() || !gameMap->isWalkable(r, c)) {
-                spawnPos = gameMap->getSpawnPosition(0);
+        // Comprobación básica: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON).
+        if (gPlayerAtlas.sprites.find("jugadorblanco.abajo.0") == gPlayerAtlas.sprites.end()) {
+            std::cerr << "[SpriteAtlas] Aviso: no existe 'jugadorblanco.abajo.0' en el atlas."
+                    << " Total sprites: " << gPlayerAtlas.sprites.size() << "\n";
+            int shown = 0;
+            for (const auto& p : gPlayerAtlas.sprites) {
+                std::cerr << "  - " << p.first << "\n";
+                if (++shown >= 10) break;
             }
         }
-        FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
-        fantasma->setContext(gameMap, &gPlayers);
-        fantasma->currentSpriteName = "fantasma.derecha.0";
-        gEnemies.push_back(fantasma);
-    }
 
-    // Limpiar bombas anteriores
-    for (auto b : gBombs) delete b;
-    gBombs.clear();
-
-    // Cargar atlas de bombas (misma sprite sheet del stage)
-    {
-        const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
-        if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas))
+        const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
+        texture = LoadTexture(texturePath.c_str());
+        if (texture == 0)
         {
-            std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+            std::cerr << "Error cargando textura: " << texturePath << std::endl;
+            std::exit(EXIT_FAILURE);
         }
-    }
 
-    // === Power-Ups ===
-    gameMap->loadPowerUpTextures();
-    gameMap->placePowerUps();
+        // Cargar mapa
+        gameMap = new GameMap();
+        if (!gameMap->loadFromFile("levels/level_01.txt"))
+        {
+            std::cerr << "Error cargando mapa" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        // Cargar atlas del mapa (coordenadas de sprites)
+        if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json"))
+        {
+            std::cerr << "Error cargando atlas del mapa" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        // Calcular métricas del mapa (ahora que tenemos cols, rows y aspectRatio)
+        float aspectRatio = (float)WIDTH / (float)HEIGHT;
+        gameMap->calculateTileMetrics(aspectRatio);
+
+        // Cargar textura de la sprite sheet del mapa
+        const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
+        mapTexture = LoadTexture(mapTexPath.c_str());
+        if (mapTexture == 0)
+        {
+            std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        // Cargar textura del HUD
+        const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
+        hudTexture = LoadTexture(hudTexPath.c_str());
+        if (hudTexture == 0)    {
+            std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        // Crear jugador(es) en la posición de spawn del mapa
+        gPlayers.clear();
+
+        {
+            glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
+            Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/0, "jugadorblanco");
+            gPlayers.push_back(p1);
+        }
+
+        if (this->mode == GameMode::TwoPlayers) {
+            glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
+            Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/1, "jugadorrojo");
+            gPlayers.push_back(p2);
+        }
+
+        // Cargar atlas + textura de enemigos
+        {
+            const std::string enemyAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasEnemy.json");
+            if (!loadSpriteAtlasMinimal(enemyAtlasPath, gEnemyAtlas))
+            {
+                std::cerr << "Error cargando atlas enemigos: " << enemyAtlasPath << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+            const std::string enemyTexPath = resolveAssetPath(gEnemyAtlas.imagePath);
+            enemyTexture = LoadTexture(enemyTexPath.c_str());
+            if (enemyTexture == 0)
+            {
+                std::cerr << "Error cargando textura enemigos: " << enemyTexPath << std::endl;
+                std::exit(EXIT_FAILURE);
+            }
+        }
+
+        for (auto enemy : gEnemies) {
+            delete enemy;
+        }
+        gEnemies.clear();
+
+        // Crear Leon
+        {
+            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
+            Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
+            leon->setContext(gameMap, &gPlayers);
+            leon->currentSpriteName = "leon.derecha.0";
+            gEnemies.push_back(leon);
+        }
+
+        // Crear Babosa
+        {
+            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
+            Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
+            babosa->setContext(gameMap, &gPlayers);
+            babosa->currentSpriteName = "babosa.derecha.0";
+            gEnemies.push_back(babosa);
+        }
+
+        // Crear Bebe Lloron
+        {
+            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
+            BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
+            bebe->setContext(gameMap, &gPlayers);
+            bebe->currentSpriteName = "bebe.derecha.0";
+            gEnemies.push_back(bebe);
+        }
+
+        // Crear Fantasma Mortal
+        {
+            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 2.0f);
+            {
+                int r, c;
+                gameMap->ndcToGrid(spawnPos, r, c);
+                if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols() || !gameMap->isWalkable(r, c)) {
+                    spawnPos = gameMap->getSpawnPosition(0);
+                }
+            }
+            FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
+            fantasma->setContext(gameMap, &gPlayers);
+            fantasma->currentSpriteName = "fantasma.derecha.0";
+            gEnemies.push_back(fantasma);
+        }
+
+        // Limpiar bombas anteriores
+        for (auto b : gBombs) delete b;
+        gBombs.clear();
+
+        // Cargar atlas de bombas (misma sprite sheet del stage)
+        {
+            const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
+            if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas))
+            {
+                std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+            }
+        }
+
+        // === Power-Ups ===
+        gameMap->loadPowerUpTextures();
+        gameMap->placePowerUps();
+    }
 }
 
 // Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
 void Game::processInput() {
-    if (this->state != GAME_PLAYING) return;
-
-    // Controles de visualizacion.
-    if (this->keys[GLFW_KEY_F1] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
-        toggleViewMode();
-    }
-    if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
-        cycleCamera3DType();
+    // Pasar de windowed a fullscreen: Tab
+    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
+        toggleFullscreen(this->window);
     }
 
-    if (gPlayers.empty() || gPlayers[0] == nullptr) return;
-    Player* p1 = gPlayers[0];
-
-    // ======================= Jugador 1 (blanco): Flechas =======================
-
-    if (p1->isAlive()) {
-        const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
-        const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
-        const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
-        const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
-
-        const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
-        if (pressedCount == 0) {
-            p1->isWalking = false;
-
-            if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-                p1->facingDirKey = this->lastDirKey;
-            }
-        } else {
-            GLint keyToUse = GLFW_KEY_UNKNOWN;
-            if (pressedCount == 1) {
-                if (up) keyToUse = GLFW_KEY_UP;
-                if (down) keyToUse = GLFW_KEY_DOWN;
-                if (left) keyToUse = GLFW_KEY_LEFT;
-                if (right) keyToUse = GLFW_KEY_RIGHT;
-                this->lastDirKey = keyToUse;
-            } else {
-                switch (this->lastDirKey) {
-                    case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
-                    case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
-                    case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
-                    case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
-                }
-                if (keyToUse == GLFW_KEY_UNKNOWN) return;
-            }
-
-            switch (keyToUse) {
-                case GLFW_KEY_UP:
-                    p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_UP;
-                    break;
-                case GLFW_KEY_DOWN:
-                    p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_DOWN;
-                    break;
-                case GLFW_KEY_LEFT:
-                    p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_LEFT;
-                    break;
-                case GLFW_KEY_RIGHT:
-                    p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
-                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
-                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                    }
-                    p1->facingDirKey = GLFW_KEY_RIGHT;
-                    break;
-            }
-
-            p1->isWalking = true;
+    // ========== INTRO: Enter para pasar al juego ==========
+    if (this->state == GAME_INTRO) {
+        return; // No procesamos input en intro (solo Enter en callback)
+    }
+    // ========== JUEGO NORMAL ==========
+    if (this->state == GAME_PLAYING) {
+        // Controles de visualizacion.
+        if (this->keys[GLFW_KEY_F1] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
+            toggleViewMode();
         }
-    } else {
-        p1->isWalking = false;
-    }
+        if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
+            cycleCamera3DType();
+        }
 
-    // ======================= Jugador 2 (rojo): WASD =======================
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
-        Player* p2 = gPlayers[1];
+        if (gPlayers.empty() || gPlayers[0] == nullptr) return;
+        Player* p1 = gPlayers[0];
 
-        if (!p2->isAlive()) {
-            p2->isWalking = false;
-        } else {
+        // ======================= Jugador 1 (blanco): Flechas =======================
 
-            const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
-            const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
-            const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
-            const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
+        if (p1->isAlive()) {
+            const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
+            const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
+            const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
+            const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
 
-            const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
-            if (pressedCount2 == 0) {
-                p2->isWalking = false;
+            const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
+            if (pressedCount == 0) {
+                p1->isWalking = false;
 
-                if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
-                    switch (this->lastDirKeyP2) {
-                        case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
-                        case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
-                        case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
-                        case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
-                    }
+                if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
+                    p1->facingDirKey = this->lastDirKey;
                 }
             } else {
-                GLint keyToUse2 = GLFW_KEY_UNKNOWN;
-                if (pressedCount2 == 1) {
-                    if (up2) keyToUse2 = GLFW_KEY_W;
-                    if (down2) keyToUse2 = GLFW_KEY_S;
-                    if (left2) keyToUse2 = GLFW_KEY_A;
-                    if (right2) keyToUse2 = GLFW_KEY_D;
-                    this->lastDirKeyP2 = keyToUse2;
+                GLint keyToUse = GLFW_KEY_UNKNOWN;
+                if (pressedCount == 1) {
+                    if (up) keyToUse = GLFW_KEY_UP;
+                    if (down) keyToUse = GLFW_KEY_DOWN;
+                    if (left) keyToUse = GLFW_KEY_LEFT;
+                    if (right) keyToUse = GLFW_KEY_RIGHT;
+                    this->lastDirKey = keyToUse;
                 } else {
-                    switch (this->lastDirKeyP2) {
-                        case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
-                        case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
-                        case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
-                        case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+                    switch (this->lastDirKey) {
+                        case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
+                        case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
+                        case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
+                        case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
                     }
-                    if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
+                    if (keyToUse == GLFW_KEY_UNKNOWN) return;
                 }
 
-                GLint dir2 = GLFW_KEY_DOWN;
-                Move mov2 = MOVE_NONE;
-                switch (keyToUse2) {
-                    case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
-                    case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
-                    case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
-                    case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
+                switch (keyToUse) {
+                    case GLFW_KEY_UP:
+                        p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_UP;
+                        break;
+                    case GLFW_KEY_DOWN:
+                        p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_DOWN;
+                        break;
+                    case GLFW_KEY_LEFT:
+                        p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_LEFT;
+                        break;
+                    case GLFW_KEY_RIGHT:
+                        p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
+                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
+                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = GLFW_KEY_RIGHT;
+                        break;
                 }
 
-                p2->UpdateSprite(mov2, gameMap, this->deltaTime);
-                if (!p2->isWalking || p2->facingDirKey != dir2) {
-                    p2->walkTimer = 0.0f;
-                    p2->walkPhase = 0;
+                p1->isWalking = true;
+            }
+        } else {
+            p1->isWalking = false;
+        }
+
+        // ======================= Jugador 2 (rojo): WASD =======================
+        if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+            Player* p2 = gPlayers[1];
+
+            if (!p2->isAlive()) {
+                p2->isWalking = false;
+            } else {
+
+                const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
+                const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
+                const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
+                const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
+
+                const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
+                if (pressedCount2 == 0) {
+                    p2->isWalking = false;
+
+                    if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
+                        switch (this->lastDirKeyP2) {
+                            case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
+                            case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
+                            case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
+                            case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
+                        }
+                    }
+                } else {
+                    GLint keyToUse2 = GLFW_KEY_UNKNOWN;
+                    if (pressedCount2 == 1) {
+                        if (up2) keyToUse2 = GLFW_KEY_W;
+                        if (down2) keyToUse2 = GLFW_KEY_S;
+                        if (left2) keyToUse2 = GLFW_KEY_A;
+                        if (right2) keyToUse2 = GLFW_KEY_D;
+                        this->lastDirKeyP2 = keyToUse2;
+                    } else {
+                        switch (this->lastDirKeyP2) {
+                            case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
+                            case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
+                            case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
+                            case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+                        }
+                        if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
+                    }
+
+                    GLint dir2 = GLFW_KEY_DOWN;
+                    Move mov2 = MOVE_NONE;
+                    switch (keyToUse2) {
+                        case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
+                        case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
+                        case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
+                        case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
+                    }
+
+                    p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+                    if (!p2->isWalking || p2->facingDirKey != dir2) {
+                        p2->walkTimer = 0.0f;
+                        p2->walkPhase = 0;
+                    }
+                    p2->facingDirKey = dir2;
+                    p2->isWalking = true;
                 }
-                p2->facingDirKey = dir2;
-                p2->isWalking = true;
             }
         }
-    }
 
-    // ======================= Colocar bombas (Botón 1) =======================
-    // P1 (flechas): Ctrl derecho — poner bomba
-    if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
+        // ======================= Colocar bombas (Botón 1) =======================
+        // P1 (flechas): Ctrl derecho — poner bomba
+        if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
-        if (p1->canPlaceBomb()) {
-            int bombRow, bombCol;
-            gameMap->ndcToGrid(p1->position, bombRow, bombCol);
-
-            // Comprobar que no hay ya una bomba en este tile
-            bool alreadyHasBomb = false;
-            for (auto* b : gBombs) {
-                if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
-                    alreadyHasBomb = true;
-                    break;
-                }
-            }
-
-            if (!alreadyHasBomb) {
-                glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
-                Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
-                                      /*owner=*/p1,
-                                      /*power=*/p1->explosionPower,
-                                      /*remote=*/p1->hasRemoteControl);
-                gBombs.push_back(bomb);
-                p1->activeBombs++;
-            }
-        }
-    }
-
-    // P1: Detonar (Botón 2) — Alt derecho
-    if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
-        // Detonar la bomba MÁS ANTIGUA del jugador (una por una, estilo Arcade)
-        for (auto* b : gBombs) {
-            if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
-                b->detonate();
-                break; // Solo una por pulsación
-            }
-        }
-    }
-
-    // P2 (WASD): X — poner bomba
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
-        Player* p2 = gPlayers[1];
-        if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_X] = GLFW_REPEAT;
-
-            if (p2->canPlaceBomb()) {
+            if (p1->canPlaceBomb()) {
                 int bombRow, bombCol;
-                gameMap->ndcToGrid(p2->position, bombRow, bombCol);
+                gameMap->ndcToGrid(p1->position, bombRow, bombCol);
 
+                // Comprobar que no hay ya una bomba en este tile
                 bool alreadyHasBomb = false;
                 for (auto* b : gBombs) {
                     if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
@@ -1037,31 +1020,68 @@ void Game::processInput() {
                 if (!alreadyHasBomb) {
                     glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
                     Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
-                                          /*owner=*/p2,
-                                          /*power=*/p2->explosionPower,
-                                          /*remote=*/p2->hasRemoteControl);
+                                        /*owner=*/p1,
+                                        /*power=*/p1->explosionPower,
+                                        /*remote=*/p1->hasRemoteControl);
                     gBombs.push_back(bomb);
-                    p2->activeBombs++;
+                    p1->activeBombs++;
                 }
             }
         }
 
-        // P2: Detonar (Botón 2) — Z
-        if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
+        // P1: Detonar (Botón 2) — Alt derecho
+        if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
+            // Detonar la bomba MÁS ANTIGUA del jugador (una por una, estilo Arcade)
             for (auto* b : gBombs) {
-                if (b && b->ownerIndex == p2->playerId && b->state == BombState::FUSE) {
+                if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
                     b->detonate();
-                    break;
+                    break; // Solo una por pulsación
                 }
             }
         }
-    }
 
-    // Pasar de windowed a fullscreen: Tab
-    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
-        toggleFullscreen(this->window);
+        // P2 (WASD): X — poner bomba
+        if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+            Player* p2 = gPlayers[1];
+            if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
+                this->keys[GLFW_KEY_X] = GLFW_REPEAT;
+
+                if (p2->canPlaceBomb()) {
+                    int bombRow, bombCol;
+                    gameMap->ndcToGrid(p2->position, bombRow, bombCol);
+
+                    bool alreadyHasBomb = false;
+                    for (auto* b : gBombs) {
+                        if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
+                            alreadyHasBomb = true;
+                            break;
+                        }
+                    }
+
+                    if (!alreadyHasBomb) {
+                        glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
+                        Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
+                                            /*owner=*/p2,
+                                            /*power=*/p2->explosionPower,
+                                            /*remote=*/p2->hasRemoteControl);
+                        gBombs.push_back(bomb);
+                        p2->activeBombs++;
+                    }
+                }
+            }
+
+            // P2: Detonar (Botón 2) — Z
+            if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
+                this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
+                for (auto* b : gBombs) {
+                    if (b && b->ownerIndex == p2->playerId && b->state == BombState::FUSE) {
+                        b->detonate();
+                        break;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1069,6 +1089,12 @@ void Game::processInput() {
 void Game::update() {
     float deltaTime = this->deltaTime;
 
+    // ========== INTRO ==========
+    if (this->state == GAME_INTRO) {
+        return; // No hacer nada, solo esperar a que presione Enter
+    }
+
+    // ========== RESTO DEL JUEGO ==========
     if (gameMap) {
         gameMap->update(deltaTime);
     }
@@ -1174,6 +1200,31 @@ void Game::update() {
 
 // Renderiza mapa, bombas, jugadores y enemigos.
 void Game::render() {
+
+    // ========== INTRO ==========
+    if (this->state == GAME_INTRO) {
+        glUseProgram(shader);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, introTexture);
+        glBindVertexArray(VAO);
+        
+        glm::mat4 projection = glm::ortho(0.0f, (float)WIDTH, 0.0f, (float)HEIGHT);
+        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+        
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 0.0f));
+        model = glm::scale(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 1.0f));
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        
+        glm::vec4 tintColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tintColor));
+        
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        return;
+    }
 
     if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
         glEnable(GL_DEPTH_TEST);

@@ -22,6 +22,7 @@
  */
 
 enum GameState {
+    GAME_INTRO,      // Pantalla de intro
     GAME_PLAYING
 };
 
@@ -66,7 +67,7 @@ class Game
         // Timing
         float deltaTime = 0.0f;               // Tiempo entre frames (segundos)
 
-        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_PLAYING;}
+        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_INTRO;}
         ~Game();
 
         void setMode(GameMode m) { mode = m; } // Selecciona modo (se aplica al hacer init()).
