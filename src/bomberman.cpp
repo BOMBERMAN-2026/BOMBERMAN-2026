@@ -46,6 +46,9 @@ GameMap* gameMap;
 GLuint mapTexture;
 GLuint hudTexture;
 GLuint introTexture;
+GLuint menuTexture[2];  // [0] = imagen 1P, [1] = imagen 2P
+int menuSelection = 0;  // 0 = 1P, 1 = 2P
+const int NUM_MENU_OPTIONS = 2;
 
 // ============================== OpenGL: estado global ==============================
 
@@ -675,6 +678,17 @@ void Game::init() {
         return;
     }
 
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
+        menuTexture[0] = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/Menu_Screen1.png").c_str());
+        menuTexture[1] = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/Menu_Screen2.png").c_str());
+        if (menuTexture[0] == 0 || menuTexture[1] == 0) {
+            std::cerr << "Advertencia: No se pudo cargar textura del menu.\n";
+        }
+        menuSelection = 0;  // Reiniciar a 1P
+        return;
+    }
+
     // ========== JUEGO ==========
     if (this->state == GAME_PLAYING) {
         // Cargar atlas + textura del jugador (alpha) desde JSON
@@ -851,6 +865,20 @@ void Game::processInput() {
     if (this->state == GAME_INTRO) {
         return; // No procesamos input en intro (solo Enter en callback)
     }
+
+    // ========== MENU: Flechas para seleccionar, Enter para confirmar ==========
+    if (this->state == GAME_MENU) {
+        if (this->keys[GLFW_KEY_UP] == GLFW_PRESS || this->keys[GLFW_KEY_W] == GLFW_PRESS) {
+            menuSelection = (menuSelection - 1 + NUM_MENU_OPTIONS) % NUM_MENU_OPTIONS;  // Subimos en menú
+            this->keys[GLFW_KEY_UP] = GLFW_REPEAT;
+        }
+        if (this->keys[GLFW_KEY_DOWN] == GLFW_PRESS || this->keys[GLFW_KEY_S] == GLFW_PRESS) {
+            menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;  // Bajamos en menú
+            this->keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+        }
+        return;  // Solo procesamos navegación en menu
+    }
+
     // ========== JUEGO NORMAL ==========
     if (this->state == GAME_PLAYING) {
         // Controles de visualizacion.
@@ -1094,6 +1122,11 @@ void Game::update() {
         return; // No hacer nada, solo esperar a que presione Enter
     }
 
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
+        return; // No actualizar lógica en menú
+    }
+
     // ========== RESTO DEL JUEGO ==========
     if (gameMap) {
         gameMap->update(deltaTime);
@@ -1211,6 +1244,32 @@ void Game::render() {
         glm::mat4 projection = glm::ortho(0.0f, (float)WIDTH, 0.0f, (float)HEIGHT);
         glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
         
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 0.0f));
+        model = glm::scale(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 1.0f));
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        
+        glm::vec4 tintColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tintColor));
+        
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        return;
+    }
+
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
+        glUseProgram(shader);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, menuTexture[menuSelection]); 
+        glBindVertexArray(VAO);
+        
+        glm::mat4 projection = glm::ortho(0.0f, (float)WIDTH, 0.0f, (float)HEIGHT);
+        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+        
+        // Renderizar fondo del menú
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 0.0f));
         model = glm::scale(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 1.0f));

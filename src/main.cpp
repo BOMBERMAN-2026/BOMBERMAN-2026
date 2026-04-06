@@ -20,6 +20,8 @@
 
 Game* bomberman;
 
+extern int menuSelection;
+
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
@@ -126,8 +128,16 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         if (action == GLFW_PRESS) {
             // ========== INTRO: Enter para ir al juego ==========
             if (bomberman->state == GAME_INTRO && key == GLFW_KEY_ENTER) {
+                bomberman->state = GAME_MENU;
+                bomberman->init(); // Cargar textura del menú
+                return;
+            }
+
+            // ========== MENU: Enter para seleccionar modo y pasar a juego ==========
+            if (bomberman->state == GAME_MENU && key == GLFW_KEY_ENTER) {
+                bomberman->mode = (menuSelection == 0) ? GameMode::OnePlayer : GameMode::TwoPlayers;
                 bomberman->state = GAME_PLAYING;
-                bomberman->init(); // Reinicializar juego
+                bomberman->init();  // Cargar todo el juego con el modo seleccionado
                 return;
             }
 
