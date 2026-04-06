@@ -7,6 +7,7 @@
 #include "enemies/bebe_lloron.hpp"
 #include "enemies/babosa.hpp"
 #include "enemies/fantasma_mortal.hpp"
+#include "enemies/sol_pervertido.hpp"
 
 /*
  * bomberman.cpp
@@ -75,7 +76,7 @@ GLuint enemyTexture = 0;
 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 
-static std::vector<Enemy*> gEnemies;
+std::vector<Enemy*> gEnemies;
 std::vector<Bomb*> gBombs;
 
 static const char* viewModeToString(ViewMode mode) {
@@ -112,17 +113,35 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
-// Devuelve true si el tile donde está la entidad coincide con cualquier segmento
-// de la explosión ya calculada de la bomba.
+// Devuelve true si la caja de colisión de la entidad intersecta con el área de explosión
+// calculada de la bomba. Permite detectar daño si está parcialmente en la casilla.
 static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
     if (!map || !bomb) return false;
-    int er, ec;
-    map->ndcToGrid(entityPos, er, ec);
+    
+    // Asumimos un radio de colisión del 45% del tile para la entidad
+    float entityRadius = map->getTileSize() * 0.45f;
+    float tileHalf = map->getTileSize() * 0.5f;
 
     for (const auto& seg : bomb->explosionSegments) {
-        int sr, sc;
-        map->ndcToGrid(seg.pos, sr, sc);
-        if (sr == er && sc == ec) return true;
+        // La explosión ocupa casi todo el segmento/tile
+        float exMin = seg.pos.x - tileHalf;
+        float exMax = seg.pos.x + tileHalf;
+        float eyMin = seg.pos.y - tileHalf;
+        float eyMax = seg.pos.y + tileHalf;
+
+        // La caja de colisión de la entidad
+        float entMinX = entityPos.x - entityRadius;
+        float entMaxX = entityPos.x + entityRadius;
+        float entMinY = entityPos.y - entityRadius;
+        float entMaxY = entityPos.y + entityRadius;
+
+        // Comprobar intersección AABB (Eje X e Y)
+        bool intersectX = (entMaxX > exMin) && (entMinX < exMax);
+        bool intersectY = (entMaxY > eyMin) && (entMinY < eyMax);
+
+        if (intersectX && intersectY) {
+            return true;
+        }
     }
     return false;
 }
@@ -763,10 +782,12 @@ void Game::init() {
     }
     gEnemies.clear();
 
+    // Comentados por ahora para probar a Sol Pervertido en solitario
+#if 0
     // Crear Leon
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
-        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
+        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), 0.1f);
         leon->setContext(gameMap, &gPlayers);
         leon->currentSpriteName = "leon.derecha.0";
         gEnemies.push_back(leon);
@@ -775,7 +796,7 @@ void Game::init() {
     // Crear Babosa
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
-        Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
+        Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), 0.06f);
         babosa->setContext(gameMap, &gPlayers);
         babosa->currentSpriteName = "babosa.derecha.0";
         gEnemies.push_back(babosa);
@@ -784,7 +805,7 @@ void Game::init() {
     // Crear Bebe Lloron
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
-        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
+        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), 0.08f);
         bebe->setContext(gameMap, &gPlayers);
         bebe->currentSpriteName = "bebe.derecha.0";
         gEnemies.push_back(bebe);
@@ -804,6 +825,16 @@ void Game::init() {
         fantasma->setContext(gameMap, &gPlayers);
         fantasma->currentSpriteName = "fantasma.derecha.0";
         gEnemies.push_back(fantasma);
+    }
+#endif
+
+    // Crear Sol Pervertido
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 4.0f, 0.0f);
+        SolPervertido* sol = new SolPervertido(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+        sol->setContext(gameMap, &gPlayers);
+        sol->currentSpriteName = "sol.grande.0"; // Frame inicial
+        gEnemies.push_back(sol);
     }
 
     // Limpiar bombas anteriores
