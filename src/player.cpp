@@ -16,6 +16,7 @@ extern GLuint uniformModel;
 extern GLuint uniformUvRect;
 extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
+extern GLuint uniformWhiteFlash;
 extern SpriteAtlas gPlayerAtlas;
 extern GLuint texture;
 extern GameMap* gameMap;
@@ -28,8 +29,30 @@ extern GameMap* gameMap;
  * Nota:
  * - El movimiento real se aplica en `UpdateSprite` (según una dirección) y se valida
  *   contra el `GameMap` usando una combinación de sondas + `canMoveTo`.
- * - `Update`/`Draw` están como placeholders (la renderización se realiza desde Game).
+ * - El render del jugador se hace desde `Game::render()` llamando a `Player::Draw()`.
  */
+
+static constexpr float kSpawnInvulnerabilitySeconds = 2.5f;
+static constexpr float kPowerUpInvulnerabilitySeconds = ArcadeCaps::INVINCIBILITY_TIME;
+
+static float invulnBlinkHz(const Player& p)
+{
+    if (!p.invincible) return 0.0f;
+
+    // Frecuencia de parpadeo (Hz) para el feedback visual.
+    // Ciclo "Armadura" (power-up, 16s):
+    // - Segundos 1..12: parpadeo moderado
+    // - Segundos 13..16 (fase crítica): parpadeo muy rápido
+    // Como `invincibilityTimer` es cuenta atrás:
+    // - remaining > 4s  => moderado (primeros 12s)
+    // - remaining <= 4s => frenético (últimos 4s)
+    if (p.invincibilityFromPowerUp) {
+        return (p.invincibilityTimer > 4.0f) ? 6.0f : 18.0f;
+    }
+
+    // Spawn/respawn: parpadeo moderado constante (ventana corta para reaparecer).
+    return 8.0f;
+}
 
 // ============================== Ctor / dtor ==============================
 
@@ -51,6 +74,12 @@ Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId, co
     deathTimer = 0.0f;
     deathFrame = 0;
     pendingRespawn = false;
+
+    // Invulnerabilidad breve al aparecer/reaparecer.
+    invincible = true;
+    invincibilityTimer = kSpawnInvulnerabilitySeconds;
+    invincibilityTotalSeconds = kSpawnInvulnerabilitySeconds;
+    invincibilityFromPowerUp = false;
 }
 
 // Colisión con bombas (tile-based): el dueño puede salir una vez; luego también bloquea para él.
@@ -163,12 +192,14 @@ void Player::updateDeathAnimation() {
 // Tick de lógica: animación de caminar o de muerte + invincibilidad.
 void Player::Update() {
     if (lifeState == PlayerLifeState::Alive) {
-        // Invincibilidad: decrementar temporizador
+        // Invulnerabilidad: decrementar temporizador (sin "frames extra" al acabar).
         if (invincible) {
             invincibilityTimer -= deltaTime;
             if (invincibilityTimer <= 0.0f) {
                 invincible = false;
                 invincibilityTimer = 0.0f;
+                invincibilityTotalSeconds = 0.0f;
+                invincibilityFromPowerUp = false;
             }
         }
         updateAnimation();
@@ -213,20 +244,19 @@ void Player::Draw() {
     glUniform1f(uniformFlipX, flipX);
 
     glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+    float whiteFlash = 0.0f;
 
-    // Parpadeo visual cuando la invincibilidad está a punto de acabar (< 3s)
-    if (invincible && invincibilityTimer < 3.0f) {
-        // Parpadeo rápido: invisible en frames alternos
-        int flickerPhase = (int)(invincibilityTimer * 10.0f);
-        if (flickerPhase % 2 == 0) {
-            tint.a = 0.3f;
-        }
-    } else if (invincible) {
-        // Efecto de brillo sutil mientras es invencible
-        tint = glm::vec4(1.2f, 1.2f, 1.0f, 1.0f);
+    // Parpadeo blanco retro durante la invulnerabilidad (spawn/respawn o Armadura).
+    // La fase crítica (últimos 4s de Armadura) incrementa la frecuencia.
+    if (invincible) {
+        const float hz = invulnBlinkHz(*this);
+        const float t = (float)glfwGetTime();
+        const int phase = (int)(t * hz);
+        whiteFlash = (phase % 2 == 0) ? 1.0f : 0.0f;
     }
 
     glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+    glUniform1f(uniformWhiteFlash, whiteFlash);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
@@ -372,8 +402,10 @@ void Player::respawn() {
     speed = 0.4f;
     baseSpeed = 0.4f;
     hasRemoteControl = false;
-    invincible = false;
-    invincibilityTimer = 0.0f;
+    invincible = true;
+    invincibilityTimer = kSpawnInvulnerabilitySeconds;
+    invincibilityTotalSeconds = kSpawnInvulnerabilitySeconds;
+    invincibilityFromPowerUp = false;
     // activeBombs no se resetea: las bombas en el mapa siguen existiendo
     // y decrementarán activeBombs cuando exploten.
 }
@@ -400,7 +432,9 @@ void Player::applyPowerUp(PowerUpType type) {
 
         case PowerUpType::Invincibility:
             invincible = true;
-            invincibilityTimer = ArcadeCaps::INVINCIBILITY_TIME;
+            invincibilityTimer = kPowerUpInvulnerabilitySeconds;
+            invincibilityTotalSeconds = kPowerUpInvulnerabilitySeconds;
+            invincibilityFromPowerUp = true;
             break;
 
         case PowerUpType::RemoteControl:
