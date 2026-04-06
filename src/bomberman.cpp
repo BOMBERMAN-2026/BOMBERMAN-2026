@@ -1150,6 +1150,14 @@ void Game::update() {
                     enemy->takeDamage(gEnemyAtlas, 999);
                 }
             }
+            // Explosión: si toca a otra bomba que aún no ha explotado, la detona.
+            for (auto* otherB : gBombs) {
+                if (otherB && otherB != b && otherB->state == BombState::FUSE) {
+                    if (explosionHitsEntity(gameMap, b, otherB->position)) {
+                        otherB->detonate();
+                    }
+                }
+            }
         }
 
         if (justExploded) {

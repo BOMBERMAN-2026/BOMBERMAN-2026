@@ -49,7 +49,7 @@ class Player : public Entity {
         // === Power-Up Stats (Arcade 1991) ===
         int maxBombs = 1;                // Bombas simultáneas permitidas (cap: 8)
         int activeBombs = 0;             // Bombas activas en el mapa (contador O(1))
-        int explosionPower = 2;          // Radio de explosión (cap: 10)
+        int explosionPower = 3;          // Radio de explosión (cap: 10)
         float baseSpeed;                 // Velocidad base actual (cap: 0.8f)
         int lives = 3;                   // Vidas
 
