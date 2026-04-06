@@ -38,6 +38,8 @@
 #include <vector>
 #include <cmath>
 #include <utility>
+#include <fstream>
+#include <sstream>
 
 static std::vector<Player*> gPlayers;
 GameMap* gameMap;
@@ -52,39 +54,19 @@ GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, u
 GLuint texture;
 
 // ============================== Shaders (vertex/fragment) ==============================
-// Vertex Shader
-static const char* vShaderSrc = R"(
-#version 330
-layout (location = 0) in vec3 pos;
-layout (location = 1) in vec2 texCoord;
-out vec2 TexCoord;
-uniform mat4 model;
-uniform mat4 projection;
-uniform vec4 uvRect; // (u0, v0, u1, v1)
-uniform float flipX; // 0.0 normal, 1.0 mirror horizontally
-void main()
-{
-    gl_Position = projection * model * vec4(pos, 1.0);
-    float tx = mix(texCoord.x, 1.0 - texCoord.x, flipX);
-    TexCoord = vec2(
-        mix(uvRect.x, uvRect.z, tx),
-        mix(uvRect.y, uvRect.w, texCoord.y)
-    );
-}
-)";
+static const char* kSpriteVertexShaderPath = "shaders/sprite.vs";
+static const char* kSpriteFragmentShaderPath = "shaders/sprite.frag";
+static const char* kModel3DVertexShaderPath = "shaders/model3D.vs";
+static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
 
-// Fragment Shader
-static const char* fShaderSrc = R"(
-#version 330
-in vec2 TexCoord;
-out vec4 color;
-uniform sampler2D ourTexture;
-uniform vec4 tintColor;
-void main()
-{
-    vec4 texColor = texture(ourTexture, TexCoord);
-    color = texColor * tintColor; // Apply tint color
-})";
+GLuint cubeVAO = 0;
+GLuint cubeVBO = 0;
+GLuint cubeEBO = 0;
+GLuint shader3D = 0;
+GLuint uniform3DModel = 0;
+GLuint uniform3DView = 0;
+GLuint uniform3DProjection = 0;
+GLuint uniform3DColor = 0;
 
 SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
 
@@ -95,6 +77,20 @@ SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 
 static std::vector<Enemy*> gEnemies;
 std::vector<Bomb*> gBombs;
+
+static const char* viewModeToString(ViewMode mode) {
+    return (mode == ViewMode::Mode3D) ? "3D" : "2D";
+}
+
+static const char* camera3DTypeToString(Camera3DType type) {
+    switch (type) {
+        case Camera3DType::OrthographicFixed: return "OrthographicFixed";
+        case Camera3DType::PerspectiveFixed: return "PerspectiveFixed";
+        case Camera3DType::PerspectiveMobile: return "PerspectiveMobile";
+        case Camera3DType::FirstPerson: return "FirstPerson";
+        default: return "Unknown";
+    }
+}
 
 // ============================== Gameplay: helpers ==============================
 
@@ -133,6 +129,20 @@ static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm:
 
 // ============================== OpenGL: helpers ==============================
 
+static bool readTextFile(const std::string& filePath, std::string& out)
+{
+    std::ifstream file(filePath.c_str(), std::ios::binary);
+    if (!file.is_open()) {
+        return false;
+    }
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    out = ss.str();
+    return true;
+}
+
+void AddShader(GLuint program, const char* shaderCode, GLenum shaderType);
+
 void CreateRectangle()
 {
     GLfloat vertices[] = {
@@ -166,27 +176,137 @@ void CreateRectangle()
     glBindVertexArray(0);
 }
 
-void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
+void CreateCube()
 {
-    GLuint shader = glCreateShader(shaderType);
-    glShaderSource(shader, 1, &shaderCode, nullptr);
-    glCompileShader(shader);
+    const GLfloat vertices[] = {
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f
+    };
 
-    GLint result = 0;
-    GLchar errorLog[1024] = { 0 };
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    if (!result)
+    const GLuint indices[] = {
+        0, 1, 2, 2, 3, 0, // back
+        4, 5, 6, 6, 7, 4, // front
+        0, 4, 7, 7, 3, 0, // left
+        1, 5, 6, 6, 2, 1, // right
+        3, 2, 6, 6, 7, 3, // top
+        0, 1, 5, 5, 4, 0  // bottom
+    };
+
+    glGenVertexArrays(1, &cubeVAO);
+    glBindVertexArray(cubeVAO);
+
+    glGenBuffers(1, &cubeVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &cubeEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindVertexArray(0);
+}
+
+void Compile3DShaders()
+{
+    std::string vertexShaderCode;
+    std::string fragmentShaderCode;
+
+    const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
+    const std::string resolvedFragmentPath = resolveAssetPath(kModel3DFragmentShaderPath);
+    if (!readTextFile(resolvedVertexPath, vertexShaderCode))
     {
-        glGetShaderInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
-        printf("Error compiling the %d shader: '%s'\n", shaderType, errorLog);
+        std::cerr << "No se pudo leer shader 3D de vertice: " << resolvedVertexPath << "\n";
+        return;
+    }
+    if (!readTextFile(resolvedFragmentPath, fragmentShaderCode))
+    {
+        std::cerr << "No se pudo leer shader 3D de fragmento: " << resolvedFragmentPath << "\n";
         return;
     }
 
-    glAttachShader(program, shader);
+    shader3D = glCreateProgram();
+    if (!shader3D)
+    {
+        std::cerr << "Error creando programa shader 3D\n";
+        return;
+    }
+
+    AddShader(shader3D, vertexShaderCode.c_str(), GL_VERTEX_SHADER);
+    AddShader(shader3D, fragmentShaderCode.c_str(), GL_FRAGMENT_SHADER);
+
+    GLint result = 0;
+    GLchar errorLog[1024] = { 0 };
+
+    glLinkProgram(shader3D);
+    glGetProgramiv(shader3D, GL_LINK_STATUS, &result);
+    if (!result)
+    {
+        glGetProgramInfoLog(shader3D, sizeof(errorLog), nullptr, errorLog);
+        std::cerr << "Error link shader 3D: '" << errorLog << "'\n";
+        return;
+    }
+
+    uniform3DModel = glGetUniformLocation(shader3D, "model");
+    uniform3DView = glGetUniformLocation(shader3D, "view");
+    uniform3DProjection = glGetUniformLocation(shader3D, "projection");
+    uniform3DColor = glGetUniformLocation(shader3D, "objectColor");
+}
+
+static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
+{
+    const float worldX = (float)col - ((float)map->getCols() * 0.5f) + 0.5f;
+    const float worldZ = (float)row - ((float)map->getRows() * 0.5f) + 0.5f;
+    return glm::vec3(worldX, y, worldZ);
+}
+
+void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
+{
+    GLuint shaderObject = glCreateShader(shaderType);
+    glShaderSource(shaderObject, 1, &shaderCode, nullptr);
+    glCompileShader(shaderObject);
+
+    GLint result = 0;
+    GLchar errorLog[1024] = { 0 };
+    glGetShaderiv(shaderObject, GL_COMPILE_STATUS, &result);
+    if (!result)
+    {
+        glGetShaderInfoLog(shaderObject, sizeof(errorLog), nullptr, errorLog);
+        printf("Error compiling the %d shader: '%s'\n", shaderType, errorLog);
+        glDeleteShader(shaderObject);
+        return;
+    }
+
+    glAttachShader(program, shaderObject);
+    glDeleteShader(shaderObject);
 }
 
 void CompileShaders()
 {
+    std::string vertexShaderCode;
+    std::string fragmentShaderCode;
+
+    const std::string resolvedVertexPath = resolveAssetPath(kSpriteVertexShaderPath);
+    const std::string resolvedFragmentPath = resolveAssetPath(kSpriteFragmentShaderPath);
+    if (!readTextFile(resolvedVertexPath, vertexShaderCode))
+    {
+        std::cerr << "No se pudo leer shader de vertice: " << resolvedVertexPath << "\n";
+        return;
+    }
+    if (!readTextFile(resolvedFragmentPath, fragmentShaderCode))
+    {
+        std::cerr << "No se pudo leer shader de fragmento: " << resolvedFragmentPath << "\n";
+        return;
+    }
+
     shader = glCreateProgram();
     if (!shader)
     {
@@ -194,8 +314,8 @@ void CompileShaders()
         return;
     }
 
-    AddShader(shader, vShaderSrc, GL_VERTEX_SHADER);
-    AddShader(shader, fShaderSrc, GL_FRAGMENT_SHADER);
+    AddShader(shader, vertexShaderCode.c_str(), GL_VERTEX_SHADER);
+    AddShader(shader, fragmentShaderCode.c_str(), GL_FRAGMENT_SHADER);
 
     GLint result = 0;
     GLchar errorLog[1024] = { 0 };
@@ -510,10 +630,35 @@ static std::string getKeyName(GLint key){
 
 // ============================== Game lifecycle ==============================
 
+void Game::toggleViewMode() {
+    viewMode = (viewMode == ViewMode::Mode2D) ? ViewMode::Mode3D : ViewMode::Mode2D;
+    std::cout << "[Render] View mode -> " << viewModeToString(viewMode) << "\n";
+}
+
+void Game::cycleCamera3DType() {
+    switch (camera3DType) {
+        case Camera3DType::OrthographicFixed:
+            camera3DType = Camera3DType::PerspectiveFixed;
+            break;
+        case Camera3DType::PerspectiveFixed:
+            camera3DType = Camera3DType::PerspectiveMobile;
+            break;
+        case Camera3DType::PerspectiveMobile:
+            camera3DType = Camera3DType::FirstPerson;
+            break;
+        case Camera3DType::FirstPerson:
+            camera3DType = Camera3DType::OrthographicFixed;
+            break;
+    }
+    std::cout << "[Render] 3D camera -> " << camera3DTypeToString(camera3DType) << "\n";
+}
+
 void Game::init() {
 
     CreateRectangle();
     CompileShaders();
+    CreateCube();
+    Compile3DShaders();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -678,6 +823,16 @@ void Game::init() {
 // Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
 void Game::processInput() {
     if (this->state != GAME_PLAYING) return;
+
+    // Controles de visualizacion.
+    if (this->keys[GLFW_KEY_F1] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
+        toggleViewMode();
+    }
+    if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
+        cycleCamera3DType();
+    }
 
     if (gPlayers.empty() || gPlayers[0] == nullptr) return;
     Player* p1 = gPlayers[0];
@@ -972,6 +1127,141 @@ void Game::update() {
 
 // Renderiza mapa, bombas, jugadores y enemigos.
 void Game::render() {
+
+    if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
+        glEnable(GL_DEPTH_TEST);
+        glUseProgram(shader3D);
+
+        const float aspect = (float)WIDTH / (float)HEIGHT;
+        glm::vec3 cameraPos(0.0f, 16.0f, 12.0f);
+        glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
+        glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+        if (camera3DType == Camera3DType::OrthographicFixed) {
+            cameraPos = glm::vec3(0.0f, 20.0f, 0.01f);
+            up = glm::vec3(0.0f, 0.0f, -1.0f);
+        } else if (camera3DType == Camera3DType::PerspectiveMobile) {
+            const float t = (float)glfwGetTime();
+            cameraPos = glm::vec3(std::sin(t * 0.35f) * 10.0f, 14.0f, std::cos(t * 0.35f) * 10.0f);
+        } else if (camera3DType == Camera3DType::FirstPerson && !gPlayers.empty() && gPlayers[0] != nullptr) {
+            int playerRow = 0;
+            int playerCol = 0;
+            gameMap->ndcToGrid(gPlayers[0]->position, playerRow, playerCol);
+            if (playerRow >= 0 && playerCol >= 0 && playerRow < gameMap->getRows() && playerCol < gameMap->getCols()) {
+                cameraPos = gridToWorld3D(gameMap, playerRow, playerCol, 0.75f);
+                glm::vec3 forward(0.0f, 0.0f, 1.0f);
+                switch (gPlayers[0]->facingDirKey) {
+                    case GLFW_KEY_UP:    forward = glm::vec3(0.0f, 0.0f, -1.0f); break;
+                    case GLFW_KEY_DOWN:  forward = glm::vec3(0.0f, 0.0f, 1.0f); break;
+                    case GLFW_KEY_LEFT:  forward = glm::vec3(-1.0f, 0.0f, 0.0f); break;
+                    case GLFW_KEY_RIGHT: forward = glm::vec3(1.0f, 0.0f, 0.0f); break;
+                }
+                cameraTarget = cameraPos + forward * 2.0f;
+            }
+        }
+
+        const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
+        glm::mat4 projection(1.0f);
+        if (camera3DType == Camera3DType::OrthographicFixed) {
+            const float halfW = (float)gameMap->getCols() * 0.55f;
+            const float halfH = (float)gameMap->getRows() * 0.55f;
+            projection = glm::ortho(-halfW, halfW, -halfH, halfH, 0.1f, 100.0f);
+        } else {
+            projection = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 100.0f);
+        }
+
+        glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+
+        auto drawCube3D = [&](const glm::vec3& center, const glm::vec3& scale, const glm::vec3& color) {
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, center);
+            model = glm::scale(model, scale);
+            glUniformMatrix4fv(uniform3DModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(uniform3DColor, 1, glm::value_ptr(color));
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        };
+
+        glBindVertexArray(cubeVAO);
+
+        // Mapa: cubos por tile.
+        for (int r = 0; r < gameMap->getRows(); ++r) {
+            for (int c = 0; c < gameMap->getCols(); ++c) {
+                const bool walkable = gameMap->isWalkable(r, c);
+                const bool destructible = gameMap->isDestructible(r, c);
+
+                float h = 0.10f;
+                glm::vec3 color(0.24f, 0.26f, 0.27f);
+                if (!walkable) {
+                    h = destructible ? 0.70f : 1.00f;
+                    color = destructible ? glm::vec3(0.75f, 0.45f, 0.20f)
+                                        : glm::vec3(0.35f, 0.35f, 0.40f);
+                }
+
+                const glm::vec3 center = gridToWorld3D(gameMap, r, c, h * 0.5f);
+                drawCube3D(center, glm::vec3(0.95f, h, 0.95f), color);
+            }
+        }
+
+        // Jugadores como cajas 3D.
+        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p) continue;
+
+            int r = 0;
+            int c = 0;
+            gameMap->ndcToGrid(p->position, r, c);
+            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
+
+            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.55f);
+            const glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
+                                             : glm::vec3(0.88f, 0.18f, 0.18f);
+            drawCube3D(center, glm::vec3(0.60f, 1.10f, 0.60f), color);
+        }
+
+        // Enemigos como cajas 3D.
+        for (auto* enemy : gEnemies) {
+            if (!enemy || enemy->lifeState == EnemyLifeState::Dead) continue;
+
+            int r = 0;
+            int c = 0;
+            gameMap->ndcToGrid(enemy->position, r, c);
+            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
+
+            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.45f);
+            drawCube3D(center, glm::vec3(0.60f, 0.90f, 0.60f), glm::vec3(0.19f, 0.68f, 0.27f));
+        }
+
+        // Bombas y explosiones como primitivas 3D.
+        for (auto* b : gBombs) {
+            if (!b || b->state == BombState::DONE) continue;
+
+            if (b->state == BombState::FUSE) {
+                const glm::vec3 center = gridToWorld3D(gameMap, b->gridRow, b->gridCol, 0.30f);
+                drawCube3D(center, glm::vec3(0.45f, 0.45f, 0.45f), glm::vec3(0.10f, 0.10f, 0.10f));
+            } else {
+                for (std::size_t i = 0; i < b->explosionSegments.size(); ++i) {
+                    const ExplosionSegment& seg = b->explosionSegments[i];
+                    int r = 0;
+                    int c = 0;
+                    gameMap->ndcToGrid(seg.pos, r, c);
+                    if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
+
+                    const bool warmColor = (((int)i + b->animFrame) % 2 == 0);
+                    const glm::vec3 color = warmColor ? glm::vec3(1.00f, 0.15f, 0.10f)
+                                                      : glm::vec3(1.00f, 0.92f, 0.10f);
+                    const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.35f);
+                    drawCube3D(center, glm::vec3(0.50f, 0.50f, 0.50f), color);
+                }
+            }
+        }
+
+        glBindVertexArray(0);
+        glUseProgram(0);
+        return;
+    }
+
+    glDisable(GL_DEPTH_TEST);
 
     glUseProgram(shader);
 

@@ -30,6 +30,18 @@ enum class GameMode {
     TwoPlayers
 };
 
+enum class ViewMode {
+    Mode2D,
+    Mode3D
+};
+
+enum class Camera3DType {
+    OrthographicFixed,
+    PerspectiveFixed,
+    PerspectiveMobile,
+    FirstPerson
+};
+
 class Game
 {
     private:
@@ -43,6 +55,8 @@ class Game
         // Estado
         GameState state;
         GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
+        ViewMode viewMode = ViewMode::Mode2D;
+        Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
@@ -56,6 +70,9 @@ class Game
         ~Game();
 
         void setMode(GameMode m) { mode = m; } // Selecciona modo (se aplica al hacer init()).
+        void toggleViewMode();
+        void cycleCamera3DType();
+        bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
 
         // Init
         void init(); // Carga recursos y crea entidades iniciales.

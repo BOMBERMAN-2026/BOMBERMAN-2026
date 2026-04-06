@@ -72,6 +72,7 @@ int main() {
 
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glClearDepth(1.0f);
 
     // ============================== Juego ==============================
     bomberman = new Game(mainWindow, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -103,7 +104,11 @@ int main() {
         bomberman->update();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        GLbitfield clearMask = GL_COLOR_BUFFER_BIT;
+        if (bomberman->is3DViewEnabled()) {
+            clearMask |= GL_DEPTH_BUFFER_BIT;
+        }
+        glClear(clearMask);
         bomberman->render();
         
         // Swap buffers
