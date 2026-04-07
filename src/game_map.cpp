@@ -14,7 +14,7 @@
 #include <chrono>
 
 // Convierte un string de nivel (p.ej. "flame", "bomba", "velocidad") a PowerUpType.
-// Se usa para la directiva: `powerup <type> <row> <col>` dentro de `levels/*.txt`.
+// Se usa para la directiva: `powerup <type> <x> <y>` dentro de `levels/*.txt`.
 // Nota: normaliza a minúsculas y elimina espacios/guiones/guiones bajos.
 static bool parsePowerUpTypeFromString(const std::string& raw, PowerUpType& outType) {
     // Normalizar: minúsculas y sin guiones/espacios
@@ -39,7 +39,7 @@ static bool parsePowerUpTypeFromString(const std::string& raw, PowerUpType& outT
 }
 
 // Convierte un string de nivel (p.ej. "leon", "bebe", "fantasma", "king", "dron") a EnemySpawnType.
-// Se usa para la directiva: `enemy <type> <row> <col>` dentro de `levels/*.txt`.
+// Se usa para la directiva: `enemy <type> <x> <y>` dentro de `levels/*.txt`.
 static bool parseEnemySpawnTypeFromString(const std::string& raw, EnemySpawnType& outType) {
     // Normaliza a minúsculas y elimina espacios/guiones/guiones bajos.
     std::string s;
@@ -55,7 +55,10 @@ static bool parseEnemySpawnTypeFromString(const std::string& raw, EnemySpawnType
     if (s == "fantasma" || s == "fantasmamortal") { outType = EnemySpawnType::FantasmaMortal; return true; }
     if (s == "sol" || s == "solpervertido" || s == "sol_pervertido") { outType = EnemySpawnType::SolPervertido; return true; }
     if (s == "king" || s == "kingbomber" || s == "king_bomber") { outType = EnemySpawnType::KingBomber; return true; }
-    if (s == "dron" || s == "drone" || s == "dronbombardero" || s == "dron_bombardero") { outType = EnemySpawnType::DronBombardero; return true; }
+    if (s == "dronrosa") { outType = EnemySpawnType::DronRosa; return true; }
+    if (s == "dronverde") { outType = EnemySpawnType::DronVerde; return true; }
+    if (s == "dronamarillo") { outType = EnemySpawnType::DronAmarillo; return true; }
+    if (s == "dronazul") { outType = EnemySpawnType::DronAzul; return true; }
     if (s == "dragon" || s == "dragonjoven" || s == "dragon_joven") { outType = EnemySpawnType::DragonJoven; return true; }
 
     return false;
@@ -74,7 +77,7 @@ static bool parseEnemySpawnTypeFromString(const std::string& raw, EnemySpawnType
  *
  * Coordenadas de grid:
  * - Se usan como (row, col) internamente en la mayoría de funciones.
- * - En directivas `spawn`, el fichero habla en (x,y) = (col,row) con (0,0) arriba-izquierda.
+ * - En directivas `spawn`, `powerup`, `enemy`, el fichero habla en (x,y) = (col,row) con (0,0) arriba-izquierda.
  */
 
 // ============================== Ctor / dtor ==============================
@@ -185,15 +188,15 @@ bool GameMap::loadFromFile(const std::string& filePath) {
             }
         }
 
-        // Directivas: powerup <type> <row> <col>
+        // Directivas: powerup <type> <x> <y>
         {
             std::istringstream issDir(trimmed);
             std::string kw;
             issDir >> kw;
             if (kw == "powerup") {
                 std::string typeStr;
-                int row = 0, col = 0;
-                if (!(issDir >> typeStr >> row >> col)) {
+                int x = 0, y = 0;
+                if (!(issDir >> typeStr >> x >> y)) {
                     std::cerr << "GameMap: directiva powerup inválida: '" << trimmed << "'\n";
                     continue;
                 }
@@ -206,22 +209,22 @@ bool GameMap::loadFromFile(const std::string& filePath) {
 
                 PendingPowerUp pp;
                 pp.type = type;
-                pp.row = row;
-                pp.col = col;
+                pp.row = y;
+                pp.col = x;
                 pendingPowerUps.push_back(pp);
                 continue;
             }
         }
 
-        // Directivas: enemy <type> <row> <col>
+        // Directivas: enemy <type> <x> <y>
         {
             std::istringstream issDir(trimmed);
             std::string kw;
             issDir >> kw;
             if (kw == "enemy") {
                 std::string typeStr;
-                int row = 0, col = 0;
-                if (!(issDir >> typeStr >> row >> col)) {
+                int x = 0, y = 0;
+                if (!(issDir >> typeStr >> x >> y)) {
                     std::cerr << "GameMap: directiva enemy inválida: '" << trimmed << "'\n";
                     continue;
                 }
@@ -234,8 +237,8 @@ bool GameMap::loadFromFile(const std::string& filePath) {
 
                 PendingEnemy pe;
                 pe.type = type;
-                pe.row = row;
-                pe.col = col;
+                pe.row = y;
+                pe.col = x;
                 pendingEnemies.push_back(pe);
                 continue;
             }
@@ -305,7 +308,7 @@ bool GameMap::loadFromFile(const std::string& filePath) {
     // De momento marcamos el power-up; placePowerUps() ajustará visible/oculto según tipo de bloque.
     for (const auto& pp : pendingPowerUps) {
         if (pp.row < 0 || pp.row >= rows || pp.col < 0 || pp.col >= cols) {
-            std::cerr << "GameMap: powerup fuera de rango (row=" << pp.row << ", col=" << pp.col << ")\n";
+            std::cerr << "GameMap: powerup fuera de rango (x=" << pp.col << ", y=" << pp.row << ")\n";
             continue;
         }
         Block& b = grid[pp.row][pp.col];
@@ -319,7 +322,7 @@ bool GameMap::loadFromFile(const std::string& filePath) {
     // Registrar spawns de enemigos definidos por directiva.
     for (const auto& pe : pendingEnemies) {
         if (pe.row < 0 || pe.row >= rows || pe.col < 0 || pe.col >= cols) {
-            std::cerr << "GameMap: enemy fuera de rango (row=" << pe.row << ", col=" << pe.col << ")\n";
+            std::cerr << "GameMap: enemy fuera de rango (x=" << pe.col << ", y=" << pe.row << ")\n";
             continue;
         }
         EnemySpawn es;

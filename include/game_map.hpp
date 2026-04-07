@@ -19,9 +19,14 @@
  * - Usa un atlas JSON (SpriteAtlasStage*.json) para asociar ID -> tipo (walkable, destructible...).
  * - Expone utilidades de conversión Grid <-> NDC para movimiento/colisión.
  * - Soporta spawns definidos por nivel con directivas `spawn ...` en el TXT.
+ * - Soporta power-ups y enemigos definidos por nivel con directivas `powerup ...` y `enemy ...`.
  *
  * Convención de coordenadas:
- * - Grid: (row, col) = (y, x), con (0,0) en la esquina superior-izquierda del TXT.
+ * - Grid interno (código): (row, col) = (y, x), con (0,0) en la esquina superior-izquierda del TXT.
+ * - Directivas en `levels/*.txt`: se escriben como (x, y) = (col, row).
+ *   - `spawn <player> <x> <y>`
+ *   - `powerup <type> <x> <y>`
+ *   - `enemy <type> <x> <y>`
  * - `gridToNDC(row,col)` devuelve el centro de la celda.
  */
 
@@ -63,7 +68,10 @@ enum class EnemySpawnType {
     FantasmaMortal,
     SolPervertido,
     KingBomber,
-    DronBombardero,
+    DronRosa,
+    DronVerde,
+    DronAmarillo,
+    DronAzul,
     DragonJoven
 };
 
@@ -148,7 +156,7 @@ public:
     void destroyExposedPowerUp(int row, int col);
 
     // === Enemigos ===
-    // Devuelve los spawns de enemigos declarados en el TXT con `enemy <tipo> <row> <col>`.
+    // Devuelve los spawns de enemigos declarados en el TXT con `enemy <tipo> <x> <y>`.
     const std::vector<EnemySpawn>& getEnemySpawns() const { return enemySpawns; }
 
 private:

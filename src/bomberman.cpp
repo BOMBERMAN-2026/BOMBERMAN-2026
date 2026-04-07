@@ -728,9 +728,9 @@ void Game::init() {
             std::exit(EXIT_FAILURE);
         }
 
-        // Cargar mapa
+        // Cargar nivel
         gameMap = new GameMap();
-        if (!gameMap->loadFromFile("levels/level_04.txt"))
+        if (!gameMap->loadFromFile("levels/level_05.txt"))
         {
             std::cerr << "Error cargando mapa" << std::endl;
             std::exit(EXIT_FAILURE);
@@ -801,7 +801,7 @@ void Game::init() {
         }
         gEnemies.clear();
 
-        // Crear enemigos según el nivel (directivas `enemy` en el TXT).
+        // Crear enemigos según el nivel
         {
             const auto& spawns = gameMap->getEnemySpawns();
             if (spawns.empty()) {
@@ -853,9 +853,27 @@ void Game::init() {
                     enemy = e;
                     break;
                 }
-                case EnemySpawnType::DronBombardero: {
+                case EnemySpawnType::DronRosa: {
                     auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
                     e->currentSpriteName = "dronrosa.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronVerde: {
+                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
+                    e->currentSpriteName = "dronverde.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronAmarillo: {
+                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
+                    e->currentSpriteName = "dronamarillo.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronAzul: {
+                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
+                    e->currentSpriteName = "dronazul.abajo.0";
                     enemy = e;
                     break;
                 }
