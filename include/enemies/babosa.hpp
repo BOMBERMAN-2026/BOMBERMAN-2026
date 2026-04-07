@@ -17,7 +17,8 @@ public:
     void Draw()   override;
 
 private:
-    float dirChangeTimer;
+    // IA
+    float dirChangeTimer;     // Tiempo acumulado desde el último cambio
     float dirChangeInterval;  // Intervalo corto → cambia frecuentemente
 };
 

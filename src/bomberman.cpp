@@ -5,6 +5,9 @@
 #include "bomb.hpp"
 #include "enemies/leon.hpp"
 #include "enemies/bebe_lloron.hpp"
+#include "enemies/babosa.hpp"
+#include "enemies/fantasma_mortal.hpp"
+#include "enemies/sol_pervertido.hpp"
 
 /*
  * bomberman.cpp
@@ -19,7 +22,7 @@
  * - Render: mapa primero, jugadores encima (sprites desde SpriteAtlasPlayer).
  *
  * Nota:
- * - Este archivo es deliberadamente “monolítico” por ahora. Se organizan secciones
+ * - Este archivo es deliberadamente "monolítico" por ahora. Se organizan secciones
  *   para facilitar lectura sin introducir demasiadas clases nuevas.
  */
 
@@ -34,52 +37,37 @@
 #include <string>
 #include <cstdlib>
 #include <vector>
+#include <cmath>
+#include <utility>
+#include <fstream>
+#include <sstream>
 
 static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
+GLuint hudTexture;
 
 // ============================== OpenGL: estado global ==============================
 
 // Global variables for OpenGL
-GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX;
+GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX, uniformWhiteFlash;
 
 GLuint texture;
 
 // ============================== Shaders (vertex/fragment) ==============================
-// Vertex Shader
-static const char* vShaderSrc = R"(
-#version 330
-layout (location = 0) in vec3 pos;
-layout (location = 1) in vec2 texCoord;
-out vec2 TexCoord;
-uniform mat4 model;
-uniform mat4 projection;
-uniform vec4 uvRect; // (u0, v0, u1, v1)
-uniform float flipX; // 0.0 normal, 1.0 mirror horizontally
-void main()
-{
-    gl_Position = projection * model * vec4(pos, 1.0);
-    float tx = mix(texCoord.x, 1.0 - texCoord.x, flipX);
-    TexCoord = vec2(
-        mix(uvRect.x, uvRect.z, tx),
-        mix(uvRect.y, uvRect.w, texCoord.y)
-    );
-}
-)";
+static const char* kSpriteVertexShaderPath = "shaders/sprite.vs";
+static const char* kSpriteFragmentShaderPath = "shaders/sprite.frag";
+static const char* kModel3DVertexShaderPath = "shaders/model3D.vs";
+static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
 
-// Fragment Shader
-static const char* fShaderSrc = R"(
-#version 330
-in vec2 TexCoord;
-out vec4 color;
-uniform sampler2D ourTexture;
-uniform vec4 tintColor;
-void main()
-{
-    vec4 texColor = texture(ourTexture, TexCoord);
-    color = texColor * tintColor; // Apply tint color
-})";
+GLuint cubeVAO = 0;
+GLuint cubeVBO = 0;
+GLuint cubeEBO = 0;
+GLuint shader3D = 0;
+GLuint uniform3DModel = 0;
+GLuint uniform3DView = 0;
+GLuint uniform3DProjection = 0;
+GLuint uniform3DColor = 0;
 
 SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
 
@@ -88,10 +76,91 @@ GLuint enemyTexture = 0;
 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 
-static std::vector<Enemy*> gEnemies;
-static std::vector<Bomb*> gBombs;
+std::vector<Enemy*> gEnemies;
+std::vector<Bomb*> gBombs;
+
+static const char* viewModeToString(ViewMode mode) {
+    return (mode == ViewMode::Mode3D) ? "3D" : "2D";
+}
+
+static const char* camera3DTypeToString(Camera3DType type) {
+    switch (type) {
+        case Camera3DType::OrthographicFixed: return "OrthographicFixed";
+        case Camera3DType::PerspectiveFixed: return "PerspectiveFixed";
+        case Camera3DType::PerspectiveMobile: return "PerspectiveMobile";
+        case Camera3DType::FirstPerson: return "FirstPerson";
+        default: return "Unknown";
+    }
+}
+
+// ============================== Gameplay: helpers ==============================
+
+// Devuelve true si dos posiciones NDC caen en el mismo tile del mapa.
+static bool isSameTile(const GameMap* map, const glm::vec2& a, const glm::vec2& b) {
+    if (!map) return false;
+    int ar, ac, br, bc;
+    map->ndcToGrid(a, ar, ac);
+    map->ndcToGrid(b, br, bc);
+    return ar == br && ac == bc;
+}
+
+// Colisión enemigo-jugador (AABB simple por tile): detecta contacto.
+static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, const glm::vec2& playerPos) {
+    if (!map) return false;
+    // AABB simple alrededor del centro del tile. Ajustable.
+    const float halfTile = map->getTileSize() / 2.0f;
+    const float r = halfTile * 0.70f;
+    return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
+}
+
+// Devuelve true si la caja de colisión de la entidad intersecta con el área de explosión
+// calculada de la bomba. Permite detectar daño si está parcialmente en la casilla.
+static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
+    if (!map || !bomb) return false;
+    
+    // Asumimos un radio de colisión del 45% del tile para la entidad
+    float entityRadius = map->getTileSize() * 0.45f;
+    float tileHalf = map->getTileSize() * 0.5f;
+
+    for (const auto& seg : bomb->explosionSegments) {
+        // La explosión ocupa casi todo el segmento/tile
+        float exMin = seg.pos.x - tileHalf;
+        float exMax = seg.pos.x + tileHalf;
+        float eyMin = seg.pos.y - tileHalf;
+        float eyMax = seg.pos.y + tileHalf;
+
+        // La caja de colisión de la entidad
+        float entMinX = entityPos.x - entityRadius;
+        float entMaxX = entityPos.x + entityRadius;
+        float entMinY = entityPos.y - entityRadius;
+        float entMaxY = entityPos.y + entityRadius;
+
+        // Comprobar intersección AABB (Eje X e Y)
+        bool intersectX = (entMaxX > exMin) && (entMinX < exMax);
+        bool intersectY = (entMaxY > eyMin) && (entMinY < eyMax);
+
+        if (intersectX && intersectY) {
+            return true;
+        }
+    }
+    return false;
+}
 
 // ============================== OpenGL: helpers ==============================
+
+static bool readTextFile(const std::string& filePath, std::string& out)
+{
+    std::ifstream file(filePath.c_str(), std::ios::binary);
+    if (!file.is_open()) {
+        return false;
+    }
+    std::ostringstream ss;
+    ss << file.rdbuf();
+    out = ss.str();
+    return true;
+}
+
+void AddShader(GLuint program, const char* shaderCode, GLenum shaderType);
 
 void CreateRectangle()
 {
@@ -126,27 +195,137 @@ void CreateRectangle()
     glBindVertexArray(0);
 }
 
-void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
+void CreateCube()
 {
-    GLuint shader = glCreateShader(shaderType);
-    glShaderSource(shader, 1, &shaderCode, nullptr);
-    glCompileShader(shader);
+    const GLfloat vertices[] = {
+        -0.5f, -0.5f, -0.5f,
+         0.5f, -0.5f, -0.5f,
+         0.5f,  0.5f, -0.5f,
+        -0.5f,  0.5f, -0.5f,
+        -0.5f, -0.5f,  0.5f,
+         0.5f, -0.5f,  0.5f,
+         0.5f,  0.5f,  0.5f,
+        -0.5f,  0.5f,  0.5f
+    };
 
-    GLint result = 0;
-    GLchar errorLog[1024] = { 0 };
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    if (!result)
+    const GLuint indices[] = {
+        0, 1, 2, 2, 3, 0, // back
+        4, 5, 6, 6, 7, 4, // front
+        0, 4, 7, 7, 3, 0, // left
+        1, 5, 6, 6, 2, 1, // right
+        3, 2, 6, 6, 7, 3, // top
+        0, 1, 5, 5, 4, 0  // bottom
+    };
+
+    glGenVertexArrays(1, &cubeVAO);
+    glBindVertexArray(cubeVAO);
+
+    glGenBuffers(1, &cubeVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glGenBuffers(1, &cubeEBO);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cubeEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindVertexArray(0);
+}
+
+void Compile3DShaders()
+{
+    std::string vertexShaderCode;
+    std::string fragmentShaderCode;
+
+    const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
+    const std::string resolvedFragmentPath = resolveAssetPath(kModel3DFragmentShaderPath);
+    if (!readTextFile(resolvedVertexPath, vertexShaderCode))
     {
-        glGetShaderInfoLog(shader, sizeof(errorLog), nullptr, errorLog);
-        printf("Error compiling the %d shader: '%s'\n", shaderType, errorLog);
+        std::cerr << "No se pudo leer shader 3D de vertice: " << resolvedVertexPath << "\n";
+        return;
+    }
+    if (!readTextFile(resolvedFragmentPath, fragmentShaderCode))
+    {
+        std::cerr << "No se pudo leer shader 3D de fragmento: " << resolvedFragmentPath << "\n";
         return;
     }
 
-    glAttachShader(program, shader);
+    shader3D = glCreateProgram();
+    if (!shader3D)
+    {
+        std::cerr << "Error creando programa shader 3D\n";
+        return;
+    }
+
+    AddShader(shader3D, vertexShaderCode.c_str(), GL_VERTEX_SHADER);
+    AddShader(shader3D, fragmentShaderCode.c_str(), GL_FRAGMENT_SHADER);
+
+    GLint result = 0;
+    GLchar errorLog[1024] = { 0 };
+
+    glLinkProgram(shader3D);
+    glGetProgramiv(shader3D, GL_LINK_STATUS, &result);
+    if (!result)
+    {
+        glGetProgramInfoLog(shader3D, sizeof(errorLog), nullptr, errorLog);
+        std::cerr << "Error link shader 3D: '" << errorLog << "'\n";
+        return;
+    }
+
+    uniform3DModel = glGetUniformLocation(shader3D, "model");
+    uniform3DView = glGetUniformLocation(shader3D, "view");
+    uniform3DProjection = glGetUniformLocation(shader3D, "projection");
+    uniform3DColor = glGetUniformLocation(shader3D, "objectColor");
+}
+
+static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
+{
+    const float worldX = (float)col - ((float)map->getCols() * 0.5f) + 0.5f;
+    const float worldZ = (float)row - ((float)map->getRows() * 0.5f) + 0.5f;
+    return glm::vec3(worldX, y, worldZ);
+}
+
+void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
+{
+    GLuint shaderObject = glCreateShader(shaderType);
+    glShaderSource(shaderObject, 1, &shaderCode, nullptr);
+    glCompileShader(shaderObject);
+
+    GLint result = 0;
+    GLchar errorLog[1024] = { 0 };
+    glGetShaderiv(shaderObject, GL_COMPILE_STATUS, &result);
+    if (!result)
+    {
+        glGetShaderInfoLog(shaderObject, sizeof(errorLog), nullptr, errorLog);
+        printf("Error compiling the %d shader: '%s'\n", shaderType, errorLog);
+        glDeleteShader(shaderObject);
+        return;
+    }
+
+    glAttachShader(program, shaderObject);
+    glDeleteShader(shaderObject);
 }
 
 void CompileShaders()
 {
+    std::string vertexShaderCode;
+    std::string fragmentShaderCode;
+
+    const std::string resolvedVertexPath = resolveAssetPath(kSpriteVertexShaderPath);
+    const std::string resolvedFragmentPath = resolveAssetPath(kSpriteFragmentShaderPath);
+    if (!readTextFile(resolvedVertexPath, vertexShaderCode))
+    {
+        std::cerr << "No se pudo leer shader de vertice: " << resolvedVertexPath << "\n";
+        return;
+    }
+    if (!readTextFile(resolvedFragmentPath, fragmentShaderCode))
+    {
+        std::cerr << "No se pudo leer shader de fragmento: " << resolvedFragmentPath << "\n";
+        return;
+    }
+
     shader = glCreateProgram();
     if (!shader)
     {
@@ -154,8 +333,8 @@ void CompileShaders()
         return;
     }
 
-    AddShader(shader, vShaderSrc, GL_VERTEX_SHADER);
-    AddShader(shader, fShaderSrc, GL_FRAGMENT_SHADER);
+    AddShader(shader, vertexShaderCode.c_str(), GL_VERTEX_SHADER);
+    AddShader(shader, fragmentShaderCode.c_str(), GL_FRAGMENT_SHADER);
 
     GLint result = 0;
     GLchar errorLog[1024] = { 0 };
@@ -182,6 +361,7 @@ void CompileShaders()
     uniformProjection = glGetUniformLocation(shader, "projection");
     uniformTexture = glGetUniformLocation(shader, "ourTexture");
     uniformTintColor = glGetUniformLocation(shader, "tintColor");
+    uniformWhiteFlash = glGetUniformLocation(shader, "whiteFlash");
     uniformUvRect = glGetUniformLocation(shader, "uvRect");
     uniformFlipX = glGetUniformLocation(shader, "flipX");
 }
@@ -218,7 +398,7 @@ GLuint LoadTexture(const char* filePath)
 // ============================== Utilidades (debug/keys) ==============================
 
 
-// Copiada de Pengu, por si sirve
+// Convierte un código de tecla GLFW en una etiqueta corta (utilidad de depuración).
 static std::string getKeyName(GLint key){
     std::string str;
     switch(key) {
@@ -470,10 +650,35 @@ static std::string getKeyName(GLint key){
 
 // ============================== Game lifecycle ==============================
 
+void Game::toggleViewMode() {
+    viewMode = (viewMode == ViewMode::Mode2D) ? ViewMode::Mode3D : ViewMode::Mode2D;
+    std::cout << "[Render] View mode -> " << viewModeToString(viewMode) << "\n";
+}
+
+void Game::cycleCamera3DType() {
+    switch (camera3DType) {
+        case Camera3DType::OrthographicFixed:
+            camera3DType = Camera3DType::PerspectiveFixed;
+            break;
+        case Camera3DType::PerspectiveFixed:
+            camera3DType = Camera3DType::PerspectiveMobile;
+            break;
+        case Camera3DType::PerspectiveMobile:
+            camera3DType = Camera3DType::FirstPerson;
+            break;
+        case Camera3DType::FirstPerson:
+            camera3DType = Camera3DType::OrthographicFixed;
+            break;
+    }
+    std::cout << "[Render] 3D camera -> " << camera3DTypeToString(camera3DType) << "\n";
+}
+
 void Game::init() {
 
     CreateRectangle();
     CompileShaders();
+    CreateCube();
+    Compile3DShaders();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -486,7 +691,7 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Sanity check: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON)
+    // Comprobación básica: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON).
     if (gPlayerAtlas.sprites.find("jugadorblanco.abajo.0") == gPlayerAtlas.sprites.end()) {
         std::cerr << "[SpriteAtlas] Aviso: no existe 'jugadorblanco.abajo.0' en el atlas."
                   << " Total sprites: " << gPlayerAtlas.sprites.size() << "\n";
@@ -520,7 +725,7 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Calcular metricas del mapa (ahora que tenemos cols, rows y aspectRatio)
+    // Calcular métricas del mapa (ahora que tenemos cols, rows y aspectRatio)
     float aspectRatio = (float)WIDTH / (float)HEIGHT;
     gameMap->calculateTileMetrics(aspectRatio);
 
@@ -533,18 +738,26 @@ void Game::init() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Crear jugador(es) en la posicion de spawn del mapa
+    // Cargar textura del HUD
+    const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
+    hudTexture = LoadTexture(hudTexPath.c_str());
+    if (hudTexture == 0)    {
+        std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    // Crear jugador(es) en la posición de spawn del mapa
     gPlayers.clear();
 
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-        Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, "jugadorblanco");
+        Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/0, "jugadorblanco");
         gPlayers.push_back(p1);
     }
 
     if (this->mode == GameMode::TwoPlayers) {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
-        Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, "jugadorrojo");
+        Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/1, "jugadorrojo");
         gPlayers.push_back(p2);
     }
 
@@ -570,22 +783,59 @@ void Game::init() {
     }
     gEnemies.clear();
 
+    // Comentados por ahora para probar a Sol Pervertido en solitario
+#if 0
     // Crear Leon
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
-        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
+        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), 0.1f);
         leon->setContext(gameMap, &gPlayers);
         leon->currentSpriteName = "leon.derecha.0";
         gEnemies.push_back(leon);
     }
 
+    // Crear Babosa
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
+        Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), 0.06f);
+        babosa->setContext(gameMap, &gPlayers);
+        babosa->currentSpriteName = "babosa.derecha.0";
+        gEnemies.push_back(babosa);
+    }
+
     // Crear Bebe Lloron
     {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
-        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
+        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), 0.08f);
         bebe->setContext(gameMap, &gPlayers);
         bebe->currentSpriteName = "bebe.derecha.0";
         gEnemies.push_back(bebe);
+    }
+
+    // Crear Fantasma Mortal
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 2.0f);
+        {
+            int r, c;
+            gameMap->ndcToGrid(spawnPos, r, c);
+            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols() || !gameMap->isWalkable(r, c)) {
+                spawnPos = gameMap->getSpawnPosition(0);
+            }
+        }
+        FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
+        fantasma->setContext(gameMap, &gPlayers);
+        fantasma->currentSpriteName = "fantasma.derecha.0";
+        gEnemies.push_back(fantasma);
+    }
+#endif
+
+    // Crear Sol Pervertido
+    {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 4.0f, 0.0f);
+        SolPervertido* sol = new SolPervertido(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+        sol->setContext(gameMap, &gPlayers);
+        sol->currentSpriteName = "sol.grande.0"; // Frame inicial
+        gEnemies.push_back(sol);
     }
 
     // Limpiar bombas anteriores
@@ -600,165 +850,254 @@ void Game::init() {
             std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
         }
     }
+
+    // === Power-Ups ===
+    gameMap->loadPowerUpTextures();
+    gameMap->placePowerUps();
 }
 
-// Procesa input y aplica movimiento/animación de jugadores.
+// Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
 void Game::processInput() {
     if (this->state != GAME_PLAYING) return;
+
+    // Controles de visualizacion.
+    if (this->keys[GLFW_KEY_F1] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
+        toggleViewMode();
+    }
+    if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
+        cycleCamera3DType();
+    }
 
     if (gPlayers.empty() || gPlayers[0] == nullptr) return;
     Player* p1 = gPlayers[0];
 
     // ======================= Jugador 1 (blanco): Flechas =======================
 
-    const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
-    const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
-    const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
-    const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
+    if (p1->isAlive()) {
+        const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
+        const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
+        const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
+        const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
 
-    const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
-    if (pressedCount == 0) {
-        p1->isWalking = false;
+        const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
+        if (pressedCount == 0) {
+            p1->isWalking = false;
 
-        if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-            p1->facingDirKey = this->lastDirKey;
+            if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
+                p1->facingDirKey = this->lastDirKey;
+            }
+        } else {
+            GLint keyToUse = GLFW_KEY_UNKNOWN;
+            if (pressedCount == 1) {
+                if (up) keyToUse = GLFW_KEY_UP;
+                if (down) keyToUse = GLFW_KEY_DOWN;
+                if (left) keyToUse = GLFW_KEY_LEFT;
+                if (right) keyToUse = GLFW_KEY_RIGHT;
+                this->lastDirKey = keyToUse;
+            } else {
+                switch (this->lastDirKey) {
+                    case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
+                    case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
+                    case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
+                    case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
+                }
+                if (keyToUse == GLFW_KEY_UNKNOWN) return;
+            }
+
+            switch (keyToUse) {
+                case GLFW_KEY_UP:
+                    p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_UP;
+                    break;
+                case GLFW_KEY_DOWN:
+                    p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_DOWN;
+                    break;
+                case GLFW_KEY_LEFT:
+                    p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_LEFT;
+                    break;
+                case GLFW_KEY_RIGHT:
+                    p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
+                    if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
+                        p1->walkTimer = 0.0f; p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = GLFW_KEY_RIGHT;
+                    break;
+            }
+
+            p1->isWalking = true;
         }
     } else {
-        GLint keyToUse = GLFW_KEY_UNKNOWN;
-        if (pressedCount == 1) {
-            if (up) keyToUse = GLFW_KEY_UP;
-            if (down) keyToUse = GLFW_KEY_DOWN;
-            if (left) keyToUse = GLFW_KEY_LEFT;
-            if (right) keyToUse = GLFW_KEY_RIGHT;
-            this->lastDirKey = keyToUse;
-        } else {
-            switch (this->lastDirKey) {
-                case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
-                case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
-                case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
-                case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
-            }
-            if (keyToUse == GLFW_KEY_UNKNOWN) return;
-        }
-
-        switch (keyToUse) {
-            case GLFW_KEY_UP:
-                p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_UP;
-                break;
-            case GLFW_KEY_DOWN:
-                p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_DOWN;
-                break;
-            case GLFW_KEY_LEFT:
-                p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_LEFT;
-                break;
-            case GLFW_KEY_RIGHT:
-                p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
-                if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
-                    p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                }
-                p1->facingDirKey = GLFW_KEY_RIGHT;
-                break;
-        }
-
-        p1->isWalking = true;
+        p1->isWalking = false;
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
     if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
-        const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
-        const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
-        const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
-        const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
-
-        const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
-        if (pressedCount2 == 0) {
+        if (!p2->isAlive()) {
             p2->isWalking = false;
-
-            if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
-                switch (this->lastDirKeyP2) {
-                    case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
-                    case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
-                    case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
-                    case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
-                }
-            }
         } else {
-            GLint keyToUse2 = GLFW_KEY_UNKNOWN;
-            if (pressedCount2 == 1) {
-                if (up2) keyToUse2 = GLFW_KEY_W;
-                if (down2) keyToUse2 = GLFW_KEY_S;
-                if (left2) keyToUse2 = GLFW_KEY_A;
-                if (right2) keyToUse2 = GLFW_KEY_D;
-                this->lastDirKeyP2 = keyToUse2;
-            } else {
-                switch (this->lastDirKeyP2) {
-                    case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
-                    case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
-                    case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
-                    case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+
+            const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
+            const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
+            const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
+            const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
+
+            const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
+            if (pressedCount2 == 0) {
+                p2->isWalking = false;
+
+                if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
+                    switch (this->lastDirKeyP2) {
+                        case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
+                        case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
+                        case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
+                        case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
+                    }
                 }
-                if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
-            }
+            } else {
+                GLint keyToUse2 = GLFW_KEY_UNKNOWN;
+                if (pressedCount2 == 1) {
+                    if (up2) keyToUse2 = GLFW_KEY_W;
+                    if (down2) keyToUse2 = GLFW_KEY_S;
+                    if (left2) keyToUse2 = GLFW_KEY_A;
+                    if (right2) keyToUse2 = GLFW_KEY_D;
+                    this->lastDirKeyP2 = keyToUse2;
+                } else {
+                    switch (this->lastDirKeyP2) {
+                        case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
+                        case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
+                        case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
+                        case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+                    }
+                    if (keyToUse2 == GLFW_KEY_UNKNOWN) return;
+                }
 
-            GLint dir2 = GLFW_KEY_DOWN;
-            Move mov2 = MOVE_NONE;
-            switch (keyToUse2) {
-                case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
-                case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
-                case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
-                case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
-            }
+                GLint dir2 = GLFW_KEY_DOWN;
+                Move mov2 = MOVE_NONE;
+                switch (keyToUse2) {
+                    case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
+                    case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
+                    case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
+                    case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
+                }
 
-            p2->UpdateSprite(mov2, gameMap, this->deltaTime);
-            if (!p2->isWalking || p2->facingDirKey != dir2) {
-                p2->walkTimer = 0.0f;
-                p2->walkPhase = 0;
+                p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+                if (!p2->isWalking || p2->facingDirKey != dir2) {
+                    p2->walkTimer = 0.0f;
+                    p2->walkPhase = 0;
+                }
+                p2->facingDirKey = dir2;
+                p2->isWalking = true;
             }
-            p2->facingDirKey = dir2;
-            p2->isWalking = true;
         }
     }
 
-    // ======================= Colocar bomba: Jugador 1 con X =======================
-    if (this->keys[GLFW_KEY_X] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_X] = GLFW_REPEAT; // Evitar colocar múltiples bombas con una sola pulsación
+    // ======================= Colocar bombas (Botón 1) =======================
+    // P1 (flechas): Ctrl derecho — poner bomba
+    if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
-        // Obtener tile actual del jugador
-        int bombRow, bombCol;
-        gameMap->ndcToGrid(p1->position, bombRow, bombCol);
+        if (p1->canPlaceBomb()) {
+            int bombRow, bombCol;
+            gameMap->ndcToGrid(p1->position, bombRow, bombCol);
 
-        // Comprobar que no hay ya una bomba en ese tile
-        bool alreadyHasBomb = false;
+            // Comprobar que no hay ya una bomba en este tile
+            bool alreadyHasBomb = false;
+            for (auto* b : gBombs) {
+                if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
+                    alreadyHasBomb = true;
+                    break;
+                }
+            }
+
+            if (!alreadyHasBomb) {
+                glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
+                Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
+                                      /*owner=*/p1,
+                                      /*power=*/p1->explosionPower,
+                                      /*remote=*/p1->hasRemoteControl);
+                gBombs.push_back(bomb);
+                p1->activeBombs++;
+            }
+        }
+    }
+
+    // P1: Detonar (Botón 2) — Alt derecho
+    if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
+        // Detonar la bomba MÁS ANTIGUA del jugador (una por una, estilo Arcade)
         for (auto* b : gBombs) {
-            if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
-                alreadyHasBomb = true;
-                break;
+            if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
+                b->detonate();
+                break; // Solo una por pulsación
+            }
+        }
+    }
+
+    // P2 (WASD): X — poner bomba
+    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+        Player* p2 = gPlayers[1];
+        if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_X] = GLFW_REPEAT;
+
+            if (p2->canPlaceBomb()) {
+                int bombRow, bombCol;
+                gameMap->ndcToGrid(p2->position, bombRow, bombCol);
+
+                bool alreadyHasBomb = false;
+                for (auto* b : gBombs) {
+                    if (b->state != BombState::DONE && b->gridRow == bombRow && b->gridCol == bombCol) {
+                        alreadyHasBomb = true;
+                        break;
+                    }
+                }
+
+                if (!alreadyHasBomb) {
+                    glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
+                    Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol,
+                                          /*owner=*/p2,
+                                          /*power=*/p2->explosionPower,
+                                          /*remote=*/p2->hasRemoteControl);
+                    gBombs.push_back(bomb);
+                    p2->activeBombs++;
+                }
             }
         }
 
-        if (!alreadyHasBomb) {
-            glm::vec2 tileCenter = gameMap->gridToNDC(bombRow, bombCol);
-            Bomb* bomb = new Bomb(tileCenter, bombRow, bombCol, 0);
-            gBombs.push_back(bomb);
+        // P2: Detonar (Botón 2) — Z
+        if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
+            for (auto* b : gBombs) {
+                if (b && b->ownerIndex == p2->playerId && b->state == BombState::FUSE) {
+                    b->detonate();
+                    break;
+                }
+            }
         }
+    }
+
+    // Pasar de windowed a fullscreen: Tab
+    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
+        toggleFullscreen(this->window);
     }
 }
 
-// Actualiza timers/animación en función del deltaTime.
+// Tick de lógica: mapa, enemigos, bombas (daño) y contacto enemigo-jugador.
 void Game::update() {
     float deltaTime = this->deltaTime;
 
@@ -766,11 +1105,36 @@ void Game::update() {
         gameMap->update(deltaTime);
     }
 
-    // Actualizar enemigos (lógica de movimiento + animación)
-    for (auto enemy : gEnemies) {
-        if (!enemy || !enemy->alive) continue;
+    // Actualizar enemigos (lógica o animación de muerte)
+    for (auto* enemy : gEnemies) {
+        if (!enemy) continue;
         enemy->setDeltaTime(deltaTime);
+
+        if (enemy->lifeState == EnemyLifeState::Alive) {
+    
+        // Notificar si hay bombas cercanas
+        for (auto* b : gBombs) {
+            float dist = glm::distance(enemy->position, b->position);
+            if (gameMap && dist < gameMap->getTileSize() * 2.5f) {
+                enemy->notifyBombNearby(b->position);
+            }
+        }
+        
         enemy->Update();
+        } else if (enemy->lifeState == EnemyLifeState::Dying) {
+            enemy->updateDeath(deltaTime);
+        }
+    }
+
+    // Limpiar enemigos que ya terminaron de morir
+    for (auto it = gEnemies.begin(); it != gEnemies.end(); ) {
+        Enemy* e = *it;
+        if (e && e->lifeState == EnemyLifeState::Dead) {
+            delete e;
+            it = gEnemies.erase(it);
+        } else {
+            ++it;
+        }
     }
 
     // Actualizar jugador
@@ -778,25 +1142,224 @@ void Game::update() {
         if (!p) continue;
         p->deltaTime = deltaTime;
         p->Update();
+
+        // Comprobar si el jugador recoge un power-up
+        if (p->isAlive() && gameMap) {
+            int pr, pc;
+            gameMap->ndcToGrid(p->position, pr, pc);
+            gameMap->tryCollectPowerUp(pr, pc, p);
+        }
     }
 
-    // Actualizar bombas
+    // Actualizar bombas + aplicar daño por explosión
     for (auto it = gBombs.begin(); it != gBombs.end(); ) {
         Bomb* b = *it;
+
+        // Marcar si el dueño ya abandonó la casilla (entonces bloquea también para él)
+        if (b && !b->ownerLeftTile) {
+            Player* owner = nullptr;
+            if (b->ownerIndex >= 0 && (std::size_t)b->ownerIndex < gPlayers.size()) {
+                owner = gPlayers[b->ownerIndex];
+            }
+            if (!owner || !owner->isAlive() || !isSameTile(gameMap, owner->position, b->position)) {
+                b->ownerLeftTile = true;
+            }
+        }
+
         bool justExploded = b->Update(deltaTime);
+
+        if (b->state == BombState::EXPLODING) {
+            // Explosión: si el fuego toca a una entidad, muere.
+            for (auto* p : gPlayers) {
+                if (!p || !p->isAlive()) continue;
+                if (explosionHitsEntity(gameMap, b, p->position)) {
+                    p->killByExplosion();
+                }
+            }
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+                if (explosionHitsEntity(gameMap, b, enemy->position)) {
+                    enemy->takeDamage(gEnemyAtlas, 999);
+                }
+            }
+            // Explosión: si toca a otra bomba que aún no ha explotado, la detona.
+            for (auto* otherB : gBombs) {
+                if (otherB && otherB != b && otherB->state == BombState::FUSE) {
+                    if (explosionHitsEntity(gameMap, b, otherB->position)) {
+                        otherB->detonate();
+                    }
+                }
+            }
+        }
+
         if (justExploded) {
-            // TODO: Aquí se implementará la lógica de explosión (destruir bloques, dañar enemigos/jugadores)
-            // Por ahora simplemente eliminamos la bomba
             delete b;
             it = gBombs.erase(it);
         } else {
             ++it;
         }
     }
+
+    // Colisión enemigo ↔ jugador: el jugador muere y respawnea.
+    for (auto* enemy : gEnemies) {
+        if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+        for (auto* p : gPlayers) {
+            if (!p || !p->isAlive()) continue;
+            if (overlapsEnemyPlayer(gameMap, enemy->position, p->position)) {
+                p->killByEnemy();
+            }
+        }
+    }
 }
 
-// Renderiza mapa + jugadores (sprites) con un quad y UVs desde el atlas.
+// Renderiza mapa, bombas, jugadores y enemigos.
 void Game::render() {
+
+    if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
+        glEnable(GL_DEPTH_TEST);
+        glUseProgram(shader3D);
+
+        const float aspect = (float)WIDTH / (float)HEIGHT;
+        glm::vec3 cameraPos(0.0f, 16.0f, 12.0f);
+        glm::vec3 cameraTarget(0.0f, 0.0f, 0.0f);
+        glm::vec3 up(0.0f, 1.0f, 0.0f);
+
+        if (camera3DType == Camera3DType::OrthographicFixed) {
+            cameraPos = glm::vec3(0.0f, 20.0f, 0.01f);
+            up = glm::vec3(0.0f, 0.0f, -1.0f);
+        } else if (camera3DType == Camera3DType::PerspectiveMobile) {
+            const float t = (float)glfwGetTime();
+            cameraPos = glm::vec3(std::sin(t * 0.35f) * 10.0f, 14.0f, std::cos(t * 0.35f) * 10.0f);
+        } else if (camera3DType == Camera3DType::FirstPerson && !gPlayers.empty() && gPlayers[0] != nullptr) {
+            int playerRow = 0;
+            int playerCol = 0;
+            gameMap->ndcToGrid(gPlayers[0]->position, playerRow, playerCol);
+            if (playerRow >= 0 && playerCol >= 0 && playerRow < gameMap->getRows() && playerCol < gameMap->getCols()) {
+                cameraPos = gridToWorld3D(gameMap, playerRow, playerCol, 0.75f);
+                glm::vec3 forward(0.0f, 0.0f, 1.0f);
+                switch (gPlayers[0]->facingDirKey) {
+                    case GLFW_KEY_UP:    forward = glm::vec3(0.0f, 0.0f, -1.0f); break;
+                    case GLFW_KEY_DOWN:  forward = glm::vec3(0.0f, 0.0f, 1.0f); break;
+                    case GLFW_KEY_LEFT:  forward = glm::vec3(-1.0f, 0.0f, 0.0f); break;
+                    case GLFW_KEY_RIGHT: forward = glm::vec3(1.0f, 0.0f, 0.0f); break;
+                }
+                cameraTarget = cameraPos + forward * 2.0f;
+            }
+        }
+
+        const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
+        glm::mat4 projection(1.0f);
+        if (camera3DType == Camera3DType::OrthographicFixed) {
+            const float halfW = (float)gameMap->getCols() * 0.55f;
+            const float halfH = (float)gameMap->getRows() * 0.55f;
+            projection = glm::ortho(-halfW, halfW, -halfH, halfH, 0.1f, 100.0f);
+        } else {
+            projection = glm::perspective(glm::radians(55.0f), aspect, 0.1f, 100.0f);
+        }
+
+        glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+
+        auto drawCube3D = [&](const glm::vec3& center, const glm::vec3& scale, const glm::vec3& color) {
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, center);
+            model = glm::scale(model, scale);
+            glUniformMatrix4fv(uniform3DModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform3fv(uniform3DColor, 1, glm::value_ptr(color));
+            glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
+        };
+
+        glBindVertexArray(cubeVAO);
+
+        // Mapa: cubos por tile.
+        for (int r = 0; r < gameMap->getRows(); ++r) {
+            for (int c = 0; c < gameMap->getCols(); ++c) {
+                const bool walkable = gameMap->isWalkable(r, c);
+                const bool destructible = gameMap->isDestructible(r, c);
+
+                float h = 0.10f;
+                glm::vec3 color(0.24f, 0.26f, 0.27f);
+                if (!walkable) {
+                    h = destructible ? 0.70f : 1.00f;
+                    color = destructible ? glm::vec3(0.75f, 0.45f, 0.20f)
+                                        : glm::vec3(0.35f, 0.35f, 0.40f);
+                }
+
+                const glm::vec3 center = gridToWorld3D(gameMap, r, c, h * 0.5f);
+                drawCube3D(center, glm::vec3(0.95f, h, 0.95f), color);
+            }
+        }
+
+        // Jugadores como cajas 3D.
+        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p) continue;
+
+            int r = 0;
+            int c = 0;
+            gameMap->ndcToGrid(p->position, r, c);
+            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
+
+            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.55f);
+            glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
+                                        : glm::vec3(0.88f, 0.18f, 0.18f);
+            if (p->invincible) {
+                float hz = 8.0f;
+                if (p->invincibilityFromPowerUp) {
+                    hz = (p->invincibilityTimer > 4.0f) ? 6.0f : 18.0f;
+                }
+                const float t = (float)glfwGetTime();
+                const int phase = (int)(t * hz);
+                if (phase % 2 == 0) {
+                    color = glm::vec3(1.0f, 1.0f, 1.0f);
+                }
+            }
+            drawCube3D(center, glm::vec3(0.60f, 1.10f, 0.60f), color);
+        }
+
+        // Enemigos como cajas 3D.
+        for (auto* enemy : gEnemies) {
+            if (!enemy || enemy->lifeState == EnemyLifeState::Dead) continue;
+
+            int r = 0;
+            int c = 0;
+            gameMap->ndcToGrid(enemy->position, r, c);
+            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
+
+            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.45f);
+            drawCube3D(center, glm::vec3(0.60f, 0.90f, 0.60f), glm::vec3(0.19f, 0.68f, 0.27f));
+        }
+
+        // Bombas y explosiones como primitivas 3D.
+        for (auto* b : gBombs) {
+            if (!b || b->state == BombState::DONE) continue;
+
+            if (b->state == BombState::FUSE) {
+                const glm::vec3 center = gridToWorld3D(gameMap, b->gridRow, b->gridCol, 0.30f);
+                drawCube3D(center, glm::vec3(0.45f, 0.45f, 0.45f), glm::vec3(0.10f, 0.10f, 0.10f));
+            } else {
+                for (std::size_t i = 0; i < b->explosionSegments.size(); ++i) {
+                    const ExplosionSegment& seg = b->explosionSegments[i];
+                    int r = 0;
+                    int c = 0;
+                    gameMap->ndcToGrid(seg.pos, r, c);
+                    if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
+
+                    const bool warmColor = (((int)i + b->animFrame) % 2 == 0);
+                    const glm::vec3 color = warmColor ? glm::vec3(1.00f, 0.15f, 0.10f)
+                                                      : glm::vec3(1.00f, 0.92f, 0.10f);
+                    const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.35f);
+                    drawCube3D(center, glm::vec3(0.50f, 0.50f, 0.50f), color);
+                }
+            }
+        }
+
+        glBindVertexArray(0);
+        glUseProgram(0);
+        return;
+    }
+
+    glDisable(GL_DEPTH_TEST);
 
     glUseProgram(shader);
 
@@ -808,8 +1371,15 @@ void Game::render() {
     // Texture unit 0
     glUniform1i(uniformTexture, 0);
 
+    // Por defecto, no aplicar flash blanco (solo lo usa el jugador en invulnerabilidad).
+    glUniform1f(uniformWhiteFlash, 0.0f);
+
     // === 1. Renderizar mapa (fondo) ===
     gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
+
+    // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
+    gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
+    gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
@@ -837,6 +1407,10 @@ void Game::render() {
         p->Draw();
     }
 
+    // Importante: `Player::Draw()` puede dejar `whiteFlash=1` (parpadeo).
+    // Reseteamos antes de dibujar otros sprites con el mismo shader.
+    glUniform1f(uniformWhiteFlash, 0.0f);
+
     glBindVertexArray(0);
 
     // === 3. Renderizar enemigos ===
@@ -855,3 +1429,22 @@ void Game::render() {
     glUseProgram(0);
 }
 
+// Cambiar pantalla de fullscreen a windowed (y viceversa)
+void Game::toggleFullscreen(GLFWwindow* window) {
+
+    if (glfwGetWindowMonitor(window) == nullptr) {
+        // Cambiar a fullscreen
+        glfwGetWindowPos(window, &windowedXPos, &windowedYPos);
+        glfwGetWindowSize(window, &WIDTH, &HEIGHT);
+
+        GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode* mode = glfwGetVideoMode(monitor);
+        glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+    } else {
+        // Pasar a windowed
+        // Valores fixeados para windowed
+        WIDTH = 1280; 
+        HEIGHT = 720;
+        glfwSetWindowMonitor(window, nullptr, windowedXPos, windowedYPos, WIDTH, HEIGHT, 0);
+    }
+}

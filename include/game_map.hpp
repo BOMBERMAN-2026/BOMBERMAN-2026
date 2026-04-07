@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include "sprite_atlas.hpp"
 #include "tile_animator.hpp"
+#include "power_up.hpp"
 
 #include <string>
 #include <vector>
@@ -32,13 +33,16 @@ enum class BlockType {
 };
 
 struct Block {
-    int spriteId;
-    BlockType type;
+    int spriteId;            // ID del sprite en el atlas (según el .txt)
+    BlockType type;          // Tipo lógico del bloque
     bool destroyed  = false; // Solo relevante si type == DESTRUCTIBLE
     bool breaking   = false; // true cuando está reproduciendo la animación de rotura
-    float breakTimer = 0.0f;
-    int breakFrame  = 0;
+    float breakTimer = 0.0f; // Acumulador de animación de rotura
+    int breakFrame  = 0;     // Frame actual de rotura
     bool hasPowerUp = false; // Si al destruirse revela un power-up
+    PowerUpType powerUpType = PowerUpType::ExtraLife; // Tipo de power-up escondido
+    bool powerUpRevealed = false; // El power-up está visible pero no recogido
+    bool powerUpCollected = false; // El power-up ya fue recogido
 
     bool isWalkable() const {
         if (destroyed) return true; // destructible ya destruido → suelo
@@ -68,6 +72,9 @@ public:
                 GLuint uniformModel, GLuint uniformUvRect,
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
+    void renderHud(GLuint vao, GLuint hudTexture,
+                   GLuint uniformModel, GLuint uniformUvRect);
+
     int getRows() const { return rows; }
     int getCols() const { return cols; }
 
@@ -76,20 +83,18 @@ public:
     // True si la celda permite caminar.
     bool isWalkable(int row, int col) const;
 
+    // True si la celda es un bloque destructible.
+    bool isDestructible(int row, int col) const;
+
     // Destruye una celda (si es destructible). Devuelve true si se destruyó.
     bool destroyTile(int row, int col);
 
     // Convierte posición NDC a celda (row, col) del grid.
     void ndcToGrid(glm::vec2 ndc, int& row, int& col) const;
 
-    // Devuelve true si un AABB centrado en `center` con semilado `halfSize`
-    // no solapa ningún tile no caminable.
-    bool canMoveTo(glm::vec2 center, float halfSize) const;
+    bool canMoveTo(glm::vec2 center, float halfSize) const; // True si un AABB no solapa ningún tile no caminable.
 
-    // Spawn de jugador por índice.
-    // - Si el nivel define `spawn` para ese índice, se usa (si es walkable).
-    // - Si no, cae a un spawn automático (primera casilla walkable desde una esquina).
-    glm::vec2 getSpawnPosition(int playerIndex) const;
+    glm::vec2 getSpawnPosition(int playerIndex) const; // Usa spawn del nivel o fallback automático.
 
     // Convierte una celda (row,col) al centro en NDC.
     glm::vec2 gridToNDC(int row, int col) const;
@@ -102,34 +107,62 @@ public:
     // Calcula tamaño de tile y offsets para centrar el mapa en pantalla.
     void calculateTileMetrics(float aspectRatio);
 
+    // === Power-Ups ===
+    // Coloca power-ups aleatoriamente debajo de bloques destructibles.
+    // stackeables (BombUp, FireUp, SpeedUp): 2 de cada uno
+    // no stackeables (ExtraLife, Invincibility, RemoteControl): 1 de cada uno
+    void placePowerUps();
+
+    // Renderiza los power-ups revelados (bloques destruidos con power-up visible).
+    void renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
+                        GLuint uniformTintColor, GLuint uniformFlipX);
+
+    // Carga las texturas de los power-ups.
+    void loadPowerUpTextures();
+
+    // Comprueba si un jugador está sobre un power-up revelado y lo recoge.
+    // Devuelve true si recogió un power-up (y lo aplica al player).
+    bool tryCollectPowerUp(int row, int col, class Player* player);
+
 private:
     struct SpawnCell {
-        int row = -1;
-        int col = -1;
+        int row = -1; // Fila en grid
+        int col = -1; // Columna en grid
     };
 
-    std::vector<std::vector<Block>> grid;
-    int rows = 0;
-    int cols = 0;
+    // Grid
+    std::vector<std::vector<Block>> grid; // Tiles del mapa
+    int rows = 0;                         // Nº filas
+    int cols = 0;                         // Nº columnas
 
-    // Spawns opcionales definidos por nivel (por índice de jugador).
-    // Si no existe o es inválido, se usa el fallback de buscar primera casilla walkable.
-    std::vector<SpawnCell> spawnCells;
+    // Spawns (opcional): si no existe/vale, se usa fallback automático.
+    std::vector<SpawnCell> spawnCells;    // Spawns por índice de jugador
 
-    float tileSize = 0.0f;
-    float offsetX  = 0.0f;
-    float offsetY  = 0.0f;
-    float currentAspectRatio = 1.0f;
+    // Layout
+    float tileSize = 0.0f;                // Tamaño de tile en NDC
+    float offsetX  = 0.0f;                // Offset para centrar mapa
+    float offsetY  = 0.0f;                // Offset para centrar mapa
+    float currentAspectRatio = 1.0f;      // Aspect ratio usado en calculateTileMetrics
 
-    SpriteAtlas atlas;
-    bool atlasLoaded = false;
+    // Atlas
+    SpriteAtlas atlas;                    // Atlas del stage
+    bool atlasLoaded = false;             // true si se cargó el atlas
+
+    // Hud
+    float hudTopSpace = 0.25f; // espacio para los marcadores y otras metricas
     
-    TileAnimator animator;
+    // Animación
+    TileAnimator animator;                // Swap de IDs animados
 
-    int destroyedFloorId = 10; // sprite a mostrar cuando se destruye (por defecto, luego se recalcula dinámico en render)
+    int destroyedFloorId = 10;            // Sprite al destruir (por defecto; se recalcula dinámico en render)
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);
+
+    // === Power-Ups ===
+    static constexpr int POWER_UP_TYPE_COUNT = 6;
+    GLuint powerUpTextures[POWER_UP_TYPE_COUNT] = {0}; // Texturas indexadas por PowerUpType
+    bool powerUpTexturesLoaded = false;
 };
 
 #endif // GAME_MAP_HPP

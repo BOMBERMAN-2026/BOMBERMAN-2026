@@ -28,8 +28,8 @@ private:
     int   bombExplosionRange;  // Alcance de explosión de sus bombas (2)
 
     // Bolas de fuego
-    float fireballCooldown;
-    float fireballCooldownMax;
+    float fireballCooldown;      // Cooldown restante
+    float fireballCooldownMax;   // Intervalo entre disparos
 
     // Estado de fuego (inmunidad temporal)
     bool  onFire;
@@ -39,8 +39,8 @@ private:
     float fireCycleTimer;      // Timer para el próximo ciclo de fuego
 
     // Cooldown para colocar bombas
-    float bombCooldown;
-    float bombCooldownMax;
+    float bombCooldown;          // Cooldown restante
+    float bombCooldownMax;       // Intervalo entre bombas
 
     void enterFireMode();
     void updateFireMode();

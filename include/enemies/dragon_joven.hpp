@@ -17,6 +17,7 @@ public:
     void Draw()   override;
 
 private:
+    // IA
     float fireCooldown;      // Tiempo restante hasta poder escupir fuego otra vez
     float fireCooldownMax;   // Intervalo entre ataques de fuego
     int   fireRange;         // Alcance en casillas (2)

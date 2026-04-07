@@ -1,5 +1,6 @@
 #include "game_map.hpp"
 #include "sprite_atlas.hpp" // for resolveAssetPath, loadSpriteAtlasMinimal, getUvRectForSprite
+#include "player.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -9,6 +10,8 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <random>
+#include <chrono>
 
 /*
  * game_map.cpp
@@ -225,6 +228,10 @@ void GameMap::update(float deltaTime) {
                     if (b.breakFrame >= 4) {
                         b.breaking = false;
                         b.destroyed = true; // finalmente se destruye y pasa a ser suelo 100% transitable
+                        // Revelar power-up si tenía uno escondido
+                        if (b.hasPowerUp && !b.powerUpCollected) {
+                            b.powerUpRevealed = true;
+                        }
                     }
                 }
             }
@@ -240,8 +247,9 @@ void GameMap::calculateTileMetrics(float aspectRatio) {
     float screenWidthInOrtho = 2.0f * aspectRatio;
     float screenHeightInOrtho = 2.0f;
 
+    float availableHeight = screenHeightInOrtho - hudTopSpace;
     float sizeByWidth  = screenWidthInOrtho / (float)cols;
-    float sizeByHeight = screenHeightInOrtho / (float)rows;
+    float sizeByHeight = availableHeight / (float)rows;
     // Escoger el mínimo para que los tiles sean siempre cuadrados perfectos y entren completos
     tileSize = std::min(sizeByWidth, sizeByHeight);
 
@@ -250,7 +258,7 @@ void GameMap::calculateTileMetrics(float aspectRatio) {
     
     // El mapa siempre lo centramos en medio de la pantalla ortográfica
     offsetX = (screenWidthInOrtho - mapWidth)  / 2.0f;
-    offsetY = (screenHeightInOrtho - mapHeight) / 2.0f;
+    offsetY = hudTopSpace + (availableHeight - mapHeight) / 2.0f;
 }
 
 // ============================== Coordenadas: Grid <-> NDC ==============================
@@ -318,6 +326,12 @@ bool GameMap::isWalkable(int row, int col) const {
     if (row < 0 || row >= rows || col < 0 || col >= cols)
         return false;
     return grid[row][col].isWalkable();
+}
+
+bool GameMap::isDestructible(int row, int col) const {
+    if (row < 0 || row >= rows || col < 0 || col >= cols)
+        return false;
+    return grid[row][col].isDestructible();
 }
 
 // Marca un bloque destructible como roto (inicia la animación de destruirse).
@@ -468,4 +482,181 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
     }
 
     glBindVertexArray(0);
+}
+
+void GameMap::renderHud(GLuint vao, GLuint hudTexture,
+                        GLuint uniformModel, GLuint uniformUvRect) {
+    float hudWidth = cols * tileSize;
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, hudTexture);
+
+    glBindVertexArray(vao);
+
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(0.0f, 1.0f - hudTopSpace * 0.5f, 0.0f));
+    model = glm::scale(model, glm::vec3(hudWidth * 0.5f, hudTopSpace * 0.5f, 1.0f));
+
+    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+// ============================== Power-Ups ==============================
+
+// LoadTexture definido en bomberman.cpp
+extern GLuint LoadTexture(const char* filePath);
+
+void GameMap::loadPowerUpTextures() {
+    if (powerUpTexturesLoaded) return;
+
+    // Rutas de cada power-up indexadas por PowerUpType
+    const char* paths[] = {
+        "resources/sprites/power_ups/Bomberman_AC_-_1-UP.png",           // ExtraLife
+        "resources/sprites/power_ups/Bomberman_AC_-_Bomb_Up.png",       // BombUp
+        "resources/sprites/power_ups/Bomberman_AC_-_Fire_Up.png",       // FireUp
+        "resources/sprites/power_ups/Bomberman_AC_-_Speed_Up.png",      // SpeedUp
+        "resources/sprites/power_ups/Bomberman_AC_-_Invincibility.png", // Invincibility
+        "resources/sprites/power_ups/Bomberman_AC_-_Remote_Control.png"  // RemoteControl
+    };
+
+    for (int i = 0; i < POWER_UP_TYPE_COUNT; i++) {
+        std::string resolved = resolveAssetPath(paths[i]);
+        powerUpTextures[i] = LoadTexture(resolved.c_str());
+        if (powerUpTextures[i] == 0) {
+            std::cerr << "GameMap: Error cargando textura power-up: " << resolved << std::endl;
+        }
+    }
+
+    powerUpTexturesLoaded = true;
+    std::cout << "GameMap: power-up textures loaded" << std::endl;
+}
+
+void GameMap::placePowerUps() {
+    // Recopilar todas las celdas destructibles
+    struct Cell { int r, c; };
+    std::vector<Cell> destructibles;
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            if (grid[r][c].type == BlockType::DESTRUCTIBLE && !grid[r][c].destroyed) {
+                destructibles.push_back({r, c});
+            }
+        }
+    }
+
+    if (destructibles.empty()) {
+        std::cerr << "GameMap: no hay bloques destructibles para colocar power-ups" << std::endl;
+        return;
+    }
+
+    // Shuffle aleatorio
+    unsigned seed = (unsigned)std::chrono::system_clock::now().time_since_epoch().count();
+    std::mt19937 rng(seed);
+    std::shuffle(destructibles.begin(), destructibles.end(), rng);
+
+    // Power-ups a colocar:
+    // Stackeables (2 de cada): BombUp, FireUp, SpeedUp
+    // No stackeables (1 de cada): ExtraLife, Invincibility, RemoteControl
+    struct PowerUpPlacement {
+        PowerUpType type;
+        int count;
+    };
+
+    PowerUpPlacement placements[] = {
+        { PowerUpType::BombUp,         2 },  // Stackeable
+        { PowerUpType::FireUp,         2 },  // Stackeable
+        { PowerUpType::SpeedUp,        2 },  // Stackeable
+        { PowerUpType::ExtraLife,      1 },  // No stackeable
+        { PowerUpType::Invincibility,  1 },  // No stackeable
+        { PowerUpType::RemoteControl,  1 },  // No stackeable
+    };
+
+    int cellIndex = 0;
+    int totalPlaced = 0;
+
+    for (const auto& p : placements) {
+        for (int i = 0; i < p.count; i++) {
+            if (cellIndex >= (int)destructibles.size()) break;
+            Cell& cell = destructibles[cellIndex++];
+            Block& b = grid[cell.r][cell.c];
+            b.hasPowerUp = true;
+            b.powerUpType = p.type;
+            b.powerUpRevealed = false;
+            b.powerUpCollected = false;
+            totalPlaced++;
+        }
+    }
+
+    std::cout << "GameMap: " << totalPlaced << " power-ups colocados en "
+              << destructibles.size() << " bloques destructibles" << std::endl;
+}
+
+void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
+                             GLuint uniformTintColor, GLuint uniformFlipX) {
+    if (!powerUpTexturesLoaded) return;
+
+    glBindVertexArray(vao);
+    glUniform1f(uniformFlipX, 0.0f);
+    glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+    float scale = tileSize / 2.0f;
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            const Block& block = grid[r][c];
+            if (!block.hasPowerUp || !block.powerUpRevealed || block.powerUpCollected)
+                continue;
+
+            int texIdx = (int)block.powerUpType;
+            if (texIdx < 0 || texIdx >= POWER_UP_TYPE_COUNT || powerUpTextures[texIdx] == 0)
+                continue;
+
+            // Bind la textura del power-up
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
+
+            glm::vec2 center = gridToNDC(r, c);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(center, 0.0f));
+            model = glm::scale(model, glm::vec3(scale, scale, 1.0f));
+
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+
+            // UV rect completo para texturas individuales
+            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+    }
+
+    glBindVertexArray(0);
+}
+
+bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
+    if (!player) return false;
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+
+    Block& b = grid[row][col];
+    if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected)
+        return false;
+
+    // Aplicar el power-up y marcarlo como recogido
+    player->applyPowerUp(b.powerUpType);
+    b.powerUpCollected = true;
+    b.powerUpRevealed = false;
+
+    // Log para debug
+    const char* names[] = { "1-UP", "Bomb Up", "Fire Up", "Speed Up", "Invincibility", "Remote Control" };
+    int idx = (int)b.powerUpType;
+    if (idx >= 0 && idx < 6) {
+        std::cout << "[PowerUp] Jugador " << player->playerId << " recogio " << names[idx] << std::endl;
+    }
+
+    return true;
 }

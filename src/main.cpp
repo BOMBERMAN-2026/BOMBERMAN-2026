@@ -21,6 +21,7 @@
 Game* bomberman;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
 int main() {
 
@@ -57,6 +58,7 @@ int main() {
     }
 
     glfwMakeContextCurrent(mainWindow);
+    glfwSetFramebufferSizeCallback(mainWindow, framebuffer_size_callback);
 
     glewExperimental = GL_TRUE;
     if (glewInit() != GLEW_OK)
@@ -70,6 +72,7 @@ int main() {
 
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
+    glClearDepth(1.0f);
 
     // ============================== Juego ==============================
     bomberman = new Game(mainWindow, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -101,7 +104,11 @@ int main() {
         bomberman->update();
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
+        GLbitfield clearMask = GL_COLOR_BUFFER_BIT;
+        if (bomberman->is3DViewEnabled()) {
+            clearMask |= GL_DEPTH_BUFFER_BIT;
+        }
+        glClear(clearMask);
         bomberman->render();
         
         // Swap buffers
@@ -126,4 +133,9 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             }
         }
     }
+}
+
+void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
+    // Actualizamos el Viewport para que ocupe toda la nueva ventana
+    glViewport(0, 0, width, height);
 }

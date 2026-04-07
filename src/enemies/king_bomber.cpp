@@ -35,6 +35,7 @@ KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
 
 KingBomber::~KingBomber() {}
 
+// Sub-IA de drones: persiguen y activan ciclos de fuego.
 void KingBomber::updateDrones() {
     float dist;
     glm::vec2 targetPos = getClosestPlayerPos(dist);
@@ -81,6 +82,7 @@ void KingBomber::updateDrones() {
     }
 }
 
+// Gestiona escudo: cuando está caído, cuenta hasta reactivarse.
 void KingBomber::updateShield() {
     if (shieldActive) return;
 
@@ -91,11 +93,13 @@ void KingBomber::updateShield() {
     }
 }
 
+// Coloca una cadena de bombas hacia el jugador (pendiente).
 void KingBomber::placeChainBombs() {
     // TODO: Colocar una cadena de bombas en la dirección general del jugador
     chainBombCooldown = chainBombCooldownMax;
 }
 
+// Cuando explotan sus bombas: cae escudo y entra en retirada.
 void KingBomber::onBombsExploded() {
     // Cuando sus propias bombas explotan, el escudo cae
     if (shieldActive) {
@@ -104,14 +108,16 @@ void KingBomber::onBombsExploded() {
     }
 }
 
+// Inicia fase de retirada y programa recuperación de escudo.
 void KingBomber::startRetreat() {
     retreating = true;
     retreatTimer = retreatDuration;
     shieldRecoverTimer = retreatDuration + shieldRecoverTime;
 }
 
+// IA principal del boss: persigue/retirada, bombas en cadena y drones.
 void KingBomber::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float step = speed * deltaTime;
 
@@ -145,6 +151,7 @@ void KingBomber::Update() {
     }
 }
 
+// Render del boss y sus drones (pendiente).
 void KingBomber::Draw() {
     // TODO: Renderizar sprite de King Bomber (con efecto de escudo si shieldActive)
     // TODO: Renderizar los 4 drones también

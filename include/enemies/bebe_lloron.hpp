@@ -17,6 +17,7 @@ public:
     void Draw()   override;
 
 private:
+    // IA
     float pursuitRange;        // Distancia a la que empieza a perseguir
     float pursuitGiveUpRange;  // Distancia a la que deja de perseguir
     bool  pursuing;            // Estado actual de persecución

@@ -28,6 +28,7 @@ BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size, float speed)
 
 BebeLloron::~BebeLloron() {}
 
+// Línea de visión: misma fila o columna, sin muros entre medias.
 bool BebeLloron::hasLineOfSightToPlayer() const {
     if (!gameMap) return false;
     
@@ -39,7 +40,7 @@ bool BebeLloron::hasLineOfSightToPlayer() const {
     gameMap->ndcToGrid(this->position, r1, c1);
     gameMap->ndcToGrid(targetPos, r2, c2);
 
-    // Debe estar en la misma fila o misma columna para verse directo
+    // Debe estar en la misma fila o columna para tener visión directa.
     if (r1 != r2 && c1 != c2) return false;
 
     if (r1 == r2) {
@@ -58,13 +59,14 @@ bool BebeLloron::hasLineOfSightToPlayer() const {
     return true;
 }
 
+// IA: patrulla; persigue si está en rango y con línea de visión.
 void BebeLloron::Update() {
-    if (!alive) return;
+    if (lifeState != EnemyLifeState::Alive) return;
 
     float dist = distanceToPlayer();
     float step = speed * deltaTime;
 
-    // Transición entre patrulla y persecución
+    // Transición entre patrulla y persecución.
     if (!pursuing && dist < pursuitRange && hasLineOfSightToPlayer()) {
         pursuing = true;
     } else if (pursuing && (dist > pursuitGiveUpRange || !hasLineOfSightToPlayer())) {
@@ -87,7 +89,7 @@ void BebeLloron::Update() {
 
         // 1. Intentar moverse en el eje principal (línea recta hacia el jugador).
         if (!tryMove(primary, step)) {
-            // 2. Si choca contra una esquina o un bloque por no estar alienado,
+            // 2. Si colisiona contra una esquina o un bloque por no estar alineado,
             // moverse en el eje secundario para "centrarse" en el pasillo.
             if (!tryMove(secondary, step)) {
                 // 3. Si aún así está completamente atascado en ambas direcciones,
@@ -133,21 +135,42 @@ void BebeLloron::Update() {
     currentSpriteName = prefix + std::to_string(animFrame);
 }
 
+// Render del enemigo (respeta aspecto real del frame).
 void BebeLloron::Draw() {
-    if (!alive) return;
+    if (lifeState == EnemyLifeState::Dead) return;
 
-    // Tamaño más pequeño como soliticado
-    const float enemyScaleFactor = 1.15f; 
+    if (!gameMap) return;
+
+    // Tamaño visual (en tiles) del enemigo.
+    // El sprite del bebé en el atlas es 16x32; con ~2 tiles de alto se verá alto y delgado.
+    const float enemyHeightInTiles = 1.95f;
     float halfTile = gameMap->getTileSize() / 2.0f;
 
-    glm::mat4 model = glm::mat4(1.0f);
-    glm::vec3 renderPos = glm::vec3(position.x, position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
-    model = glm::translate(model, renderPos);   
+    glm::vec3 renderPos = glm::vec3(position.x, position.y, 0.0f);
 
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);       
+    getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);
 
-    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor, halfTile * enemyScaleFactor, 1.0f));     
+    // Respetar el aspect ratio real del sprite del atlas (p. ej., bebé: 16x32).
+    const float targetHeightScale = halfTile * enemyHeightInTiles;
+    float scaleX = targetHeightScale;
+    float scaleY = targetHeightScale;
+    {
+        auto it = gEnemyAtlas.sprites.find(currentSpriteName);
+        if (it != gEnemyAtlas.sprites.end()) {
+            const SpriteFrame& frame = it->second;
+            if (frame.h > 0) {
+                scaleX = (targetHeightScale * (float)frame.w) / (float)frame.h;
+                scaleY = targetHeightScale;
+            }
+        }
+    }
+
+    // Ajuste vertical según el tamaño real del sprite (ancla aproximada al suelo).
+    renderPos.y = position.y + (scaleY - halfTile) * 0.8f;
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, renderPos);
+    model = glm::scale(model, glm::vec3(scaleX, scaleY, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
