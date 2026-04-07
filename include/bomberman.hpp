@@ -60,7 +60,10 @@ class Game
         GameState state;
         GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
         ViewMode viewMode = ViewMode::Mode2D;
-        Camera3DType camera3DType = Camera3DType::OrthographicFixed;
+        Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
+        float cameraOrbitYaw = 0.0f;          // Yaw orbital para la camara isometrica fija
+        bool cameraOrbitDragging = false;     // Estado de arrastre con raton
+        double cameraOrbitLastMouseX = 0.0;   // Ultima X del cursor durante el arrastre
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana

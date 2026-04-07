@@ -110,6 +110,73 @@ static glm::vec3 facingKeyToForward(int facingKey)
     }
 }
 
+static int yawToControlQuadrant(float yawRadians)
+{
+    const float kTwoPi = 6.28318530718f;
+    const float kHalfPi = 1.57079632679f;
+    const float kQuarterPi = 0.78539816339f;
+
+    float wrapped = std::fmod(yawRadians, kTwoPi);
+    if (wrapped < 0.0f) {
+        wrapped += kTwoPi;
+    }
+
+    return ((int)std::floor((wrapped + kQuarterPi) / kHalfPi)) % 4;
+}
+
+static GLint remapDirectionForOrbitCamera(const Game* game, GLint inputDirKey)
+{
+    if (!game ||
+        game->viewMode != ViewMode::Mode3D ||
+        (game->camera3DType != Camera3DType::PerspectiveFixed &&
+         game->camera3DType != Camera3DType::PerspectiveMobile)) {
+        return inputDirKey;
+    }
+
+    const int quadrant = yawToControlQuadrant(game->cameraOrbitYaw);
+    switch (quadrant) {
+        case 0:
+            return inputDirKey;
+        case 1:
+            switch (inputDirKey) {
+                case GLFW_KEY_UP: return GLFW_KEY_LEFT;
+                case GLFW_KEY_RIGHT: return GLFW_KEY_UP;
+                case GLFW_KEY_DOWN: return GLFW_KEY_RIGHT;
+                case GLFW_KEY_LEFT: return GLFW_KEY_DOWN;
+                default: return inputDirKey;
+            }
+        case 2:
+            switch (inputDirKey) {
+                case GLFW_KEY_UP: return GLFW_KEY_DOWN;
+                case GLFW_KEY_RIGHT: return GLFW_KEY_LEFT;
+                case GLFW_KEY_DOWN: return GLFW_KEY_UP;
+                case GLFW_KEY_LEFT: return GLFW_KEY_RIGHT;
+                default: return inputDirKey;
+            }
+        case 3:
+            switch (inputDirKey) {
+                case GLFW_KEY_UP: return GLFW_KEY_RIGHT;
+                case GLFW_KEY_RIGHT: return GLFW_KEY_DOWN;
+                case GLFW_KEY_DOWN: return GLFW_KEY_LEFT;
+                case GLFW_KEY_LEFT: return GLFW_KEY_UP;
+                default: return inputDirKey;
+            }
+        default:
+            return inputDirKey;
+    }
+}
+
+static Move directionKeyToMove(GLint directionKey)
+{
+    switch (directionKey) {
+        case GLFW_KEY_UP: return MOVE_UP;
+        case GLFW_KEY_DOWN: return MOVE_DOWN;
+        case GLFW_KEY_LEFT: return MOVE_LEFT;
+        case GLFW_KEY_RIGHT: return MOVE_RIGHT;
+        default: return MOVE_NONE;
+    }
+}
+
 static std::string buildWindowTitle(ViewMode viewMode, Camera3DType camera3DType)
 {
     std::ostringstream title;
@@ -568,14 +635,14 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
             return;
         }
 
-        float halfH = std::max(panelTileH * 0.44f, panelHeight * 0.0105f);
+        float halfH = std::max(panelTileH * 0.82f, panelHeight * 0.0220f);
         float halfW = halfH * actorAspect;
 
-        halfW = std::min(halfW, panelTileW * 0.92f);
-        halfH = std::min(halfH, panelTileH * 0.92f);
+        halfW = std::min(halfW, panelTileW * 1.55f);
+        halfH = std::min(halfH, panelTileH * 1.55f);
 
         // Eleva un poco para que los pies coincidan mejor con la celda.
-        const float yOffset = halfH * 0.20f;
+        const float yOffset = halfH * 0.05f;
         drawQuadNdc(x, y + yOffset, halfW, halfH, texId, uvRect, glm::vec4(1.0f), actorFlipX);
     };
 
@@ -987,6 +1054,7 @@ void Game::toggleViewMode() {
 void Game::cycleCamera3DType() {
     switch (camera3DType) {
         case Camera3DType::OrthographicFixed:
+        case Camera3DType::FirstPerson:
             camera3DType = Camera3DType::PerspectiveFixed;
             break;
         case Camera3DType::PerspectiveFixed:
@@ -994,9 +1062,6 @@ void Game::cycleCamera3DType() {
             break;
         case Camera3DType::PerspectiveMobile:
             camera3DType = Camera3DType::FirstPerson;
-            break;
-        case Camera3DType::FirstPerson:
-            camera3DType = Camera3DType::OrthographicFixed;
             break;
     }
     refreshWindowTitle();
@@ -1250,7 +1315,7 @@ void Game::processInput() {
             p1->isWalking = false;
 
             if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-                p1->facingDirKey = this->lastDirKey;
+                p1->facingDirKey = remapDirectionForOrbitCamera(this, this->lastDirKey);
             }
         } else {
             GLint keyToUse = GLFW_KEY_UNKNOWN;
@@ -1276,7 +1341,8 @@ void Game::processInput() {
             }
 
             if (keyToUse != GLFW_KEY_UNKNOWN) {
-                switch (keyToUse) {
+                const GLint mappedDir = remapDirectionForOrbitCamera(this, keyToUse);
+                switch (mappedDir) {
                     case GLFW_KEY_UP:
                         p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
                         if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
@@ -1334,12 +1400,14 @@ void Game::processInput() {
                 p2->isWalking = false;
 
                 if (this->lastDirKeyP2 != GLFW_KEY_UNKNOWN) {
+                    GLint screenDir2 = GLFW_KEY_DOWN;
                     switch (this->lastDirKeyP2) {
-                        case GLFW_KEY_W: p2->facingDirKey = GLFW_KEY_UP; break;
-                        case GLFW_KEY_S: p2->facingDirKey = GLFW_KEY_DOWN; break;
-                        case GLFW_KEY_A: p2->facingDirKey = GLFW_KEY_LEFT; break;
-                        case GLFW_KEY_D: p2->facingDirKey = GLFW_KEY_RIGHT; break;
+                        case GLFW_KEY_W: screenDir2 = GLFW_KEY_UP; break;
+                        case GLFW_KEY_S: screenDir2 = GLFW_KEY_DOWN; break;
+                        case GLFW_KEY_A: screenDir2 = GLFW_KEY_LEFT; break;
+                        case GLFW_KEY_D: screenDir2 = GLFW_KEY_RIGHT; break;
                     }
+                    p2->facingDirKey = remapDirectionForOrbitCamera(this, screenDir2);
                 }
             } else {
                 GLint keyToUse2 = GLFW_KEY_UNKNOWN;
@@ -1365,14 +1433,16 @@ void Game::processInput() {
                 }
 
                 if (keyToUse2 != GLFW_KEY_UNKNOWN) {
-                    GLint dir2 = GLFW_KEY_DOWN;
-                    Move mov2 = MOVE_NONE;
+                    GLint dir2Screen = GLFW_KEY_DOWN;
                     switch (keyToUse2) {
-                        case GLFW_KEY_W: dir2 = GLFW_KEY_UP; mov2 = MOVE_UP; break;
-                        case GLFW_KEY_S: dir2 = GLFW_KEY_DOWN; mov2 = MOVE_DOWN; break;
-                        case GLFW_KEY_A: dir2 = GLFW_KEY_LEFT; mov2 = MOVE_LEFT; break;
-                        case GLFW_KEY_D: dir2 = GLFW_KEY_RIGHT; mov2 = MOVE_RIGHT; break;
+                        case GLFW_KEY_W: dir2Screen = GLFW_KEY_UP; break;
+                        case GLFW_KEY_S: dir2Screen = GLFW_KEY_DOWN; break;
+                        case GLFW_KEY_A: dir2Screen = GLFW_KEY_LEFT; break;
+                        case GLFW_KEY_D: dir2Screen = GLFW_KEY_RIGHT; break;
                     }
+
+                    const GLint dir2 = remapDirectionForOrbitCamera(this, dir2Screen);
+                    const Move mov2 = directionKeyToMove(dir2);
 
                     p2->UpdateSprite(mov2, gameMap, this->deltaTime);
                     if (!p2->isWalking || p2->facingDirKey != dir2) {
@@ -1434,6 +1504,36 @@ void Game::processInput() {
                 gBombs.push_back(bomb);
             }
         }
+    }
+
+    // Rotacion orbital de camaras 3D no-first-person con arrastre del raton.
+    const bool canOrbitCamera = (this->viewMode == ViewMode::Mode3D
+                              && (this->camera3DType == Camera3DType::PerspectiveFixed ||
+                                  this->camera3DType == Camera3DType::PerspectiveMobile)
+                              && this->window != nullptr);
+    if (canOrbitCamera) {
+        double mouseX = 0.0;
+        double mouseY = 0.0;
+        glfwGetCursorPos(this->window, &mouseX, &mouseY);
+
+        const bool dragPressed =
+            (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) ||
+            (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+
+        if (dragPressed) {
+            if (!this->cameraOrbitDragging) {
+                this->cameraOrbitDragging = true;
+                this->cameraOrbitLastMouseX = mouseX;
+            } else {
+                const double deltaX = mouseX - this->cameraOrbitLastMouseX;
+                this->cameraOrbitLastMouseX = mouseX;
+                this->cameraOrbitYaw -= (float)deltaX * 0.0080f;
+            }
+        } else {
+            this->cameraOrbitDragging = false;
+        }
+    } else {
+        this->cameraOrbitDragging = false;
     }
 
     // Pasar de windowed a fullscreen: Tab
@@ -1573,11 +1673,19 @@ void Game::render3D() {
         cameraTarget = mapCenter;
         up = glm::vec3(0.0f, 0.0f, -1.0f);
     } else if (camera3DType == Camera3DType::PerspectiveFixed) {
-        cameraPos = glm::vec3(mapRadius * 0.75f, mapRadius * 1.45f + 3.0f, mapRadius * 1.05f + 2.0f);
+        const float orbitRadius = mapRadius * 1.10f + 2.6f;
+        const float cameraHeight = mapRadius * 1.35f + 3.0f;
+        cameraPos = glm::vec3(std::sin(cameraOrbitYaw) * orbitRadius,
+                              cameraHeight,
+                              std::cos(cameraOrbitYaw) * orbitRadius);
         cameraTarget = mapCenter;
     } else if (camera3DType == Camera3DType::PerspectiveMobile) {
-        // Camara de seguimiento con orientacion fija: no gira segun direccion del jugador.
-        const glm::vec3 followOffset(0.0f, 4.2f, 6.8f);
+        // Camara de seguimiento orbital: mantiene foco en jugador y rota con el yaw de camara.
+        const float followDistance = 6.8f;
+        const float followHeight = 4.2f;
+        const glm::vec3 followOffset(std::sin(cameraOrbitYaw) * followDistance,
+                                     followHeight,
+                                     std::cos(cameraOrbitYaw) * followDistance);
         cameraPos = trackedPlayerCenter + followOffset;
         cameraTarget = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
     } else if (camera3DType == Camera3DType::FirstPerson) {
