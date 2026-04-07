@@ -3,6 +3,7 @@
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
 #include "bomb.hpp"
+#include "menu_intro.hpp"
 #include "enemies/leon.hpp"
 #include "enemies/bebe_lloron.hpp"
 #include "enemies/babosa.hpp"
@@ -44,35 +45,7 @@
 static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
-GLuint hudTexture;
-
-// ===== INTRO VIDEO ANIMATION =====
-SpriteAtlas introAtlas;
-GLuint introVideoTexture;
-int currentIntroFrame = 0;
-float introFrameTimer = 0.0f;
-const int INTRO_FRAME_COUNT = 120;
-const float INTRO_VIDEO_FPS = 15.0f;
-
-// ===== MENU GAMEMODE SELECTOR =====
-GLuint menuBackgroundTexture;   // Solo el fondo
-GLuint menuArrowTexture;
-SpriteAtlas menuBombAtlas;
-int menuSelection = 0;  // 0 = 1P, 1 = 2P
-const int NUM_MENU_OPTIONS = 2;
-
-// Posición de la flecha de selección
-float menuArrowX = -1.4f;               // Posición X
-float menuArrowY_Base = -0.255f;        // Posición Y para opción 0 (1P)
-float menuArrowY_Offset = 0.275f;       // Desplazamiento Y entre opciones
-
-// Animación de la flecha del menú
-float menuArrowAnimTimer = 0.0f;
-float menuArrowAnimSpeed = 0.1f;        // Cambiar sprite cada 0.5 segundos
-bool menuArrowSelected = false;         // true si se ha pulsado Enter
-float menuArrowSelectedAnimSpeed = 0.8f;
-float menuSelectedWaitTimer = 0.0f;     // Tiempo de espera tras la animación
-const float MENU_SELECTED_WAIT_TIME = 1.5f;  
+GLuint hudTexture;  
 
 // ============================== OpenGL: estado global ==============================
 
@@ -693,45 +666,13 @@ void Game::init() {
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        // Cargar atlas JSON
-        const std::string introAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasIntro.json");
-        if (!loadSpriteAtlasMinimal(introAtlasPath, introAtlas)) {
-            std::cerr << "Error cargando IntroAtlas.json\n";
-        }
-        
-        // Cargar texture (solo 1 PNG)
-        const std::string introTexPath = resolveAssetPath(introAtlas.imagePath);
-        introVideoTexture = LoadTexture(introTexPath.c_str());
-        if (introVideoTexture == 0) {
-            std::cerr << "Error cargando IntroAtlas.json\n";
-        }
-        
-        currentIntroFrame = 0;
-        introFrameTimer = 0.0f;
+        menuIntroScreen.initIntro();
         return;
     }
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreen.png").c_str());
-        if (menuBackgroundTexture == 0) {
-            std::cerr << "Error cargando MenuScreen.png\n";
-        }
-
-        const std::string menuBombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasMenuBomb.json");
-        if (!loadSpriteAtlasMinimal(menuBombAtlasPath, menuBombAtlas)) {
-            std::cerr << "Error cargando SpriteAtlasMenuBomb.json\n";
-        }
-
-        menuArrowTexture = LoadTexture(resolveAssetPath(menuBombAtlas.imagePath).c_str());
-        if (menuArrowTexture == 0) {
-            std::cerr << "Error cargando SpriteBombaAtlas.png\n";
-        }
-
-        menuSelection = 0;  // Reiniciar a 1P
-        menuArrowSelected = false;  // Resetear la selección
-        menuSelectedWaitTimer = 0.0f;
-        menuArrowAnimTimer = 0.0f;
+        menuIntroScreen.initMenu();
         return;
     }
 
@@ -914,24 +855,8 @@ void Game::processInput() {
 
     // ========== MENU: Flechas para seleccionar, Enter para confirmar ==========
     if (this->state == GAME_MENU) {
-        if (this->keys[GLFW_KEY_UP] == GLFW_PRESS || this->keys[GLFW_KEY_W] == GLFW_PRESS) {
-            menuSelection = (menuSelection - 1 + NUM_MENU_OPTIONS) % NUM_MENU_OPTIONS;  // Subimos en menú
-            this->keys[GLFW_KEY_UP] = GLFW_REPEAT;
-        }
-        if (this->keys[GLFW_KEY_DOWN] == GLFW_PRESS || this->keys[GLFW_KEY_S] == GLFW_PRESS) {
-            menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;  // Bajamos en menú
-            this->keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
-        }
-
-        // Enter para seleccionar/confirmar
-        if (this->keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
-            if (!menuArrowSelected) {
-                menuArrowSelected = true;
-                menuArrowAnimTimer = 0.0f;  // Resetear timer
-                this->keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
-            }
-        }
-        return;  // Solo procesamos navegación en menu
+        menuIntroScreen.processInputMenu(this->keys);
+        return;
     }
 
     // ========== JUEGO NORMAL ==========
@@ -1174,43 +1099,20 @@ void Game::update() {
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        introFrameTimer += deltaTime;
-        if (introFrameTimer >= 1.0f / INTRO_VIDEO_FPS) {
-            currentIntroFrame++;
-            introFrameTimer = 0.0f;
-            
-            if (currentIntroFrame >= INTRO_FRAME_COUNT) {
-                // Video terminó, pasar automáticamente a menú
-                this->state = GAME_MENU;
-                this->init();
-                return;
-            }
+        if (menuIntroScreen.updateIntro(deltaTime)) {
+            this->state = GAME_MENU;
+            this->init();
         }
         return;
     }
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        if (menuArrowSelected) {
-            // Alternar entre explosion_3 y explosion_4 lentamente
-            menuArrowAnimTimer += deltaTime;
-            if (menuArrowAnimTimer >= menuArrowSelectedAnimSpeed) {
-                menuArrowAnimTimer = 0.0f;
-            }
-            // Después de que termina la animación, esperar y luego pasar al juego
-            menuSelectedWaitTimer += deltaTime;
-            if (menuSelectedWaitTimer >= MENU_SELECTED_WAIT_TIME) {
-                // Pasar al juego
-                this->mode = (menuSelection == 0) ? GameMode::OnePlayer : GameMode::TwoPlayers;
-                this->state = GAME_PLAYING;
-                this->init();
-            }
-        } else {
-            // Alternar entre explosion_0 y explosion_1 rápidamente
-            menuArrowAnimTimer += deltaTime;
-            if (menuArrowAnimTimer >= menuArrowAnimSpeed) {
-                menuArrowAnimTimer = 0.0f;
-            }
+        menuIntroScreen.updateMenu(deltaTime);
+        if (menuIntroScreen.shouldStartGame()) {
+            this->mode = menuIntroScreen.getSelectedMode();
+            this->state = GAME_PLAYING;
+            this->init();
         }
         return;
     }
@@ -1325,44 +1227,8 @@ void Game::render() {
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
         glUseProgram(shader);
-        
-        // Aspect ratio de ventana e imagen
-        float windowAspect = (float)WIDTH / (float)HEIGHT;
-        float imageAspect = 640.0f / 360.0f;  // 16:9
-        
-        glm::mat4 projection;
-        
-        if (windowAspect > imageAspect) {
-            // Ventana más ancha: imagen llena altura, barras a los lados
-            float scale = windowAspect / imageAspect;
-            projection = glm::ortho(-scale, scale, -1.0f, 1.0f, -1.0f, 1.0f);
-        } else {
-            // Ventana más alta: imagen llena ancho, barras arriba/abajo
-            float scale = imageAspect / windowAspect;
-            projection = glm::ortho(-1.0f, 1.0f, -scale, scale, -1.0f, 1.0f);
-        }
-        
-        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
-        
-        glUniform1i(uniformTexture, 0);
-        
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, introVideoTexture);
-        glBindVertexArray(VAO);
-        
-        std::string frameName = "intro_frame_" + std::to_string(currentIntroFrame);
-        glm::vec4 uvRect;
-        
-        if (getUvRectForSprite(introAtlas, frameName, uvRect)) {
-            glm::mat4 model = glm::mat4(1.0f);
-            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
-            glUniform4f(uniformTintColor, 1.0f, 1.0f, 1.0f, 1.0f);
-            glUniform1i(uniformFlipX, 0);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        }
-        
-        glBindVertexArray(0);
+        menuIntroScreen.renderIntro(VAO, shader, uniformModel, uniformProjection, uniformTexture, 
+                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
         return;
     }
@@ -1370,67 +1236,8 @@ void Game::render() {
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
         glUseProgram(shader);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, menuBackgroundTexture); 
-        glBindVertexArray(VAO);
-        
-        float aspect = (float)WIDTH / (float)HEIGHT;
-        glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
-        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
-        
-        // Renderizar fondo del menú
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
-        model = glm::scale(model, glm::vec3(aspect, 1.0f, 1.0f)); // Escalar a aspect ratio
-        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-        
-        glm::vec4 tintColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tintColor));
-        
-        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
-        
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        // ===== RENDERIZAR FLECHA DE SELECCIÓN =====
-        glBindTexture(GL_TEXTURE_2D, menuArrowTexture);
-        
-        // Posición Y según la opción seleccionada
-        float arrowY = menuArrowY_Base - (menuSelection * menuArrowY_Offset);
-        float arrowX = menuArrowX;
-        
-        // Escala en NDC (70x70 pixels ≈ 0.1 en NDC)
-        float arrowScale = 0.1f;
-        
-        model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(arrowX, arrowY, 0.0f));
-        model = glm::scale(model, glm::vec3(arrowScale, arrowScale, 1.0f));
-        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-        
-        glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)));
-        
-        uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-        if (!menuBombAtlas.sprites.empty()) {
-            std::string spriteNameToUse;
-            
-            if (menuArrowSelected) {
-                // Cuando se ha pulsado Enter: explosion_2 fijo, luego alternar 3/4
-                if (menuArrowAnimTimer < 0.05f) {  // Mostrar explosion_2 brevemente
-                    spriteNameToUse = "explosion_2";
-                } else {
-                    spriteNameToUse = (menuArrowAnimTimer < menuArrowSelectedAnimSpeed * 0.5f) ? "explosion_3" : "explosion_4";
-                }
-            } else {
-                // Sin Enter: alternar explosion_0 y explosion_1
-                spriteNameToUse = (menuArrowAnimTimer < menuArrowAnimSpeed * 0.5f) ? "explosion_0" : "explosion_1";
-            }
-            
-            getUvRectForSprite(menuBombAtlas, spriteNameToUse, uvRect);
-        }
-        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-        
-        glBindVertexArray(0);
+        menuIntroScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                     uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
         return;
     }

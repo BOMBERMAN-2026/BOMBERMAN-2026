@@ -7,6 +7,8 @@
 #include <map>
 #include <string>
 
+#include "menu_intro.hpp"
+
 /*
  * bomberman.hpp
  * ------------
@@ -44,6 +46,9 @@ enum class Camera3DType {
     FirstPerson
 };
 
+// Include MenuIntroScreen after GameMode enum
+
+
 class Game
 {
     private:
@@ -59,6 +64,9 @@ class Game
         GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
         ViewMode viewMode = ViewMode::Mode2D;
         Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
+
+        // UI Screen
+        MenuIntroScreen menuIntroScreen;    // Gestiona intro y menú
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
