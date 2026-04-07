@@ -10,6 +10,7 @@
 #include "enemies/sol_pervertido.hpp"
 #include "enemies/king_bomber.hpp"
 #include "enemies/dron_bombardero.hpp"
+#include "enemies/dragon_joven.hpp"
 
 /*
  * bomberman.cpp
@@ -714,7 +715,7 @@ void Game::init() {
 
     // Cargar mapa
     gameMap = new GameMap();
-    if (!gameMap->loadFromFile("levels/level_01.txt"))
+    if (!gameMap->loadFromFile("levels/level_04.txt"))
     {
         std::cerr << "Error cargando mapa" << std::endl;
         std::exit(EXIT_FAILURE);
@@ -840,6 +841,12 @@ void Game::init() {
                 case EnemySpawnType::DronBombardero: {
                     auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
                     e->currentSpriteName = "dronrosa.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DragonJoven: {
+                    auto* e = new DragonJoven(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+                    e->currentSpriteName = "dragon.abajo.0";
                     enemy = e;
                     break;
                 }

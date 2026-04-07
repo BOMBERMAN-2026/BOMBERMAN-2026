@@ -136,7 +136,7 @@ void Bomb::detonate() {
     gameMap->destroyExposedPowerUp(gridRow, gridCol);
 
     // 2. Expandir en 4 direcciones
-    int dr[] = {0, -1, 0, 1};
+    int dr[] = {0, -1, 0, 1}; // RIGHT, UP, LEFT, DOWN
     int dc[] = {1, 0, -1, 0};
     float angles[] = {glm::radians(-90.0f), 0.0f, glm::radians(90.0f), glm::radians(180.0f)};
 

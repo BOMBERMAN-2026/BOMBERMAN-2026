@@ -63,7 +63,8 @@ enum class EnemySpawnType {
     FantasmaMortal,
     SolPervertido,
     KingBomber,
-    DronBombardero
+    DronBombardero,
+    DragonJoven
 };
 
 // Spawn de enemigo definido por nivel.

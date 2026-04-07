@@ -2,6 +2,7 @@
 #define DRAGON_JOVEN_HPP
 
 #include "enemy.hpp"
+#include "bomb.hpp" // Para ExplosionSegment
 
 /*
  * Dragón joven – 400 pts, 1 HP
@@ -21,8 +22,13 @@ private:
     float fireCooldown;      // Tiempo restante hasta poder escupir fuego otra vez
     float fireCooldownMax;   // Intervalo entre ataques de fuego
     int   fireRange;         // Alcance en casillas (2)
+    bool  isCharging;        // Está parpadeando antes de escupir fuego
+    float chargeTimer;       // Duración del parpadeo
     bool  isFiring;          // Está en animación de escupir fuego
     float fireAnimTimer;     // Duración de la animación de fuego
+    int   fireAnimFrame;     // Frame actual de la explosión (0..3)
+
+    std::vector<ExplosionSegment> fireSegments; // Tramos de fuego a dibujar
 
     // Comprueba si el jugador está alineado en línea recta (misma fila o columna)
     // y dentro del rango. Devuelve la dirección del disparo o NONE.

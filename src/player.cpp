@@ -272,8 +272,8 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     // --- Snap perpendicular al movimiento hacia el centro del tile actual ---
     // Impide que el jugador se cuele por las esquinas en pasillos de 1 tile.
     {
-        const float snapStrength = 0.25f;         // fracción de corrección por frame
-        const float snapMaxDist  = halfTile * 0.45f; // umbral máximo para aplicar
+        const float snapStrength = 0.60f;         // fracción de corrección por frame (más fuerte)
+        const float snapMaxDist  = halfTile * 0.85f; // umbral máximo para aplicar (más amplio para esquinas)
         int tr, tc;
         map->ndcToGrid(this->position, tr, tc);
         glm::vec2 tileCenter = map->gridToNDC(tr, tc);

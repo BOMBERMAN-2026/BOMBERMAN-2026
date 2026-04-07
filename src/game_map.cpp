@@ -56,6 +56,7 @@ static bool parseEnemySpawnTypeFromString(const std::string& raw, EnemySpawnType
     if (s == "sol" || s == "solpervertido" || s == "sol_pervertido") { outType = EnemySpawnType::SolPervertido; return true; }
     if (s == "king" || s == "kingbomber" || s == "king_bomber") { outType = EnemySpawnType::KingBomber; return true; }
     if (s == "dron" || s == "drone" || s == "dronbombardero" || s == "dron_bombardero") { outType = EnemySpawnType::DronBombardero; return true; }
+    if (s == "dragon" || s == "dragonjoven" || s == "dragon_joven") { outType = EnemySpawnType::DragonJoven; return true; }
 
     return false;
 }
