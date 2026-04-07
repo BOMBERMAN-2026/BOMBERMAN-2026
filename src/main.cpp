@@ -20,6 +20,8 @@
 
 Game* bomberman;
 
+extern int menuSelection;
+
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 
@@ -124,6 +126,14 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         bomberman->keys[key] = action;
 
         if (action == GLFW_PRESS) {
+            // ========== INTRO: Enter para ir al juego ==========
+            if (bomberman->state == GAME_INTRO && key == GLFW_KEY_SPACE) {
+                bomberman->state = GAME_MENU;
+                bomberman->init(); // Cargar textura del menú
+                return;
+            }
+
+            // ========== JUEGO NORMAL ==========
             if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
                 bomberman->lastDirKey = key;
             }

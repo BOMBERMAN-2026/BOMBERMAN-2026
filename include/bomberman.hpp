@@ -7,6 +7,8 @@
 #include <map>
 #include <string>
 
+#include "menu_intro.hpp"
+
 /*
  * bomberman.hpp
  * ------------
@@ -22,6 +24,8 @@
  */
 
 enum GameState {
+    GAME_INTRO,      // Pantalla de intro
+    GAME_MENU,       // Pantalla selección de modo de juego
     GAME_PLAYING
 };
 
@@ -42,6 +46,9 @@ enum class Camera3DType {
     FirstPerson
 };
 
+// Include MenuIntroScreen after GameMode enum
+
+
 class Game
 {
     private:
@@ -58,6 +65,9 @@ class Game
         ViewMode viewMode = ViewMode::Mode2D;
         Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
+        // UI Screen
+        MenuIntroScreen menuIntroScreen;    // Gestiona intro y menú
+
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
         int windowedXPos, windowedYPos;      // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
@@ -66,7 +76,7 @@ class Game
         // Timing
         float deltaTime = 0.0f;               // Tiempo entre frames (segundos)
 
-        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_PLAYING;}
+        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_INTRO;}
         ~Game();
 
         void setMode(GameMode m) { mode = m; } // Selecciona modo (se aplica al hacer init()).

@@ -1,0 +1,11 @@
+{
+  "ruta_imagen": "resources/sprites/intro_menu/SpriteBombaAtlas.png",
+  "tamano_imagen": { "ancho": 350, "alto": 70 },
+  "sprites": {
+    "explosion_0": {"x": 0, "y": 0, "w": 70, "h": 70},
+    "explosion_1": {"x": 70, "y": 0, "w": 70, "h": 70},
+    "explosion_2": {"x": 140, "y": 0, "w": 70, "h": 70},
+    "explosion_3": {"x": 210, "y": 0, "w": 70, "h": 70},
+    "explosion_4": {"x": 280, "y": 0, "w": 70, "h": 70}
+  }
+}
