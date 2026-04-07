@@ -70,18 +70,18 @@ public:
     ~Enemy() override;
 
     // Interfaz Entity
-    void Update() override = 0;
-    void Draw()   override = 0;
+    virtual void Update() = 0;
+    virtual void Draw() = 0;
 
-    bool takeDamage(const SpriteAtlas& atlas, int amount = 1); // Devuelve true si pasa de Alive -> Dying.
+    virtual bool takeDamage(const SpriteAtlas& atlas, int amount = 1); // Devuelve true si pasa de Alive -> Dying.
 
     bool isAlive() const { return lifeState == EnemyLifeState::Alive; }
     bool isDying() const { return lifeState == EnemyLifeState::Dying; }
     bool isDead() const { return lifeState == EnemyLifeState::Dead; }
 
-    void startDying(const SpriteAtlas& atlas); // Fuerza estado Dying e inicializa contador de frames.
+    virtual void startDying(const SpriteAtlas& atlas); // Fuerza estado Dying e inicializa contador de frames.
 
-    void updateDeath(float dt); // Avanza animación; al terminar marca Dead.
+    virtual void updateDeath(float dt); // Avanza animación; al terminar marca Dead.
 
     // Vincula las referencias externas (llamar después de construir)
     void setContext(const GameMap* map, const std::vector<Player*>* players);

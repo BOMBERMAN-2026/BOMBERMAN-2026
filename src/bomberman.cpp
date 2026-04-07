@@ -8,6 +8,9 @@
 #include "enemies/bebe_lloron.hpp"
 #include "enemies/babosa.hpp"
 #include "enemies/fantasma_mortal.hpp"
+#include "enemies/sol_pervertido.hpp"
+#include "enemies/king_bomber.hpp"
+#include "enemies/dron_bombardero.hpp"
 
 /*
  * bomberman.cpp
@@ -50,7 +53,7 @@ GLuint hudTexture;
 // ============================== OpenGL: estado global ==============================
 
 // Global variables for OpenGL
-GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX;
+GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX, uniformWhiteFlash;
 
 GLuint texture;
 
@@ -76,7 +79,7 @@ GLuint enemyTexture = 0;
 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 
-static std::vector<Enemy*> gEnemies;
+std::vector<Enemy*> gEnemies;
 std::vector<Bomb*> gBombs;
 
 static const char* viewModeToString(ViewMode mode) {
@@ -113,17 +116,35 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
-// Devuelve true si el tile donde está la entidad coincide con cualquier segmento
-// de la explosión ya calculada de la bomba.
+// Devuelve true si la caja de colisión de la entidad intersecta con el área de explosión
+// calculada de la bomba. Permite detectar daño si está parcialmente en la casilla.
 static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
     if (!map || !bomb) return false;
-    int er, ec;
-    map->ndcToGrid(entityPos, er, ec);
+    
+    // Asumimos un radio de colisión del 45% del tile para la entidad
+    float entityRadius = map->getTileSize() * 0.45f;
+    float tileHalf = map->getTileSize() * 0.5f;
 
     for (const auto& seg : bomb->explosionSegments) {
-        int sr, sc;
-        map->ndcToGrid(seg.pos, sr, sc);
-        if (sr == er && sc == ec) return true;
+        // La explosión ocupa casi todo el segmento/tile
+        float exMin = seg.pos.x - tileHalf;
+        float exMax = seg.pos.x + tileHalf;
+        float eyMin = seg.pos.y - tileHalf;
+        float eyMax = seg.pos.y + tileHalf;
+
+        // La caja de colisión de la entidad
+        float entMinX = entityPos.x - entityRadius;
+        float entMaxX = entityPos.x + entityRadius;
+        float entMinY = entityPos.y - entityRadius;
+        float entMaxY = entityPos.y + entityRadius;
+
+        // Comprobar intersección AABB (Eje X e Y)
+        bool intersectX = (entMaxX > exMin) && (entMinX < exMax);
+        bool intersectY = (entMaxY > eyMin) && (entMinY < eyMax);
+
+        if (intersectX && intersectY) {
+            return true;
+        }
     }
     return false;
 }
@@ -343,6 +364,7 @@ void CompileShaders()
     uniformProjection = glGetUniformLocation(shader, "projection");
     uniformTexture = glGetUniformLocation(shader, "ourTexture");
     uniformTintColor = glGetUniformLocation(shader, "tintColor");
+    uniformWhiteFlash = glGetUniformLocation(shader, "whiteFlash");
     uniformUvRect = glGetUniformLocation(shader, "uvRect");
     uniformFlipX = glGetUniformLocation(shader, "flipX");
 }
@@ -778,47 +800,70 @@ void Game::init() {
         }
         gEnemies.clear();
 
-        // Crear Leon
+        // Crear enemigos según el nivel (directivas `enemy` en el TXT).
         {
-            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
-            Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.1f);
-            leon->setContext(gameMap, &gPlayers);
-            leon->currentSpriteName = "leon.derecha.0";
-            gEnemies.push_back(leon);
-        }
-
-        // Crear Babosa
-        {
-            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
-            Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
-            babosa->setContext(gameMap, &gPlayers);
-            babosa->currentSpriteName = "babosa.derecha.0";
-            gEnemies.push_back(babosa);
-        }
-
-        // Crear Bebe Lloron
-        {
-            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
-            BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
-            bebe->setContext(gameMap, &gPlayers);
-            bebe->currentSpriteName = "bebe.derecha.0";
-            gEnemies.push_back(bebe);
-        }
-
-        // Crear Fantasma Mortal
-        {
-            glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 2.0f);
-            {
-                int r, c;
-                gameMap->ndcToGrid(spawnPos, r, c);
-                if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols() || !gameMap->isWalkable(r, c)) {
-                    spawnPos = gameMap->getSpawnPosition(0);
-                }
+            const auto& spawns = gameMap->getEnemySpawns();
+            if (spawns.empty()) {
+                std::cerr << "No hay enemigos definidos en el nivel (directivas 'enemy').\n";
             }
-            FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
-            fantasma->setContext(gameMap, &gPlayers);
-            fantasma->currentSpriteName = "fantasma.derecha.0";
-            gEnemies.push_back(fantasma);
+            for (const auto& s : spawns) {
+                glm::vec2 pos = gameMap->gridToNDC(s.row, s.col);
+                // Evita spawnear fuera de casillas caminables (por error en el TXT).
+                if (!gameMap->isWalkable(s.row, s.col)) {
+                    std::cerr << "Enemy spawn no walkable (row=" << s.row << ", col=" << s.col << ")\n";
+                    continue;
+                }
+
+                Enemy* enemy = nullptr;
+                switch (s.type) {
+                    case EnemySpawnType::Leon: {
+                        auto* e = new Leon(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.10f);
+                        e->currentSpriteName = "leon.abajo.0";
+                        enemy = e;
+                        break;
+                    }
+                    case EnemySpawnType::Babosa: {
+                        auto* e = new Babosa(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
+                        e->currentSpriteName = "babosa.abajo.0";
+                        enemy = e;
+                        break;
+                    }
+                    case EnemySpawnType::BebeLloron: {
+                        auto* e = new BebeLloron(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
+                        e->currentSpriteName = "bebe.derecha.0";
+                        enemy = e;
+                        break;
+                    }
+                    case EnemySpawnType::FantasmaMortal: {
+                        auto* e = new FantasmaMortal(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
+                        e->currentSpriteName = "fantasma.derecha.0";
+                        enemy = e;
+                        break;
+                    }
+                    case EnemySpawnType::SolPervertido: {
+                        auto* e = new SolPervertido(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+                        e->currentSpriteName = "sol.grande.0";
+                        enemy = e;
+                        break;
+                    }
+                    case EnemySpawnType::KingBomber: {
+                        auto* e = new KingBomber(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+                        e->currentSpriteName = "kingbomber1.abajo.0";
+                        enemy = e;
+                        break;
+                    }
+                    case EnemySpawnType::DronBombardero: {
+                        auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
+                        e->currentSpriteName = "dronrosa.abajo.0";
+                        enemy = e;
+                        break;
+                    }
+                }
+
+                if (!enemy) continue;
+                enemy->setContext(gameMap, &gPlayers);
+                gEnemies.push_back(enemy);
+            }
         }
 
         // Limpiar bombas anteriores
@@ -1157,8 +1202,22 @@ void Game::update() {
     // Actualizar jugador
     for (auto* p : gPlayers) {
         if (!p) continue;
+        const PlayerLifeState prevLifeState = p->lifeState;
         p->deltaTime = deltaTime;
         p->Update();
+
+        // Si acaba de respawnear:
+        // - El Detonator se pierde al morir (ver Player::respawn).
+        // - Para evitar bombas "atascadas" (remoteControlled=true sin posibilidad de detonarlas),
+        //   convertimos sus bombas remotas a mecha normal.
+        if (prevLifeState != PlayerLifeState::Alive && p->lifeState == PlayerLifeState::Alive && !p->hasRemoteControl) {
+            for (auto* b : gBombs) {
+                if (!b) continue;
+                if (b->state == BombState::FUSE && b->ownerIndex == p->playerId && b->remoteControlled) {
+                    b->remoteControlled = false;
+                }
+            }
+        }
 
         // Comprobar si el jugador recoge un power-up
         if (p->isAlive() && gameMap) {
@@ -1197,6 +1256,14 @@ void Game::update() {
                 if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
                 if (explosionHitsEntity(gameMap, b, enemy->position)) {
                     enemy->takeDamage(gEnemyAtlas, 999);
+                }
+            }
+            // Explosión: si toca a otra bomba que aún no ha explotado, la detona.
+            for (auto* otherB : gBombs) {
+                if (otherB && otherB != b && otherB->state == BombState::FUSE) {
+                    if (explosionHitsEntity(gameMap, b, otherB->position)) {
+                        otherB->detonate();
+                    }
                 }
             }
         }
@@ -1328,8 +1395,19 @@ void Game::render() {
             if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols()) continue;
 
             const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.55f);
-            const glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
-                                             : glm::vec3(0.88f, 0.18f, 0.18f);
+            glm::vec3 color = (i == 0) ? glm::vec3(0.92f, 0.92f, 0.92f)
+                                        : glm::vec3(0.88f, 0.18f, 0.18f);
+            if (p->invincible) {
+                float hz = 8.0f;
+                if (p->invincibilityFromPowerUp) {
+                    hz = (p->invincibilityTimer > 4.0f) ? 6.0f : 18.0f;
+                }
+                const float t = (float)glfwGetTime();
+                const int phase = (int)(t * hz);
+                if (phase % 2 == 0) {
+                    color = glm::vec3(1.0f, 1.0f, 1.0f);
+                }
+            }
             drawCube3D(center, glm::vec3(0.60f, 1.10f, 0.60f), color);
         }
 
@@ -1387,12 +1465,14 @@ void Game::render() {
     // Texture unit 0
     glUniform1i(uniformTexture, 0);
 
+    // Por defecto, no aplicar flash blanco (solo lo usa el jugador en invulnerabilidad).
+    glUniform1f(uniformWhiteFlash, 0.0f);
+
     // === 1. Renderizar mapa (fondo) ===
     gameMap->render(VAO, mapTexture, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-
     gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
@@ -1420,6 +1500,10 @@ void Game::render() {
         if (!p) continue;
         p->Draw();
     }
+
+    // Importante: `Player::Draw()` puede dejar `whiteFlash=1` (parpadeo).
+    // Reseteamos antes de dibujar otros sprites con el mismo shader.
+    glUniform1f(uniformWhiteFlash, 0.0f);
 
     glBindVertexArray(0);
 

@@ -132,6 +132,8 @@ void Bomb::detonate() {
     explosionSegments.clear();
     // 1. Centro
     explosionSegments.push_back({ position, "explosion", 0.0f });
+    // Regla: si una explosión alcanza un ítem ya suelto en el suelo, desaparece.
+    gameMap->destroyExposedPowerUp(gridRow, gridCol);
 
     // 2. Expandir en 4 direcciones
     int dr[] = {0, -1, 0, 1};
@@ -139,24 +141,33 @@ void Bomb::detonate() {
     float angles[] = {glm::radians(-90.0f), 0.0f, glm::radians(90.0f), glm::radians(180.0f)};
 
     for (int i = 0; i < 4; i++) {
-        for (int d = 1; d < power; d++) {
+        for (int d = 1; d <= power; d++) {
             int r = gridRow + dr[i] * d;
             int c = gridCol + dc[i] * d;
 
             if (!gameMap->isWalkable(r, c)) {
+                // Muro: destruirlo si es destructible (su propia animación se encarga),
+                // pero NO dibujar fuego encima del bloque.
                 gameMap->destroyTile(r, c);
                 break;
             }
 
-            bool isLast = (d == power - 1);
-            if (!isLast && !gameMap->isWalkable(r + dr[i], c + dc[i])) {
-                isLast = true;
+            // Regla: si hay un power-up suelto en el suelo, la explosión lo destruye.
+            gameMap->destroyExposedPowerUp(r, c);
+
+            // Tile libre: determinar si es el último segmento visible
+            bool isLast = (d == power);
+            if (!isLast) {
+                // Lookahead: si la siguiente celda es muro, este es el "end" visual
+                int nr = r + dr[i];
+                int nc = c + dc[i];
+                if (!gameMap->isWalkable(nr, nc)) {
+                    isLast = true;
+                }
             }
 
             std::string baseName = isLast ? "explosion_end" : "explosion_mid";
             explosionSegments.push_back({ gameMap->gridToNDC(r, c), baseName, angles[i] });
-
-            if (isLast) break;
         }
     }
 }

@@ -4,12 +4,12 @@
 #include "sprite_atlas.hpp"
 #include "bomb.hpp"
 #include <cstdlib>
-#include <cmath>
+    #include <cmath>
 
-Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
-             int hp, int score, bool passSoftBlocks, bool boss)
-    : Entity(pos, size, speed),
-      hitPoints(hp), maxHitPoints(hp), scoreValue(score),
+    Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
+                int hp, int score, bool passSoftBlocks, bool boss)
+        : Entity(pos, size, speed),
+        hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
     lifeState(EnemyLifeState::Alive),
     facing(EnemyDirection::LEFT),
