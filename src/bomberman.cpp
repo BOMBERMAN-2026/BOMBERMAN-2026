@@ -1689,9 +1689,10 @@ void Game::render3D() {
         cameraPos = trackedPlayerCenter + followOffset;
         cameraTarget = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
     } else if (camera3DType == Camera3DType::FirstPerson) {
-        const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.82f, 0.0f) - trackedPlayerForward * 0.15f;
+        // Altura de ojos mas baja para mantener los muros delante y evitar ver por encima.
+        const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f, 0.0f) - trackedPlayerForward * 0.10f;
         cameraPos = eye;
-        cameraTarget = eye + trackedPlayerForward * 3.0f + glm::vec3(0.0f, -0.15f, 0.0f);
+        cameraTarget = eye + trackedPlayerForward * 2.8f + glm::vec3(0.0f, -0.28f, 0.0f);
     }
 
     const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
