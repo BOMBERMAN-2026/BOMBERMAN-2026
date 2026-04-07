@@ -87,7 +87,7 @@
       "type": "indestructible"
     },
     "9": {
-      "x": 555,
+      "x": 770,
       "y": 360,
       "w": 48,
       "h": 48,
@@ -195,6 +195,15 @@
       "nombre": "muro_destructible",
       "walkable": false,
       "type": "destructible"
+    },
+    "21": {
+      "x": 555,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_sombra_arriba_indestructible",
+      "walkable": true,
+      "type": "floor"
     },
     "bomb.0": {
       "x": 1090,

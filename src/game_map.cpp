@@ -419,11 +419,20 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
                 if (wallLeft && wallUp) floorId = 6;   // Esquina arriba izquierda
                 else if (wallLeft)      floorId = 9;   // Sombra izquierda (por muro/barrera)
                 else if (wallUp)        floorId = 7;   // Sombra arriba (por muro/barrera)
-                else if (indestUp && indestLeft) floorId = 9;  // Arriba e izquierda por indestructible -> Sombra izquierda
-                else if (indestUp)       floorId = 11;  // Sombra arriba (por indestructible)
-                else if (indestLeft)     floorId = 9;   // Sombra izquierda (por indestructible)
+                else if (indestUp)      floorId = 11;  // Sombra arriba (por indestructible)
+                else if (indestLeft)    floorId = 21;  // Sombra izquierda (por indestructible)
                 
                 displayId = floorId;
+            } else if (block.type == BlockType::FLOOR) {
+                // Forzar visualmente el sprite si es un suelo base
+                bool indestLeft = (c > 0 && grid[r][c-1].type == BlockType::INDESTRUCTIBLE);
+                bool indestUp   = (r > 0 && grid[r-1][c].type == BlockType::INDESTRUCTIBLE);
+                
+                if (indestUp) {
+                    displayId = 11;
+                } else if (indestLeft) {
+                    displayId = 21;
+                }
             }
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
             float scaleX = scale;
