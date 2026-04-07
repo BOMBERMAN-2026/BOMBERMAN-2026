@@ -274,8 +274,12 @@ void DragonJoven::Draw() {
                 if (getUvRectForSprite(gBombAtlas, segSpriteName, segUvRect)) {
                     glm::mat4 segModel = glm::mat4(1.0f);
                     
+                    // AQUI PUEDES AJUSTAR LA ALTURA DEL FUEGO. 
+                    // Valores más negativos (-) bajan más el fuego, valores más positivos (+) lo suben.
+                    float visualOffsetY = -halfTile * 0.15f; 
+
                     // El fuego se dibuja exactamente en las tiles pre-calculadas (que empiezan desde la siguiente al dragón)
-                    segModel = glm::translate(segModel, glm::vec3(seg.pos.x, seg.pos.y, 0.0f));
+                    segModel = glm::translate(segModel, glm::vec3(seg.pos.x, seg.pos.y + visualOffsetY, 0.0f));
                     segModel = glm::rotate(segModel, seg.rotation, glm::vec3(0.0f, 0.0f, 1.0f));
                     
                     // Dejar un pequeño espacio entre la boca del dragón y el primer segmento de fuego
@@ -287,8 +291,15 @@ void DragonJoven::Draw() {
                             gap = halfTile * 0.2f; // Margen menor para vertical
                         }
                     }
+                    
+                    // Hacer el fuego más delgado en los primeros 2 frames (fireAnimFrame 0 y 1)
+                    float thicknessScale = 1.0f;
+                    if (fireAnimFrame == 0 || fireAnimFrame == 1) {
+                        thicknessScale = 0.5f; // Un 50% del grosor original
+                    }
+
                     segModel = glm::translate(segModel, glm::vec3(0.0f, gap / 2.0f, 0.0f));
-                    segModel = glm::scale(segModel, glm::vec3(halfTile, halfTile - (gap / 2.0f), 1.0f));
+                    segModel = glm::scale(segModel, glm::vec3(halfTile * thicknessScale, halfTile - (gap / 2.0f), 1.0f));
 
                     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(segModel));
                     glUniform4fv(uniformUvRect, 1, glm::value_ptr(segUvRect));
