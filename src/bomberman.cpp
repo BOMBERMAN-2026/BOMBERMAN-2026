@@ -47,14 +47,6 @@ GLuint mapTexture;
 GLuint hudTexture;
 
 // ===== INTRO VIDEO ANIMATION =====
-//GLuint introVideoAtlas;
-//int currentIntroFrame = 0;
-//float introFrameTimer = 0.0f;
-//const int INTRO_FRAME_COUNT = 110;      // Frames totales
-//const int INTRO_FRAMES_PER_ROW = 12;    // Columnas del grid
-//const int INTRO_FRAME_WIDTH = 640;      // Ancho de cada frame en píxeles
-//const int INTRO_FRAME_HEIGHT = 360;      // Alto de cada frame en píxeles
-//const float INTRO_VIDEO_FPS = 15.0f;    // Frames por segundo
 SpriteAtlas introAtlas;
 GLuint introVideoTexture;
 int currentIntroFrame = 0;
@@ -62,9 +54,17 @@ float introFrameTimer = 0.0f;
 const int INTRO_FRAME_COUNT = 120;
 const float INTRO_VIDEO_FPS = 15.0f;
 
-GLuint menuTexture[2];  // [0] = imagen 1P, [1] = imagen 2P
+// ===== MENU GAMEMODE SELECTOR =====
+GLuint menuBackgroundTexture;   // Solo el fondo
+GLuint menuArrowTexture;
+SpriteAtlas menuBombAtlas;
 int menuSelection = 0;  // 0 = 1P, 1 = 2P
 const int NUM_MENU_OPTIONS = 2;
+
+// Posición de la flecha de selección (ajusta estos valores)
+float menuArrowX = -1.4f;          // Posición X
+float menuArrowY_Base = -0.255f;      // Posición Y para opción 0 (1P)
+float menuArrowY_Offset = 0.275f;    // Desplazamiento Y entre opciones
 
 // ============================== OpenGL: estado global ==============================
 
@@ -705,11 +705,21 @@ void Game::init() {
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        menuTexture[0] = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/Menu_Screen1.png").c_str());
-        menuTexture[1] = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/Menu_Screen2.png").c_str());
-        if (menuTexture[0] == 0 || menuTexture[1] == 0) {
-            std::cerr << "Advertencia: No se pudo cargar textura del menu.\n";
+        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreen.png").c_str());
+        if (menuBackgroundTexture == 0) {
+            std::cerr << "Error cargando MenuScreen.png\n";
         }
+
+        const std::string menuBombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasMenuBomb.json");
+        if (!loadSpriteAtlasMinimal(menuBombAtlasPath, menuBombAtlas)) {
+            std::cerr << "Error cargando SpriteAtlasMenuBomb.json\n";
+        }
+
+        menuArrowTexture = LoadTexture(resolveAssetPath(menuBombAtlas.imagePath).c_str());
+        if (menuArrowTexture == 0) {
+            std::cerr << "Error cargando SpriteBombaAtlas.png\n";
+        }
+
         menuSelection = 0;  // Reiniciar a 1P
         return;
     }
@@ -1320,16 +1330,17 @@ void Game::render() {
     if (this->state == GAME_MENU) {
         glUseProgram(shader);
         glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, menuTexture[menuSelection]); 
+        glBindTexture(GL_TEXTURE_2D, menuBackgroundTexture); 
         glBindVertexArray(VAO);
         
-        glm::mat4 projection = glm::ortho(0.0f, (float)WIDTH, 0.0f, (float)HEIGHT);
+        float aspect = (float)WIDTH / (float)HEIGHT;
+        glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
         glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
         
         // Renderizar fondo del menú
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 0.0f));
-        model = glm::scale(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 1.0f));
+        model = glm::translate(model, glm::vec3(0.0f, 0.0f, 0.0f));
+        model = glm::scale(model, glm::vec3(aspect, 1.0f, 1.0f)); // Escalar a aspect ratio
         glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
         
         glm::vec4 tintColor(1.0f, 1.0f, 1.0f, 1.0f);
@@ -1339,6 +1350,33 @@ void Game::render() {
         glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
         
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        // ===== RENDERIZAR FLECHA DE SELECCIÓN =====
+        glBindTexture(GL_TEXTURE_2D, menuArrowTexture);
+        
+        // Posición Y según la opción seleccionada
+        float arrowY = menuArrowY_Base - (menuSelection * menuArrowY_Offset);
+        float arrowX = menuArrowX;
+        
+        // Escala en NDC (70x70 pixels ≈ 0.1 en NDC)
+        float arrowScale = 0.1f;
+        
+        model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(arrowX, arrowY, 0.0f));
+        model = glm::scale(model, glm::vec3(arrowScale, arrowScale, 1.0f));
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)));
+        
+        uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
+        if (!menuBombAtlas.sprites.empty()) {
+            getUvRectForSprite(menuBombAtlas, "explosion_0", uvRect);
+        }
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        
+        glBindVertexArray(0);
+        glUseProgram(0);
         return;
     }
 
