@@ -45,7 +45,23 @@ static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
 GLuint hudTexture;
-GLuint introTexture;
+
+// ===== INTRO VIDEO ANIMATION =====
+//GLuint introVideoAtlas;
+//int currentIntroFrame = 0;
+//float introFrameTimer = 0.0f;
+//const int INTRO_FRAME_COUNT = 110;      // Frames totales
+//const int INTRO_FRAMES_PER_ROW = 12;    // Columnas del grid
+//const int INTRO_FRAME_WIDTH = 640;      // Ancho de cada frame en píxeles
+//const int INTRO_FRAME_HEIGHT = 360;      // Alto de cada frame en píxeles
+//const float INTRO_VIDEO_FPS = 15.0f;    // Frames por segundo
+SpriteAtlas introAtlas;
+GLuint introVideoTexture;
+int currentIntroFrame = 0;
+float introFrameTimer = 0.0f;
+const int INTRO_FRAME_COUNT = 120;
+const float INTRO_VIDEO_FPS = 15.0f;
+
 GLuint menuTexture[2];  // [0] = imagen 1P, [1] = imagen 2P
 int menuSelection = 0;  // 0 = 1P, 1 = 2P
 const int NUM_MENU_OPTIONS = 2;
@@ -669,12 +685,21 @@ void Game::init() {
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        // Cargar solo la textura de intro
-        const std::string introPath = resolveAssetPath("resources/sprites/intro_menu/Title_Screen.png");
-        introTexture = LoadTexture(introPath.c_str());
-        if (introTexture == 0) {
-            std::cerr << "Aviso: No se pudo cargar intro: " << introPath << std::endl;
+        // Cargar atlas JSON
+        const std::string introAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasIntro.json");
+        if (!loadSpriteAtlasMinimal(introAtlasPath, introAtlas)) {
+            std::cerr << "Error cargando IntroAtlas.json\n";
         }
+        
+        // Cargar texture (solo 1 PNG)
+        const std::string introTexPath = resolveAssetPath(introAtlas.imagePath);
+        introVideoTexture = LoadTexture(introTexPath.c_str());
+        if (introVideoTexture == 0) {
+            std::cerr << "Error cargando IntroAtlas.json\n";
+        }
+        
+        currentIntroFrame = 0;
+        introFrameTimer = 0.0f;
         return;
     }
 
@@ -1119,7 +1144,19 @@ void Game::update() {
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        return; // No hacer nada, solo esperar a que presione Enter
+        introFrameTimer += deltaTime;
+        if (introFrameTimer >= 1.0f / INTRO_VIDEO_FPS) {
+            currentIntroFrame++;
+            introFrameTimer = 0.0f;
+            
+            if (currentIntroFrame >= INTRO_FRAME_COUNT) {
+                // Video terminó, pasar automáticamente a menú
+                this->state = GAME_MENU;
+                this->init();
+                return;
+            }
+        }
+        return;
     }
 
     // ========== MENU ==========
@@ -1237,25 +1274,45 @@ void Game::render() {
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
         glUseProgram(shader);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, introTexture);
-        glBindVertexArray(VAO);
         
-        glm::mat4 projection = glm::ortho(0.0f, (float)WIDTH, 0.0f, (float)HEIGHT);
+        // Aspect ratio de ventana e imagen
+        float windowAspect = (float)WIDTH / (float)HEIGHT;
+        float imageAspect = 640.0f / 360.0f;  // 16:9
+        
+        glm::mat4 projection;
+        
+        if (windowAspect > imageAspect) {
+            // Ventana más ancha: imagen llena altura, barras a los lados
+            float scale = windowAspect / imageAspect;
+            projection = glm::ortho(-scale, scale, -1.0f, 1.0f, -1.0f, 1.0f);
+        } else {
+            // Ventana más alta: imagen llena ancho, barras arriba/abajo
+            float scale = imageAspect / windowAspect;
+            projection = glm::ortho(-1.0f, 1.0f, -scale, scale, -1.0f, 1.0f);
+        }
+        
         glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
         
-        glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 0.0f));
-        model = glm::scale(model, glm::vec3(WIDTH * 0.5f, HEIGHT * 0.5f, 1.0f));
-        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform1i(uniformTexture, 0);
         
-        glm::vec4 tintColor(1.0f, 1.0f, 1.0f, 1.0f);
-        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tintColor));
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, introVideoTexture);
+        glBindVertexArray(VAO);
         
-        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        std::string frameName = "intro_frame_" + std::to_string(currentIntroFrame);
+        glm::vec4 uvRect;
         
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        if (getUvRectForSprite(introAtlas, frameName, uvRect)) {
+            glm::mat4 model = glm::mat4(1.0f);
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+            glUniform4f(uniformTintColor, 1.0f, 1.0f, 1.0f, 1.0f);
+            glUniform1i(uniformFlipX, 0);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+        
+        glBindVertexArray(0);
+        glUseProgram(0);
         return;
     }
 
