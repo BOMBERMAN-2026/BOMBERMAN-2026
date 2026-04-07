@@ -389,11 +389,11 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
 
     const int rows = map->getRows();
     const int cols = map->getCols();
-    if (rows <= 0 || cols <= 0) {
+    if (rows <= 0 || cols <= 0 || width <= 0 || height <= 0) {
         return;
     }
 
-    const float safeHeight = (height > 0) ? (float)height : 1.0f;
+    const float safeHeight = (float)height;
     const float aspect = std::max(0.01f, (float)width / safeHeight);
     const float mapRatio = (float)cols / (float)rows;
 
@@ -411,13 +411,14 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
     const float panelTop = 1.0f - margin;
     const float panelLeft = panelRight - panelWidth;
     const float panelBottom = panelTop - panelHeight;
-
     const float panelCenterX = (panelLeft + panelRight) * 0.5f;
     const float panelCenterY = (panelTop + panelBottom) * 0.5f;
+    const float panelTileW = panelWidth / (float)cols;
+    const float panelTileH = panelHeight / (float)rows;
 
-    glm::vec4 panelUv(0.0f, 0.0f, 1.0f, 1.0f);
-    if (!map->getUvRectForSpriteId(10, panelUv)) {
-        map->getUvRectForTile(0, 0, panelUv);
+    glm::vec4 frameUv(0.0f, 0.0f, 1.0f, 1.0f);
+    if (!map->getUvRectForSpriteId(10, frameUv)) {
+        map->getUvRectForTile(0, 0, frameUv);
     }
 
     auto drawQuadNdc = [&](float centerX,
@@ -426,7 +427,8 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
                            float halfH,
                            GLuint texId,
                            const glm::vec4& uvRect,
-                           const glm::vec4& tint) {
+                           const glm::vec4& tint,
+                           float flipX = 0.0f) {
         if (texId == 0) {
             return;
         }
@@ -438,10 +440,20 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
         glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
         glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
         glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+        glUniform1f(uniformFlipX, flipX);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, texId);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    };
+
+    auto spriteAspect = [](const SpriteAtlas& atlas, const std::string& spriteName) {
+        auto it = atlas.sprites.find(spriteName);
+        if (it == atlas.sprites.end() || it->second.h <= 0) {
+            return 1.0f;
+        }
+        const float raw = (float)it->second.w / (float)it->second.h;
+        return std::max(0.35f, std::min(2.50f, raw));
     };
 
     glDisable(GL_DEPTH_TEST);
@@ -450,53 +462,191 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
     const glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
     glUniform1i(uniformTexture, 0);
-    glUniform1f(uniformFlipX, 0.0f);
     glBindVertexArray(VAO);
 
-    // Marco y fondo del mini-mapa.
+    // Marco del panel.
     drawQuadNdc(panelCenterX,
                 panelCenterY,
                 panelWidth * 0.5f + 0.02f,
                 panelHeight * 0.5f + 0.02f,
                 mapTexture,
-                panelUv,
-                glm::vec4(0.04f, 0.05f, 0.06f, 0.92f));
+                frameUv,
+                glm::vec4(0.05f, 0.05f, 0.05f, 0.96f));
 
     drawQuadNdc(panelCenterX,
                 panelCenterY,
                 panelWidth * 0.5f,
                 panelHeight * 0.5f,
                 mapTexture,
-                panelUv,
-                glm::vec4(0.15f, 0.18f, 0.21f, 0.86f));
+                frameUv,
+                glm::vec4(0.28f, 0.28f, 0.28f, 1.0f));
 
-    auto drawMarker = [&](const glm::vec2& ndcPos, const glm::vec4& tint, float halfScale) {
-        int row = 0;
-        int col = 0;
-        map->ndcToGrid(ndcPos, row, col);
-        if (row < 0 || row >= rows || col < 0 || col >= cols) {
+    // Recorta todo lo que se dibuje para no salir del minimapa.
+    auto clampInt = [](int v, int lo, int hi) {
+        return std::max(lo, std::min(v, hi));
+    };
+
+    const float leftNdc = panelLeft / aspect;
+    const float rightNdc = panelRight / aspect;
+    const float bottomNdc = panelBottom;
+    const float topNdc = panelTop;
+
+    int scissorLeft = (int)std::floor(((leftNdc * 0.5f) + 0.5f) * (float)width);
+    int scissorRight = (int)std::ceil(((rightNdc * 0.5f) + 0.5f) * (float)width);
+    int scissorBottom = (int)std::floor(((bottomNdc * 0.5f) + 0.5f) * (float)height);
+    int scissorTop = (int)std::ceil(((topNdc * 0.5f) + 0.5f) * (float)height);
+
+    scissorLeft = clampInt(scissorLeft, 0, width);
+    scissorRight = clampInt(scissorRight, 0, width);
+    scissorBottom = clampInt(scissorBottom, 0, height);
+    scissorTop = clampInt(scissorTop, 0, height);
+
+    const int scissorWidth = std::max(0, scissorRight - scissorLeft);
+    const int scissorHeight = std::max(0, scissorTop - scissorBottom);
+    const bool hasValidScissor = (scissorWidth > 0 && scissorHeight > 0);
+
+    if (hasValidScissor) {
+        glEnable(GL_SCISSOR_TEST);
+        glScissor(scissorLeft, scissorBottom, scissorWidth, scissorHeight);
+    }
+
+    // Tile a tile con las UV reales del atlas del mapa.
+    for (int row = 0; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            glm::vec4 tileUv(0.0f, 0.0f, 1.0f, 1.0f);
+            if (!map->getUvRectForTile(row, col, tileUv)) {
+                continue;
+            }
+
+            const float x = panelLeft + ((float)col + 0.5f) * panelTileW;
+            const float y = panelTop - ((float)row + 0.5f) * panelTileH;
+            drawQuadNdc(x,
+                        y,
+                        panelTileW * 0.5f,
+                        panelTileH * 0.5f,
+                        mapTexture,
+                        tileUv,
+                        glm::vec4(1.0f));
+        }
+    }
+
+    const glm::vec2 cell00 = map->gridToNDC(0, 0);
+    const glm::vec2 cell01 = (cols > 1)
+        ? map->gridToNDC(0, 1)
+        : glm::vec2(cell00.x + map->getTileSize(), cell00.y);
+    const glm::vec2 cell10 = (rows > 1)
+        ? map->gridToNDC(1, 0)
+        : glm::vec2(cell00.x, cell00.y - map->getTileSize());
+
+    const float dx = (std::abs(cell01.x - cell00.x) > 0.0001f) ? (cell01.x - cell00.x) : map->getTileSize();
+    const float dy = (std::abs(cell10.y - cell00.y) > 0.0001f) ? (cell10.y - cell00.y) : -map->getTileSize();
+
+    auto ndcToMiniMap = [&](const glm::vec2& ndcPos, float& outX, float& outY) {
+        const float colF = (ndcPos.x - cell00.x) / dx;
+        const float rowF = (ndcPos.y - cell00.y) / dy;
+
+        if (colF < -0.5f || colF > (float)cols - 0.5f || rowF < -0.5f || rowF > (float)rows - 0.5f) {
+            return false;
+        }
+
+        const float xNorm = (colF + 0.5f) / (float)cols;
+        const float yNorm = (rowF + 0.5f) / (float)rows;
+
+        outX = panelLeft + xNorm * panelWidth;
+        outY = panelTop - yNorm * panelHeight;
+        return true;
+    };
+
+    auto drawMiniActor = [&](const glm::vec2& ndcPos,
+                             GLuint texId,
+                             const glm::vec4& uvRect,
+                             float actorAspect,
+                             float actorFlipX = 0.0f) {
+        float x = 0.0f;
+        float y = 0.0f;
+        if (!ndcToMiniMap(ndcPos, x, y)) {
             return;
         }
 
-        const float xNorm = ((float)col + 0.5f) / (float)cols;
-        const float yNorm = ((float)row + 0.5f) / (float)rows;
+        float halfH = std::max(panelTileH * 0.44f, panelHeight * 0.0105f);
+        float halfW = halfH * actorAspect;
 
-        const float x = panelLeft + xNorm * panelWidth;
-        const float y = panelTop - yNorm * panelHeight;
+        halfW = std::min(halfW, panelTileW * 0.92f);
+        halfH = std::min(halfH, panelTileH * 0.92f);
 
-        const float halfSize = std::max(0.010f, panelHeight * halfScale);
-        drawQuadNdc(x, y, halfSize, halfSize, mapTexture, panelUv, tint);
+        // Eleva un poco para que los pies coincidan mejor con la celda.
+        const float yOffset = halfH * 0.20f;
+        drawQuadNdc(x, y + yOffset, halfW, halfH, texId, uvRect, glm::vec4(1.0f), actorFlipX);
     };
 
-    if (!gPlayers.empty() && gPlayers[0] != nullptr && gPlayers[0]->isAlive()) {
-        drawMarker(gPlayers[0]->position, glm::vec4(0.23f, 0.90f, 1.00f, 1.00f), 0.030f);
-    }
-
+    // Enemigos: usar siempre el sprite estático frontal (abajo.0) en el minimapa.
     for (auto* enemy : gEnemies) {
-        if (!enemy || enemy->lifeState != EnemyLifeState::Alive) {
+        if (!enemy || enemy->lifeState != EnemyLifeState::Alive || enemyTexture == 0) {
             continue;
         }
-        drawMarker(enemy->position, glm::vec4(1.00f, 0.28f, 0.18f, 1.00f), 0.024f);
+
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        std::string chosenSprite;
+
+        // Obtener el base del sprite del enemigo.
+        std::string base = enemy->spriteBaseId;
+        if (base.empty() && !enemy->currentSpriteName.empty()) {
+            const std::size_t dotPos = enemy->currentSpriteName.find('.');
+            base = (dotPos == std::string::npos)
+                ? enemy->currentSpriteName
+                : enemy->currentSpriteName.substr(0, dotPos);
+        }
+
+        if (!base.empty()) {
+            const std::string frontName = base + ".abajo.0";
+            const std::string frontAlt = base + ".frente.0";
+            const std::string sideName = base + ".derecha.0";
+
+            if (getUvRectForSprite(gEnemyAtlas, frontName, uvRect)) {
+                chosenSprite = frontName;
+            } else if (getUvRectForSprite(gEnemyAtlas, frontAlt, uvRect)) {
+                chosenSprite = frontAlt;
+            } else if (getUvRectForSprite(gEnemyAtlas, sideName, uvRect)) {
+                chosenSprite = sideName;
+            }
+        }
+
+        if (chosenSprite.empty()) {
+            continue;
+        }
+
+        drawMiniActor(enemy->position, enemyTexture, uvRect,
+                      spriteAspect(gEnemyAtlas, chosenSprite), 0.0f);
+    }
+
+    // Jugadores: usar siempre el sprite estático frontal (abajo.0) en el minimapa.
+    for (Player* player : gPlayers) {
+        if (!player || !player->isAlive() || texture == 0) {
+            continue;
+        }
+
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        std::string chosenSprite;
+
+        // Siempre usar el sprite frontal estático.
+        const std::string frontName = player->spritePrefix + ".abajo.0";
+        if (getUvRectForSprite(gPlayerAtlas, frontName, uvRect)) {
+            chosenSprite = frontName;
+        } else {
+            const std::string sideName = player->spritePrefix + ".derecha.0";
+            if (getUvRectForSprite(gPlayerAtlas, sideName, uvRect)) {
+                chosenSprite = sideName;
+            } else {
+                continue;
+            }
+        }
+
+        drawMiniActor(player->position, texture, uvRect,
+                      spriteAspect(gPlayerAtlas, chosenSprite), 0.0f);
+    }
+
+    if (hasValidScissor) {
+        glDisable(GL_SCISSOR_TEST);
     }
 
     glBindVertexArray(0);
