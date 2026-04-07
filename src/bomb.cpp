@@ -132,6 +132,8 @@ void Bomb::detonate() {
     explosionSegments.clear();
     // 1. Centro
     explosionSegments.push_back({ position, "explosion", 0.0f });
+    // Regla: si una explosión alcanza un ítem ya suelto en el suelo, desaparece.
+    gameMap->destroyExposedPowerUp(gridRow, gridCol);
 
     // 2. Expandir en 4 direcciones
     int dr[] = {0, -1, 0, 1};
@@ -149,6 +151,9 @@ void Bomb::detonate() {
                 gameMap->destroyTile(r, c);
                 break;
             }
+
+            // Regla: si hay un power-up suelto en el suelo, la explosión lo destruye.
+            gameMap->destroyExposedPowerUp(r, c);
 
             // Tile libre: determinar si es el último segmento visible
             bool isLast = (d == power);

@@ -8,6 +8,8 @@
 #include "enemies/babosa.hpp"
 #include "enemies/fantasma_mortal.hpp"
 #include "enemies/sol_pervertido.hpp"
+#include "enemies/king_bomber.hpp"
+#include "enemies/dron_bombardero.hpp"
 
 /*
  * bomberman.cpp
@@ -783,59 +785,70 @@ void Game::init() {
     }
     gEnemies.clear();
 
-    // Comentados por ahora para probar a Sol Pervertido en solitario
-#if 0
-    // Crear Leon
+    // Crear enemigos según el nivel (directivas `enemy` en el TXT).
     {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 3.0f, 0.0f);
-        Leon* leon = new Leon(spawnPos, glm::vec2(0.2f, 0.2f), 0.1f);
-        leon->setContext(gameMap, &gPlayers);
-        leon->currentSpriteName = "leon.derecha.0";
-        gEnemies.push_back(leon);
-    }
-
-    // Crear Babosa
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * -3.0f);
-        Babosa* babosa = new Babosa(spawnPos, glm::vec2(0.2f, 0.2f), 0.06f);
-        babosa->setContext(gameMap, &gPlayers);
-        babosa->currentSpriteName = "babosa.derecha.0";
-        gEnemies.push_back(babosa);
-    }
-
-    // Crear Bebe Lloron
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 5.0f, 0.0f);
-        BebeLloron* bebe = new BebeLloron(spawnPos, glm::vec2(0.2f, 0.2f), 0.08f);
-        bebe->setContext(gameMap, &gPlayers);
-        bebe->currentSpriteName = "bebe.derecha.0";
-        gEnemies.push_back(bebe);
-    }
-
-    // Crear Fantasma Mortal
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(0.0f, gameMap->getTileSize() * 2.0f);
-        {
-            int r, c;
-            gameMap->ndcToGrid(spawnPos, r, c);
-            if (r < 0 || c < 0 || r >= gameMap->getRows() || c >= gameMap->getCols() || !gameMap->isWalkable(r, c)) {
-                spawnPos = gameMap->getSpawnPosition(0);
-            }
+        const auto& spawns = gameMap->getEnemySpawns();
+        if (spawns.empty()) {
+            std::cerr << "No hay enemigos definidos en el nivel (directivas 'enemy').\n";
         }
-        FantasmaMortal* fantasma = new FantasmaMortal(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
-        fantasma->setContext(gameMap, &gPlayers);
-        fantasma->currentSpriteName = "fantasma.derecha.0";
-        gEnemies.push_back(fantasma);
-    }
-#endif
+        for (const auto& s : spawns) {
+            glm::vec2 pos = gameMap->gridToNDC(s.row, s.col);
+            // Evita spawnear fuera de casillas caminables (por error en el TXT).
+            if (!gameMap->isWalkable(s.row, s.col)) {
+                std::cerr << "Enemy spawn no walkable (row=" << s.row << ", col=" << s.col << ")\n";
+                continue;
+            }
 
-    // Crear Sol Pervertido
-    {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(0) + glm::vec2(gameMap->getTileSize() * 4.0f, 0.0f);
-        SolPervertido* sol = new SolPervertido(spawnPos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
-        sol->setContext(gameMap, &gPlayers);
-        sol->currentSpriteName = "sol.grande.0"; // Frame inicial
-        gEnemies.push_back(sol);
+            Enemy* enemy = nullptr;
+            switch (s.type) {
+                case EnemySpawnType::Leon: {
+                    auto* e = new Leon(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.10f);
+                    e->currentSpriteName = "leon.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::Babosa: {
+                    auto* e = new Babosa(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
+                    e->currentSpriteName = "babosa.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::BebeLloron: {
+                    auto* e = new BebeLloron(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
+                    e->currentSpriteName = "bebe.derecha.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::FantasmaMortal: {
+                    auto* e = new FantasmaMortal(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
+                    e->currentSpriteName = "fantasma.derecha.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::SolPervertido: {
+                    auto* e = new SolPervertido(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+                    e->currentSpriteName = "sol.grande.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::KingBomber: {
+                    auto* e = new KingBomber(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
+                    e->currentSpriteName = "kingbomber1.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronBombardero: {
+                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
+                    e->currentSpriteName = "dronrosa.abajo.0";
+                    enemy = e;
+                    break;
+                }
+            }
+
+            if (!enemy) continue;
+            enemy->setContext(gameMap, &gPlayers);
+            gEnemies.push_back(enemy);
+        }
     }
 
     // Limpiar bombas anteriores
@@ -1140,8 +1153,22 @@ void Game::update() {
     // Actualizar jugador
     for (auto* p : gPlayers) {
         if (!p) continue;
+        const PlayerLifeState prevLifeState = p->lifeState;
         p->deltaTime = deltaTime;
         p->Update();
+
+        // Si acaba de respawnear:
+        // - El Detonator se pierde al morir (ver Player::respawn).
+        // - Para evitar bombas "atascadas" (remoteControlled=true sin posibilidad de detonarlas),
+        //   convertimos sus bombas remotas a mecha normal.
+        if (prevLifeState != PlayerLifeState::Alive && p->lifeState == PlayerLifeState::Alive && !p->hasRemoteControl) {
+            for (auto* b : gBombs) {
+                if (!b) continue;
+                if (b->state == BombState::FUSE && b->ownerIndex == p->playerId && b->remoteControlled) {
+                    b->remoteControlled = false;
+                }
+            }
+        }
 
         // Comprobar si el jugador recoge un power-up
         if (p->isAlive() && gameMap) {

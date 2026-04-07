@@ -55,6 +55,24 @@ struct Block {
     }
 };
 
+// Tipo de enemigo declarado en `levels/*.txt` vía directiva `enemy`.
+enum class EnemySpawnType {
+    Leon,
+    Babosa,
+    BebeLloron,
+    FantasmaMortal,
+    SolPervertido,
+    KingBomber,
+    DronBombardero
+};
+
+// Spawn de enemigo definido por nivel.
+struct EnemySpawn {
+    EnemySpawnType type;
+    int row = 0;
+    int col = 0;
+};
+
 class GameMap {
 public:
     GameMap();
@@ -124,6 +142,14 @@ public:
     // Devuelve true si recogió un power-up (y lo aplica al player).
     bool tryCollectPowerUp(int row, int col, class Player* player);
 
+    // Si hay un power-up suelto/visible en esa celda, lo destruye (p.ej. por explosión).
+    // Regla: NO afecta a power-ups ocultos bajo bloques destructibles intactos.
+    void destroyExposedPowerUp(int row, int col);
+
+    // === Enemigos ===
+    // Devuelve los spawns de enemigos declarados en el TXT con `enemy <tipo> <row> <col>`.
+    const std::vector<EnemySpawn>& getEnemySpawns() const { return enemySpawns; }
+
 private:
     struct SpawnCell {
         int row = -1; // Fila en grid
@@ -137,6 +163,9 @@ private:
 
     // Spawns (opcional): si no existe/vale, se usa fallback automático.
     std::vector<SpawnCell> spawnCells;    // Spawns por índice de jugador
+
+    // Spawns de enemigos declarados por nivel.
+    std::vector<EnemySpawn> enemySpawns;
 
     // Layout
     float tileSize = 0.0f;                // Tamaño de tile en NDC

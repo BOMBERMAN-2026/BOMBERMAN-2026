@@ -374,7 +374,7 @@ void Player::killByExplosion() {
     currentSpriteName = "jugador.muerto.quemado.0";
 }
 
-// Vuelve al spawn y restaura estado. Castigo Arcade: pierde TODOS los power-ups.
+// Vuelve al spawn y restaura estado. Nota: el jugador NO pierde power-ups acumulados durante el nivel.
 void Player::respawn() {
     if (lives <= 0) {
         // Game Over: no respawnear
@@ -396,12 +396,11 @@ void Player::respawn() {
     flipX = 0.0f;
     currentSpriteName = spritePrefix + ".abajo.0";
 
-    // === Castigo Arcade: reset total de stats ===
-    maxBombs = 1;
-    explosionPower = 2;
-    speed = 0.4f;
-    baseSpeed = 0.4f;
+    // Regla General: mantener stats/power-ups acumulados (bombs/fire/speed), incluso si pierde vidas.
+    // Excepción: el Detonator (Remote Control) se pierde al morir.
     hasRemoteControl = false;
+
+    // Solo se reaplica invulnerabilidad de respawn.
     invincible = true;
     invincibilityTimer = kSpawnInvulnerabilitySeconds;
     invincibilityTotalSeconds = kSpawnInvulnerabilitySeconds;
