@@ -61,10 +61,18 @@ SpriteAtlas menuBombAtlas;
 int menuSelection = 0;  // 0 = 1P, 1 = 2P
 const int NUM_MENU_OPTIONS = 2;
 
-// Posición de la flecha de selección (ajusta estos valores)
-float menuArrowX = -1.4f;          // Posición X
-float menuArrowY_Base = -0.255f;      // Posición Y para opción 0 (1P)
-float menuArrowY_Offset = 0.275f;    // Desplazamiento Y entre opciones
+// Posición de la flecha de selección
+float menuArrowX = -1.4f;               // Posición X
+float menuArrowY_Base = -0.255f;        // Posición Y para opción 0 (1P)
+float menuArrowY_Offset = 0.275f;       // Desplazamiento Y entre opciones
+
+// Animación de la flecha del menú
+float menuArrowAnimTimer = 0.0f;
+float menuArrowAnimSpeed = 0.1f;        // Cambiar sprite cada 0.5 segundos
+bool menuArrowSelected = false;         // true si se ha pulsado Enter
+float menuArrowSelectedAnimSpeed = 0.8f;
+float menuSelectedWaitTimer = 0.0f;     // Tiempo de espera tras la animación
+const float MENU_SELECTED_WAIT_TIME = 1.5f;  
 
 // ============================== OpenGL: estado global ==============================
 
@@ -721,6 +729,9 @@ void Game::init() {
         }
 
         menuSelection = 0;  // Reiniciar a 1P
+        menuArrowSelected = false;  // Resetear la selección
+        menuSelectedWaitTimer = 0.0f;
+        menuArrowAnimTimer = 0.0f;
         return;
     }
 
@@ -910,6 +921,15 @@ void Game::processInput() {
         if (this->keys[GLFW_KEY_DOWN] == GLFW_PRESS || this->keys[GLFW_KEY_S] == GLFW_PRESS) {
             menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;  // Bajamos en menú
             this->keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+        }
+
+        // Enter para seleccionar/confirmar
+        if (this->keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
+            if (!menuArrowSelected) {
+                menuArrowSelected = true;
+                menuArrowAnimTimer = 0.0f;  // Resetear timer
+                this->keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+            }
         }
         return;  // Solo procesamos navegación en menu
     }
@@ -1171,7 +1191,28 @@ void Game::update() {
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        return; // No actualizar lógica en menú
+        if (menuArrowSelected) {
+            // Alternar entre explosion_3 y explosion_4 lentamente
+            menuArrowAnimTimer += deltaTime;
+            if (menuArrowAnimTimer >= menuArrowSelectedAnimSpeed) {
+                menuArrowAnimTimer = 0.0f;
+            }
+            // Después de que termina la animación, esperar y luego pasar al juego
+            menuSelectedWaitTimer += deltaTime;
+            if (menuSelectedWaitTimer >= MENU_SELECTED_WAIT_TIME) {
+                // Pasar al juego
+                this->mode = (menuSelection == 0) ? GameMode::OnePlayer : GameMode::TwoPlayers;
+                this->state = GAME_PLAYING;
+                this->init();
+            }
+        } else {
+            // Alternar entre explosion_0 y explosion_1 rápidamente
+            menuArrowAnimTimer += deltaTime;
+            if (menuArrowAnimTimer >= menuArrowAnimSpeed) {
+                menuArrowAnimTimer = 0.0f;
+            }
+        }
+        return;
     }
 
     // ========== RESTO DEL JUEGO ==========
@@ -1370,7 +1411,21 @@ void Game::render() {
         
         uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
         if (!menuBombAtlas.sprites.empty()) {
-            getUvRectForSprite(menuBombAtlas, "explosion_0", uvRect);
+            std::string spriteNameToUse;
+            
+            if (menuArrowSelected) {
+                // Cuando se ha pulsado Enter: explosion_2 fijo, luego alternar 3/4
+                if (menuArrowAnimTimer < 0.05f) {  // Mostrar explosion_2 brevemente
+                    spriteNameToUse = "explosion_2";
+                } else {
+                    spriteNameToUse = (menuArrowAnimTimer < menuArrowSelectedAnimSpeed * 0.5f) ? "explosion_3" : "explosion_4";
+                }
+            } else {
+                // Sin Enter: alternar explosion_0 y explosion_1
+                spriteNameToUse = (menuArrowAnimTimer < menuArrowAnimSpeed * 0.5f) ? "explosion_0" : "explosion_1";
+            }
+            
+            getUvRectForSprite(menuBombAtlas, spriteNameToUse, uvRect);
         }
         glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
