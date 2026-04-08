@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -16,17 +16,17 @@
 /*
  * bomberman.cpp
  * ------------
- * Implementación del bucle de juego (init/input/update/render) + render OpenGL simple.
+ * Implementaci├│n del bucle de juego (init/input/update/render) + render OpenGL simple.
  *
  * Funcionalidades principales:
  * - Inicializa OpenGL (VAO/VBO/EBO + shaders) y carga texturas.
  * - Carga el mapa (`GameMap`) y su atlas.
- * - Crea 1 o 2 jugadores según `GameMode`.
+ * - Crea 1 o 2 jugadores seg├║n `GameMode`.
  * - Entrada: Jugador 1 con flechas, Jugador 2 con WASD.
  * - Render: mapa primero, jugadores encima (sprites desde SpriteAtlasPlayer).
  *
  * Nota:
- * - Este archivo es deliberadamente "monolítico" por ahora. Se organizan secciones
+ * - Este archivo es deliberadamente "monol├¡tico" por ahora. Se organizan secciones
  *   para facilitar lectura sin introducir demasiadas clases nuevas.
  */
 
@@ -73,9 +73,9 @@ GLuint uniform3DView = 0;
 GLuint uniform3DProjection = 0;
 GLuint uniform3DColor = 0;
 
-SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
+SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
 
-SpriteAtlas gEnemyAtlas; // No estático para usarlo en enemigos .cpp
+SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
 GLuint enemyTexture = 0;
 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
@@ -111,7 +111,7 @@ static bool isSameTile(const GameMap* map, const glm::vec2& a, const glm::vec2& 
     return ar == br && ac == bc;
 }
 
-// Colisión enemigo-jugador (AABB simple por tile): detecta contacto.
+// Colisi├│n enemigo-jugador (AABB simple por tile): detecta contacto.
 static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, const glm::vec2& playerPos) {
     if (!map) return false;
     // AABB simple alrededor del centro del tile. Ajustable.
@@ -120,29 +120,29 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
-// Devuelve true si la caja de colisión de la entidad intersecta con el área de explosión
-// calculada de la bomba. Permite detectar daño si está parcialmente en la casilla.
+// Devuelve true si la caja de colisi├│n de la entidad intersecta con el ├írea de explosi├│n
+// calculada de la bomba. Permite detectar da├▒o si est├í parcialmente en la casilla.
 static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
     if (!map || !bomb) return false;
     
-    // Asumimos un radio de colisión del 45% del tile para la entidad
+    // Asumimos un radio de colisi├│n del 45% del tile para la entidad
     float entityRadius = map->getTileSize() * 0.45f;
     float tileHalf = map->getTileSize() * 0.5f;
 
     for (const auto& seg : bomb->explosionSegments) {
-        // La explosión ocupa casi todo el segmento/tile
+        // La explosi├│n ocupa casi todo el segmento/tile
         float exMin = seg.pos.x - tileHalf;
         float exMax = seg.pos.x + tileHalf;
         float eyMin = seg.pos.y - tileHalf;
         float eyMax = seg.pos.y + tileHalf;
 
-        // La caja de colisión de la entidad
+        // La caja de colisi├│n de la entidad
         float entMinX = entityPos.x - entityRadius;
         float entMaxX = entityPos.x + entityRadius;
         float entMinY = entityPos.y - entityRadius;
         float entMaxY = entityPos.y + entityRadius;
 
-        // Comprobar intersección AABB (Eje X e Y)
+        // Comprobar intersecci├│n AABB (Eje X e Y)
         bool intersectX = (entMaxX > exMin) && (entMinX < exMax);
         bool intersectY = (entMaxY > eyMin) && (entMinY < eyMax);
 
@@ -378,11 +378,11 @@ GLuint LoadTexture(const char* filePath);
 // ============================== Game: run/level helpers ==============================
 
 /*
- * Recursos de render que sólo deberían inicializarse una vez por ejecución:
+ * Recursos de render que s├│lo deber├¡an inicializarse una vez por ejecuci├│n:
  * - VAO/VBO/EBO del quad 2D
  * - Programas shader 2D y 3D
- * - Geometría del cubo para modo 3D
- * Además activamos blending para sprites con alpha.
+ * - Geometr├¡a del cubo para modo 3D
+ * Adem├ís activamos blending para sprites con alpha.
  */
 void Game::ensureRenderResources() {
     if (renderResourcesInitialized) return;
@@ -398,7 +398,7 @@ void Game::ensureRenderResources() {
     renderResourcesInitialized = true;
 }
 
-// Carga atlas/texturas compartidas que se reutilizan entre niveles (1 vez por ejecución).
+// Carga atlas/texturas compartidas que se reutilizan entre niveles (1 vez por ejecuci├│n).
 void Game::ensureGameplayAssets() {
     // Evita recargar texturas/atlases en cada `loadLevel()`.
     if (gameplayAssetsLoaded) return;
@@ -462,7 +462,7 @@ void Game::ensureGameplayAssets() {
     gameplayAssetsLoaded = true;
 }
 
-// Limpieza del contenido "dinámico" de un nivel.
+// Limpieza del contenido "din├ímico" de un nivel.
 // Orden: bombas -> enemigos -> jugadores.
 void Game::cleanupGameplayEntities() {
     for (auto* b : gBombs) delete b;
@@ -475,7 +475,7 @@ void Game::cleanupGameplayEntities() {
     gPlayers.clear();
 }
 
-// Condición de Game Over: todos los jugadores están sin vidas.
+// Condici├│n de Game Over: todos los jugadores est├ín sin vidas.
 bool Game::allPlayersOutOfLives() const {
     if (gPlayers.empty()) return true;
     for (auto* p : gPlayers) {
@@ -496,7 +496,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     // Guardar progreso a preservar.
     std::vector<int> savedLives;
     if (preserveLivesAndScore) {
-        // Conserva vidas y puntuación acumulada.
+        // Conserva vidas y puntuaci├│n acumulada.
         savedLives.reserve(gPlayers.size());
         for (auto* p : gPlayers) {
             savedLives.push_back(p ? p->lives : 0);
@@ -506,7 +506,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     // Limpiar entidades del nivel anterior.
     cleanupGameplayEntities();
 
-    // Reset de transición de nivel (para no arrastrar timers entre niveles).
+    // Reset de transici├│n de nivel (para no arrastrar timers entre niveles).
     pendingLevelAdvance = false;
     levelAdvanceTimer = 0.0f;
 
@@ -514,7 +514,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     if (!gameMap) gameMap = new GameMap();
 
     if (levelIndex < 0 || levelIndex >= (int)levelSequence.size()) {
-        // Seguridad: si algo fuerza un índice inválido, terminamos run y volvemos al menú.
+        // Seguridad: si algo fuerza un ├¡ndice inv├ílido, terminamos run y volvemos al men├║.
         std::cerr << "Nivel fuera de rango: " << levelIndex << std::endl;
         returnToMenuFromGame(/*resetRun=*/true);
         return;
@@ -533,7 +533,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     float aspectRatio = (float)WIDTH / (float)HEIGHT;
     gameMap->calculateTileMetrics(aspectRatio);
 
-    // Crear jugadores según el modo.
+    // Crear jugadores seg├║n el modo.
     const int numPlayers = (mode == GameMode::TwoPlayers) ? 2 : 1;
     if (!preserveLivesAndScore) {
         playerScores.assign(numPlayers, 0);
@@ -552,7 +552,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         gPlayers.push_back(p);
     }
 
-    // Crear enemigos según el nivel.
+    // Crear enemigos seg├║n el nivel.
     // La lista de spawns viene del TXT (enemy <type> <x> <y>).
     {
         const auto& spawns = gameMap->getEnemySpawns();
@@ -646,7 +646,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     gameMap->placePowerUps();
 }
 
-// Arranca una partida nueva desde nivel_01 (índice 0).
+// Arranca una partida nueva desde nivel_01 (├¡ndice 0).
 void Game::startNewRun(GameMode newMode) {
     mode = newMode;
     currentLevelIndex = 0;
@@ -656,7 +656,7 @@ void Game::startNewRun(GameMode newMode) {
     state = GAME_PLAYING;
     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
 
-    // Por si el menú dejó la marca de transición activa.
+    // Por si el men├║ dej├│ la marca de transici├│n activa.
     menuIntroScreen.resetTransition();
 }
 
@@ -664,7 +664,7 @@ void Game::startNewRun(GameMode newMode) {
 void Game::advanceToNextLevel() {
     const int nextIndex = currentLevelIndex + 1;
     if (nextIndex >= (int)levelSequence.size()) {
-        // No hay ranking ni pantalla de victoria: volver al menú.
+        // No hay ranking ni pantalla de victoria: volver al men├║.
         returnToMenuFromGame(/*resetRun=*/true);
         return;
     }
@@ -673,7 +673,7 @@ void Game::advanceToNextLevel() {
     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/true);
 }
 
-// Sale a menú desde gameplay (Game Over / fin de campaña).
+// Sale a men├║ desde gameplay (Game Over / fin de campa├▒a).
 void Game::returnToMenuFromGame(bool resetRun) {
     cleanupGameplayEntities();
     pendingLevelAdvance = false;
@@ -728,7 +728,7 @@ GLuint LoadTexture(const char* filePath)
 // ============================== Utilidades (debug/keys) ==============================
 
 
-// Convierte un código de tecla GLFW en una etiqueta corta (utilidad de depuración).
+// Convierte un c├│digo de tecla GLFW en una etiqueta corta (utilidad de depuraci├│n).
 static std::string getKeyName(GLint key){
     std::string str;
     switch(key) {
@@ -1026,11 +1026,11 @@ void Game::init() {
     }
 }
 
-// Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
+// Lee teclas y aplica acciones (movimiento, animaci├│n y colocar bombas).
 void Game::processInput() {
     // Alternar fullscreen.
     if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
+        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar m├║ltiples toggles por pulsaci├│n
         toggleFullscreen(this->window);
     }
 
@@ -1052,7 +1052,7 @@ void Game::processInput() {
             this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
             toggleViewMode();
         }
-        // F2: cambiar tipo de cámara 3D.
+        // F2: cambiar tipo de c├ímara 3D.
         if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
             this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
             cycleCamera3DType();
@@ -1060,7 +1060,7 @@ void Game::processInput() {
 
         // F3: forzar el salto al siguiente nivel.
         if (this->keys[GLFW_KEY_F3] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_F3] = GLFW_REPEAT; // acción de una sola pulsación
+            this->keys[GLFW_KEY_F3] = GLFW_REPEAT; // acci├│n de una sola pulsaci├│n
             std::cout << "[Debug] Forzando avance de nivel" << std::endl;
             advanceToNextLevel();
             return;
@@ -1202,9 +1202,9 @@ void Game::processInput() {
             }
         }
 
-        // ======================= Bombas (Botón 1) =======================
+        // ======================= Bombas (Bot├│n 1) =======================
         if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
+            this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar m├║ltiples bombas por pulsaci├│n
 
             if (p1->canPlaceBomb()) {
                 int bombRow, bombCol;
@@ -1231,14 +1231,14 @@ void Game::processInput() {
             }
         }
 
-        // Detonar (Botón 2)
+        // Detonar (Bot├│n 2)
         if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
             this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
-            // Detonar la bomba MÁS ANTIGUA del jugador (una por una, estilo Arcade)
+            // Detonar la bomba M├üS ANTIGUA del jugador (una por una, estilo Arcade)
             for (auto* b : gBombs) {
                 if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
                     b->detonate();
-                    break; // Solo una por pulsación
+                    break; // Solo una por pulsaci├│n
                 }
             }
         }
@@ -1273,7 +1273,7 @@ void Game::processInput() {
                 }
             }
 
-            // Detonar (Botón 2)
+            // Detonar (Bot├│n 2)
             if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
                 this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
                 for (auto* b : gBombs) {
@@ -1287,7 +1287,7 @@ void Game::processInput() {
     }
 }
 
-// Tick de lógica: mapa, enemigos, bombas (daño) y contacto enemigo-jugador.
+// Tick de l├│gica: mapa, enemigos, bombas (da├▒o) y contacto enemigo-jugador.
 void Game::update() {
     float deltaTime = this->deltaTime;
 
@@ -1314,8 +1314,10 @@ void Game::update() {
         gameMap->update(deltaTime);
     }
 
-    // Actualizar enemigos (lógica o animación de muerte)
-    for (auto* enemy : gEnemies) {
+    // Actualizar enemigos (l├│gica o animaci├│n de muerte)
+    const std::size_t enemiesToUpdate = gEnemies.size();
+    for (std::size_t enemyIndex = 0; enemyIndex < enemiesToUpdate; ++enemyIndex) {
+        Enemy* enemy = gEnemies[enemyIndex];
         if (!enemy) continue;
         enemy->setDeltaTime(deltaTime);
 
@@ -1374,11 +1376,11 @@ void Game::update() {
         }
     }
 
-    // Actualizar bombas + aplicar daño por explosión
+    // Actualizar bombas + aplicar da├▒o por explosi├│n
     for (auto it = gBombs.begin(); it != gBombs.end(); ) {
         Bomb* b = *it;
 
-        // Marcar si el dueño ya abandonó la casilla (entonces bloquea también para él)
+        // Marcar si el due├▒o ya abandon├│ la casilla (entonces bloquea tambi├®n para ├®l)
         if (b && !b->ownerLeftTile) {
             Player* owner = nullptr;
             if (b->ownerIndex >= 0 && (std::size_t)b->ownerIndex < gPlayers.size()) {
@@ -1392,7 +1394,7 @@ void Game::update() {
         bool justExploded = b->Update(deltaTime);
 
         if (b->state == BombState::EXPLODING) {
-            // Explosión: si el fuego toca a una entidad, muere.
+            // Explosi├│n: si el fuego toca a una entidad, muere.
             for (auto* p : gPlayers) {
                 if (!p || !p->isAlive()) continue;
                 if (explosionHitsEntity(gameMap, b, p->position)) {
@@ -1403,7 +1405,7 @@ void Game::update() {
                 if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
                 if (explosionHitsEntity(gameMap, b, enemy->position)) {
                     if (enemy->takeDamage(gEnemyAtlas, 999)) {
-                        // Puntuación: sólo suma una vez cuando el enemigo pasa de Alive -> Dying.
+                        // Puntuaci├│n: s├│lo suma una vez cuando el enemigo pasa de Alive -> Dying.
                         // `takeDamage` devuelve true justo en ese cambio de estado.
                         if (b && b->ownerIndex >= 0 && b->ownerIndex < (int)playerScores.size()) {
                             playerScores[b->ownerIndex] += enemy->scoreValue;
@@ -1411,7 +1413,7 @@ void Game::update() {
                     }
                 }
             }
-            // Explosión: si toca a otra bomba que aún no ha explotado, la detona.
+            // Explosi├│n: si toca a otra bomba que a├║n no ha explotado, la detona.
             for (auto* otherB : gBombs) {
                 if (otherB && otherB != b && otherB->state == BombState::FUSE) {
                     if (explosionHitsEntity(gameMap, b, otherB->position)) {
@@ -1429,7 +1431,7 @@ void Game::update() {
         }
     }
 
-    // Colisión enemigo ↔ jugador: el jugador muere y respawnea.
+    // Colisi├│n enemigo Ôåö jugador: el jugador muere y respawnea.
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
         for (auto* p : gPlayers) {
@@ -1443,13 +1445,13 @@ void Game::update() {
     // ========== Transiciones: Game Over / Next Level ==========
     if (this->state == GAME_PLAYING) {
         if (allPlayersOutOfLives()) {
-            // No hay pantalla de Game Over: volver al menú.
+            // No hay pantalla de Game Over: volver al men├║.
             returnToMenuFromGame(/*resetRun=*/true);
             return;
         }
 
         // Si se ha completado el nivel, esperamos un momento antes de avanzar.
-        // Esto permite ver la animación de muerte del último enemigo y que el jugador reaccione.
+        // Esto permite ver la animaci├│n de muerte del ├║ltimo enemigo y que el jugador reaccione.
         if (!pendingLevelAdvance) {
             if (allEnemiesCleared()) {
                 pendingLevelAdvance = true;
@@ -1461,7 +1463,7 @@ void Game::update() {
                 pendingLevelAdvance = false;
                 levelAdvanceTimer = 0.0f;
 
-                // Pasar de nivel: se conservan vidas y puntuación; se reinician stats.
+                // Pasar de nivel: se conservan vidas y puntuaci├│n; se reinician stats.
                 advanceToNextLevel();
                 return;
             }

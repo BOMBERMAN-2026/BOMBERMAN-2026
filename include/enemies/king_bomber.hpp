@@ -2,35 +2,21 @@
 #define KING_BOMBER_HPP
 
 #include "enemy.hpp"
-#include <array>
+#include <vector>
+
+bool IsKingPreBattleLockActive();
+bool IsKingPreBattleBlinkVisible();
 
 /*
- * King Bomber – 77000 pts, 5 HP (JEFE)
+ * King Bomber – 77000 pts, 9 HP (JEFE)
  *
  * Mecánicas:
- * - Tiene 4 drones que persiguen al jugador.
- * - Los drones periódicamente estallan en llamas, enviando bolas de fuego
- *   por los pasillos mientras siguen al jugador.
- * - King Bomber se mueve en la dirección general del jugador colocando
- *   bombas en cadena.
- * - Cuando sus bombas explotan, su escudo se desactiva y se retira
- *   → es vulnerable a las bombas del jugador.
- * - El escudo se recupera poco después.
+ * - Movimiento continuo semi-aleatorio condicionado por colisiones del mapa.
+ * - Colocación periódica de bombas con límite de bombas activas propias.
+ * - Evasión básica: si su tile entra en peligro por explosiones activas
+ *   o inminentes, prioriza moverse a una celda segura.
+ * - Escala agresividad por vida restante (sprites kingbomber1/2/3).
  */
-
-// Dron acompañante de King Bomber
-struct KingDrone {
-    glm::vec2 position; // Posición en NDC
-    glm::vec2 direction; // Dirección de movimiento
-    float speed; // Velocidad
-    bool onFire; // true si está en modo fuego
-    float fireTimer; // Tiempo restante en modo fuego
-    bool alive; // true si existe (para render/IA)
-
-    KingDrone()
-        : position(0.0f), direction(0.0f), speed(0.0f),
-          onFire(false), fireTimer(0.0f), alive(true) {}
-};
 
 class KingBomber : public Enemy {
 public:
@@ -39,40 +25,102 @@ public:
 
     void Update() override;
     void Draw()   override;
+    bool takeDamage(const SpriteAtlas& atlas, int amount = 1) override;
+    void startDying(const SpriteAtlas& atlas) override;
+    void updateDeath(float dt) override;
 
-    bool isShieldActive() const { return shieldActive; }
-    bool isRetreating()   const { return retreating; }
-
-    // Acceso a los drones para renderizar/interactuar desde fuera
-    const std::array<KingDrone, 4>& getDrones() const { return drones; }
+    bool isShieldActive() const { return false; }
+    bool isRetreating()   const { return false; }
 
 private:
-    // Escudo
-    bool  shieldActive;          // true si el escudo está activo
-    float shieldRecoverTimer;    // Tiempo acumulado para recuperar
-    float shieldRecoverTime;     // Tiempo para recuperar el escudo
+    enum class BattleState {
+        IntroBlink,
+        IntroGo,
+        ShieldedWithDrones,
+        CombatLoop,
+        Dying
+    };
 
-    // Retirada
-    bool  retreating;            // true si está retirándose
-    float retreatTimer;          // Tiempo acumulado en retirada
-    float retreatDuration;       // Duración total de la retirada
+    enum class SpecialAttackState {
+        Idle,
+        Charging,
+        TeleportDelay,
+        BlastSequence
+    };
 
-    // Bombas en cadena
-    float chainBombCooldown;     // Cooldown restante
-    float chainBombCooldownMax;  // Intervalo entre bombas
-    int   chainBombCount;        // Bombas por cadena
+    BattleState battleState;
+    SpecialAttackState specialState;
 
-    // Drones
-    std::array<KingDrone, 4> drones;
-    float droneFireCycle;        // Intervalo entre ciclos de fuego de los drones
-    float droneFireTimer;        // Timer del ciclo
-    float droneFireDuration;     // Duración del estado de fuego de cada dron
+    // Intro de combate
+    float introBlinkTimer;
+    float introBlinkDuration;
+    float introGoTimer;
+    float introGoDuration;
+    float blinkToggleTimer;
+    float blinkInterval;
+    bool blinkVisible;
 
-    void updateDrones();
-    void updateShield();
-    void placeChainBombs();
-    void onBombsExploded();      // Callback cuando sus bombas explotan
-    void startRetreat();
+    // Escudo cíclico post-drones
+    bool shieldActive;
+    float shieldStateTimer;
+    float shieldOnDuration;
+    float shieldOffDuration;
+    bool dronesCleared;
+
+    // Estado y navegación
+    EnemyDirection plannedDir;
+    int stepsUntilReevaluate;
+
+    // Bombas
+    float bombCooldown;
+    float bombCooldownMax;
+    int maxOwnedBombs;
+    int bombPower;
+
+    // Ataque especial
+    float specialCooldownTimer;
+    float specialCooldown;
+    float specialChargeTimer;
+    float specialChargeDuration;
+    float specialTeleportDelayTimer;
+    float specialTeleportDelay;
+    float specialBlastFrameTimer;
+    float specialBlastFrameInterval;
+    int specialBlastFrame;
+
+    // Evita recibir múltiples impactos por una misma explosión en frames consecutivos.
+    float damageGraceTimer;
+    float damageGraceDuration;
+
+    // Seguimiento de bombas propias para respetar límite simultáneo
+    std::vector<glm::ivec2> ownedBombTiles;
+
+    // Fase visual por vida (1..3)
+    int phaseIndex;
+
+    // Muerte final (usa kingbomberX.fuego.N)
+    float phaseDeathTimer;
+    int phaseDeathFrame;
+    float phaseDeathFrameInterval;
+
+    bool hasAliveDrones() const;
+    void updatePhaseAggression();
+    void updateBlink(float dt);
+    void updateShieldCycle(float dt);
+    void updateBombOwnershipState();
+    bool isBombStillActiveAt(const glm::ivec2& tile) const;
+    bool isTileDangerous(int row, int col) const;
+    bool hasLineOfFireToBomb(int fromRow, int fromCol, int bombRow, int bombCol, int power) const;
+    EnemyDirection chooseSafeDirection() const;
+    EnemyDirection chooseExplorationDirection() const;
+    EnemyDirection chooseBiasedDirectionTowardPlayer(float towardWeight) const;
+    bool tryFindTeleportNearPlayer(glm::vec2& outPos) const;
+    void emitSpecialCrossExplosion(int stepDist);
+    void updateMovement(float dt, float towardWeight, bool avoidDanger);
+    void updateSpecialAttack(float dt);
+    void maybePlaceBomb();
+    void placeBombOnCurrentTile();
+    std::string phaseBase() const;
 };
 
 #endif // KING_BOMBER_HPP

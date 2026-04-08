@@ -266,14 +266,15 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     if (!map) return;
     if (lifeState != PlayerLifeState::Alive) return;
 
+    this->movingToTarget = false; // Disable any tile lock just in case
+
     const float step     = this->speed * deltaTime;
     const float halfTile = map->getTileSize() / 2.0f;
 
     // --- Snap perpendicular al movimiento hacia el centro del tile actual ---
-    // Impide que el jugador se cuele por las esquinas en pasillos de 1 tile.
     {
-        const float snapStrength = 0.60f;         // fracción de corrección por frame (más fuerte)
-        const float snapMaxDist  = halfTile * 0.85f; // umbral máximo para aplicar (más amplio para esquinas)
+        const float snapStrength = 0.60f;
+        const float snapMaxDist  = halfTile * 0.85f;
         int tr, tc;
         map->ndcToGrid(this->position, tr, tc);
         glm::vec2 tileCenter = map->gridToNDC(tr, tc);
@@ -298,50 +299,40 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
         default: return;
     }
 
-    // --- Sondas de colisión: dos esquinas en el borde frontal de la dirección ---
-    // Cada dirección comprueba ambas esquinas del lado que avanza.
+    // --- Sondas de colisión ---
     {
         int r, c;
-        const float eFront = halfTile;          // siempre cae en el tile vecino
-        const float eSide  = halfTile * 0.60f; // semiancho del hitbox
+        const float eFront = halfTile;
+        const float eSide  = halfTile * 0.60f;
 
         if (mov == MOVE_UP) {
             map->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_DOWN) {
             map->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_LEFT) {
             map->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_RIGHT) {
             map->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
     }
 
     this->position = newPos;
 }
-
 // Mata al jugador por contacto con enemigo (usa "jugador(color).muerto.N").
 void Player::killByEnemy() {
     if (lifeState != PlayerLifeState::Alive) return;
@@ -441,3 +432,4 @@ void Player::applyPowerUp(PowerUpType type) {
             break;
     }
 }
+
