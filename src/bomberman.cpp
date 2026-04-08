@@ -66,6 +66,7 @@ static const char* kModel3DTexturedVertexShaderPath = "shaders/model3D_textured.
 static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_textured.frag";
 static const char* kPlayerGlbPath = "models/3D/cartoon astronaut 3d model.glb";
 static const char* kLeonGlbPath = "resources/purple spiky creature 3d model.glb";
+static const char* kFantasmaGlbPath = "resources/ghost character 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -86,6 +87,11 @@ GLuint leonGlbVBO = 0;
 GLuint leonGlbEBO = 0;
 GLsizei leonGlbIndexCount = 0;
 GLuint leonGlbTexture = 0;
+GLuint fantasmaGlbVAO = 0;
+GLuint fantasmaGlbVBO = 0;
+GLuint fantasmaGlbEBO = 0;
+GLsizei fantasmaGlbIndexCount = 0;
+GLuint fantasmaGlbTexture = 0;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -569,6 +575,17 @@ void CreateLeonGlbModel(const std::string& modelPath)
                                  leonGlbEBO,
                                  leonGlbIndexCount,
                                  leonGlbTexture);
+}
+
+void CreateFantasmaGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("fantasmaGLB",
+                                 modelPath,
+                                 fantasmaGlbVAO,
+                                 fantasmaGlbVBO,
+                                 fantasmaGlbEBO,
+                                 fantasmaGlbIndexCount,
+                                 fantasmaGlbTexture);
 }
 
 void Compile3DShaders()
@@ -1329,6 +1346,10 @@ Game::~Game() {
         glDeleteTextures(1, &leonGlbTexture);
         leonGlbTexture = 0;
     }
+    if (fantasmaGlbTexture != 0) {
+        glDeleteTextures(1, &fantasmaGlbTexture);
+        fantasmaGlbTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -1351,6 +1372,9 @@ Game::~Game() {
     leonGlbVAO = leonGlbVBO = leonGlbEBO = 0;
     leonGlbIndexCount = 0;
     leonGlbTexture = 0;
+    fantasmaGlbVAO = fantasmaGlbVBO = fantasmaGlbEBO = 0;
+    fantasmaGlbIndexCount = 0;
+    fantasmaGlbTexture = 0;
 }
 
 void Game::init() {
@@ -1361,6 +1385,7 @@ void Game::init() {
     CreateSphere();
     CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
     CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
+    CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -2286,8 +2311,10 @@ void Game::render3D() {
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderLeonGlb =
         (leonGlbVAO != 0 && leonGlbIndexCount > 0 && leonGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderFantasmaGlb =
+        (fantasmaGlbVAO != 0 && fantasmaGlbIndexCount > 0 && fantasmaGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -2362,6 +2389,35 @@ void Game::render3D() {
             }
         }
 
+        if (canRenderFantasmaGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, fantasmaGlbTexture);
+
+            // Ajuste de orientacion base del modelo GLB de Fantasma Mortal.
+            const float kFantasmaModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool isFantasmaEnemy =
+                    (enemy->spriteBaseId == "fantasma") ||
+                    (enemy->currentSpriteName.size() >= 9 && enemy->currentSpriteName.compare(0, 9, "fantasma.") == 0);
+                if (!isFantasmaEnemy) continue;
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(enemy->facing) + kFantasmaModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(1.08f, 1.08f, 1.08f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(fantasmaGlbVAO);
+                glDrawElements(GL_TRIANGLES, fantasmaGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
         if (wasBlendEnabled) {
             glEnable(GL_BLEND);
         }
@@ -2402,7 +2458,13 @@ void Game::render3D() {
         const bool isLeonEnemy =
             (enemy->spriteBaseId == "leon") ||
             (enemy->currentSpriteName.size() >= 5 && enemy->currentSpriteName.compare(0, 5, "leon.") == 0);
+        const bool isFantasmaEnemy =
+            (enemy->spriteBaseId == "fantasma") ||
+            (enemy->currentSpriteName.size() >= 9 && enemy->currentSpriteName.compare(0, 9, "fantasma.") == 0);
         if (canRenderLeonGlb && isLeonEnemy) {
+            continue;
+        }
+        if (canRenderFantasmaGlb && isFantasmaEnemy) {
             continue;
         }
 
