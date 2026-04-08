@@ -1376,6 +1376,11 @@ void Game::processInput() {
          this->camera3DType == Camera3DType::FirstPerson &&
          this->window != nullptr);
 
+    const bool keepScreenFacingForPerspective3D =
+        (this->viewMode == ViewMode::Mode3D &&
+         (this->camera3DType == Camera3DType::PerspectiveFixed ||
+          this->camera3DType == Camera3DType::PerspectiveMobile));
+
     if (this->window != nullptr) {
         if (shouldCaptureFirstPersonMouse && !this->firstPersonCursorLocked) {
             glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -1435,7 +1440,10 @@ void Game::processInput() {
             p1->isWalking = false;
 
             if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-                p1->facingDirKey = remapDirectionFor3DCamera(this, this->lastDirKey);
+                const GLint idleFacingDir = keepScreenFacingForPerspective3D
+                    ? this->lastDirKey
+                    : remapDirectionFor3DCamera(this, this->lastDirKey);
+                p1->facingDirKey = idleFacingDir;
             }
         } else {
             GLint keyToUse = GLFW_KEY_UNKNOWN;
@@ -1462,38 +1470,22 @@ void Game::processInput() {
 
             if (keyToUse != GLFW_KEY_UNKNOWN) {
                 const GLint mappedDir = remapDirectionFor3DCamera(this, keyToUse);
-                switch (mappedDir) {
-                    case GLFW_KEY_UP:
-                        p1->UpdateSprite(MOVE_UP, gameMap, this->deltaTime);
-                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_UP) {
-                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                        }
-                        p1->facingDirKey = GLFW_KEY_UP;
-                        break;
-                    case GLFW_KEY_DOWN:
-                        p1->UpdateSprite(MOVE_DOWN, gameMap, this->deltaTime);
-                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_DOWN) {
-                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                        }
-                        p1->facingDirKey = GLFW_KEY_DOWN;
-                        break;
-                    case GLFW_KEY_LEFT:
-                        p1->UpdateSprite(MOVE_LEFT, gameMap, this->deltaTime);
-                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_LEFT) {
-                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                        }
-                        p1->facingDirKey = GLFW_KEY_LEFT;
-                        break;
-                    case GLFW_KEY_RIGHT:
-                        p1->UpdateSprite(MOVE_RIGHT, gameMap, this->deltaTime);
-                        if (!p1->isWalking || p1->facingDirKey != GLFW_KEY_RIGHT) {
-                            p1->walkTimer = 0.0f; p1->walkPhase = 0;
-                        }
-                        p1->facingDirKey = GLFW_KEY_RIGHT;
-                        break;
-                }
+                const Move mappedMove = directionKeyToMove(mappedDir);
+                if (mappedMove != MOVE_NONE) {
+                    p1->UpdateSprite(mappedMove, gameMap, this->deltaTime);
 
-                p1->isWalking = true;
+                    const GLint facingDir = keepScreenFacingForPerspective3D
+                        ? keyToUse
+                        : mappedDir;
+                    if (!p1->isWalking || p1->facingDirKey != facingDir) {
+                        p1->walkTimer = 0.0f;
+                        p1->walkPhase = 0;
+                    }
+                    p1->facingDirKey = facingDir;
+                    p1->isWalking = true;
+                } else {
+                    p1->isWalking = false;
+                }
             } else {
                 p1->isWalking = false;
             }
@@ -1527,7 +1519,10 @@ void Game::processInput() {
                         case GLFW_KEY_A: screenDir2 = GLFW_KEY_LEFT; break;
                         case GLFW_KEY_D: screenDir2 = GLFW_KEY_RIGHT; break;
                     }
-                    p2->facingDirKey = remapDirectionFor3DCamera(this, screenDir2);
+                    const GLint idleFacingDir2 = keepScreenFacingForPerspective3D
+                        ? screenDir2
+                        : remapDirectionFor3DCamera(this, screenDir2);
+                    p2->facingDirKey = idleFacingDir2;
                 }
             } else {
                 GLint keyToUse2 = GLFW_KEY_UNKNOWN;
@@ -1564,13 +1559,21 @@ void Game::processInput() {
                     const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen);
                     const Move mov2 = directionKeyToMove(dir2);
 
-                    p2->UpdateSprite(mov2, gameMap, this->deltaTime);
-                    if (!p2->isWalking || p2->facingDirKey != dir2) {
-                        p2->walkTimer = 0.0f;
-                        p2->walkPhase = 0;
+                    if (mov2 != MOVE_NONE) {
+                        p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+
+                        const GLint facingDir2 = keepScreenFacingForPerspective3D
+                            ? dir2Screen
+                            : dir2;
+                        if (!p2->isWalking || p2->facingDirKey != facingDir2) {
+                            p2->walkTimer = 0.0f;
+                            p2->walkPhase = 0;
+                        }
+                        p2->facingDirKey = facingDir2;
+                        p2->isWalking = true;
+                    } else {
+                        p2->isWalking = false;
                     }
-                    p2->facingDirKey = dir2;
-                    p2->isWalking = true;
                 } else {
                     p2->isWalking = false;
                 }
