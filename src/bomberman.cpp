@@ -64,6 +64,8 @@ static const char* kModel3DVertexShaderPath = "shaders/model3D.vs";
 static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
 static const char* kModel3DTexturedVertexShaderPath = "shaders/model3D_textured.vs";
 static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_textured.frag";
+static const char* kPlayerGlbPath = "models/3D/cartoon astronaut 3d model.glb";
+static const char* kLeonGlbPath = "resources/purple spiky creature 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -79,6 +81,11 @@ GLuint actorGlbVBO = 0;
 GLuint actorGlbEBO = 0;
 GLsizei actorGlbIndexCount = 0;
 GLuint actorGlbTexture = 0;
+GLuint leonGlbVAO = 0;
+GLuint leonGlbVBO = 0;
+GLuint leonGlbEBO = 0;
+GLsizei leonGlbIndexCount = 0;
+GLuint leonGlbTexture = 0;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -132,6 +139,17 @@ static float facingKeyToYawRadians(int facingKey)
         case GLFW_KEY_LEFT: return 1.57079632679f;
         case GLFW_KEY_DOWN: return 3.14159265359f;
         case GLFW_KEY_RIGHT: return -1.57079632679f;
+        default: return 0.0f;
+    }
+}
+
+static float enemyDirectionToYawRadians(EnemyDirection direction)
+{
+    switch (direction) {
+        case EnemyDirection::UP: return 0.0f;
+        case EnemyDirection::LEFT: return 1.57079632679f;
+        case EnemyDirection::DOWN: return 3.14159265359f;
+        case EnemyDirection::RIGHT: return -1.57079632679f;
         default: return 0.0f;
     }
 }
@@ -442,22 +460,28 @@ void CreateSphere()
     sphereIndexCount = sphereMesh->indexCount;
 }
 
-void CreateActorGlbModel(const std::string& modelPath)
+static bool createTexturedGlbModel(const std::string& meshCacheKey,
+                                   const std::string& modelPath,
+                                   GLuint& outVao,
+                                   GLuint& outVbo,
+                                   GLuint& outEbo,
+                                   GLsizei& outIndexCount,
+                                   GLuint& outTexture)
 {
     TexturedMeshData meshData;
     std::string loadError;
     if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
-        std::cerr << "[Render] Aviso: no se pudo cargar GLB de actores ('" << modelPath
+        std::cerr << "[Render] Aviso: no se pudo cargar GLB ('" << modelPath
                   << "'): " << loadError << "\n";
-        return;
+        return false;
     }
 
     if (meshData.vertices.empty() || meshData.indices.empty()) {
-        std::cerr << "[Render] Aviso: GLB de actores sin datos renderizables: " << modelPath << "\n";
-        return;
+        std::cerr << "[Render] Aviso: GLB sin datos renderizables: " << modelPath << "\n";
+        return false;
     }
 
-    MeshResource* actorMesh = ResourceManager::createMesh("actorGLB", [meshData]() -> MeshResource {
+    MeshResource* actorMesh = ResourceManager::createMesh(meshCacheKey, [meshData]() -> MeshResource {
         MeshResource mesh;
 
         glGenVertexArrays(1, &mesh.vao);
@@ -490,22 +514,22 @@ void CreateActorGlbModel(const std::string& modelPath)
     });
 
     if (!actorMesh) {
-        std::cerr << "[Render] Aviso: no se pudo crear mesh OpenGL para GLB de actores.\n";
-        return;
+        std::cerr << "[Render] Aviso: no se pudo crear mesh OpenGL para GLB: " << modelPath << "\n";
+        return false;
     }
 
-    actorGlbVAO = actorMesh->vao;
-    actorGlbVBO = actorMesh->vbo;
-    actorGlbEBO = actorMesh->ebo;
-    actorGlbIndexCount = actorMesh->indexCount;
+    outVao = actorMesh->vao;
+    outVbo = actorMesh->vbo;
+    outEbo = actorMesh->ebo;
+    outIndexCount = actorMesh->indexCount;
 
-    if (actorGlbTexture != 0) {
-        glDeleteTextures(1, &actorGlbTexture);
-        actorGlbTexture = 0;
+    if (outTexture != 0) {
+        glDeleteTextures(1, &outTexture);
+        outTexture = 0;
     }
 
-    glGenTextures(1, &actorGlbTexture);
-    glBindTexture(GL_TEXTURE_2D, actorGlbTexture);
+    glGenTextures(1, &outTexture);
+    glBindTexture(GL_TEXTURE_2D, outTexture);
     glTexImage2D(GL_TEXTURE_2D,
                  0,
                  GL_RGBA,
@@ -521,6 +545,30 @@ void CreateActorGlbModel(const std::string& modelPath)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    return true;
+}
+
+void CreateActorGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("actorGLB",
+                                 modelPath,
+                                 actorGlbVAO,
+                                 actorGlbVBO,
+                                 actorGlbEBO,
+                                 actorGlbIndexCount,
+                                 actorGlbTexture);
+}
+
+void CreateLeonGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("leonGLB",
+                                 modelPath,
+                                 leonGlbVAO,
+                                 leonGlbVBO,
+                                 leonGlbEBO,
+                                 leonGlbIndexCount,
+                                 leonGlbTexture);
 }
 
 void Compile3DShaders()
@@ -1277,6 +1325,10 @@ Game::~Game() {
         glDeleteTextures(1, &actorGlbTexture);
         actorGlbTexture = 0;
     }
+    if (leonGlbTexture != 0) {
+        glDeleteTextures(1, &leonGlbTexture);
+        leonGlbTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -1296,6 +1348,9 @@ Game::~Game() {
     actorGlbVAO = actorGlbVBO = actorGlbEBO = 0;
     actorGlbIndexCount = 0;
     actorGlbTexture = 0;
+    leonGlbVAO = leonGlbVBO = leonGlbEBO = 0;
+    leonGlbIndexCount = 0;
+    leonGlbTexture = 0;
 }
 
 void Game::init() {
@@ -1304,7 +1359,8 @@ void Game::init() {
     CompileShaders();
     CreateCube();
     CreateSphere();
-    CreateActorGlbModel(resolveAssetPath("models/3D/cartoon astronaut 3d model.glb"));
+    CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
+    CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -2228,8 +2284,10 @@ void Game::render3D() {
 
     const bool canRenderPlayerGlb =
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderLeonGlb =
+        (leonGlbVAO != 0 && leonGlbIndexCount > 0 && leonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -2240,37 +2298,68 @@ void Game::render3D() {
         glUniformMatrix4fv(uniform3DTexturedProjection, 1, GL_FALSE, glm::value_ptr(projection));
         glUniform1i(uniform3DTexturedSampler, 0);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, actorGlbTexture);
+        if (canRenderPlayerGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, actorGlbTexture);
 
-        // Ajuste de orientacion base del modelo GLB.
-        const float kPlayerModelYawOffset = 1.57079632679f;
+            // Ajuste de orientacion base del modelo GLB.
+            const float kPlayerModelYawOffset = 1.57079632679f;
 
-        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
-            Player* p = gPlayers[i];
-            if (!p || !p->isAlive()) continue;
+            for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+                Player* p = gPlayers[i];
+                if (!p || !p->isAlive()) continue;
 
-            if (camera3DType == Camera3DType::FirstPerson && i == 0) {
-                continue;
+                if (camera3DType == Camera3DType::FirstPerson && i == 0) {
+                    continue;
+                }
+
+                GLint modelFacingDirKey = p->facingDirKey;
+                if (this->camera3DType == Camera3DType::PerspectiveFixed ||
+                    this->camera3DType == Camera3DType::PerspectiveMobile) {
+                    modelFacingDirKey = remapDirectionFor3DCamera(this, modelFacingDirKey);
+                }
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.08f);
+                const float yaw = facingKeyToYawRadians(modelFacingDirKey) + kPlayerModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(1.28f, 1.28f, 1.28f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(actorGlbVAO);
+                glDrawElements(GL_TRIANGLES, actorGlbIndexCount, GL_UNSIGNED_INT, 0);
             }
+        }
 
-            GLint modelFacingDirKey = p->facingDirKey;
-            if (this->camera3DType == Camera3DType::PerspectiveFixed ||
-                this->camera3DType == Camera3DType::PerspectiveMobile) {
-                modelFacingDirKey = remapDirectionFor3DCamera(this, modelFacingDirKey);
+        if (canRenderLeonGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, leonGlbTexture);
+
+            // Ajuste de orientacion base del modelo GLB de Leon.
+            const float kLeonModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool isLeonEnemy =
+                    (enemy->spriteBaseId == "leon") ||
+                    (enemy->currentSpriteName.size() >= 5 && enemy->currentSpriteName.compare(0, 5, "leon.") == 0);
+                if (!isLeonEnemy) continue;
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(enemy->facing) + kLeonModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(1.05f, 1.05f, 1.05f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(leonGlbVAO);
+                glDrawElements(GL_TRIANGLES, leonGlbIndexCount, GL_UNSIGNED_INT, 0);
             }
-
-            const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.08f);
-            const float yaw = facingKeyToYawRadians(modelFacingDirKey) + kPlayerModelYawOffset;
-
-            glm::mat4 model(1.0f);
-            model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
-            model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(1.28f, 1.28f, 1.28f));
-
-            glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-            glBindVertexArray(actorGlbVAO);
-            glDrawElements(GL_TRIANGLES, actorGlbIndexCount, GL_UNSIGNED_INT, 0);
         }
 
         if (wasBlendEnabled) {
@@ -2309,6 +2398,13 @@ void Game::render3D() {
 
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+        const bool isLeonEnemy =
+            (enemy->spriteBaseId == "leon") ||
+            (enemy->currentSpriteName.size() >= 5 && enemy->currentSpriteName.compare(0, 5, "leon.") == 0);
+        if (canRenderLeonGlb && isLeonEnemy) {
+            continue;
+        }
 
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
         bool hasUv = getUvRectForSprite(gEnemyAtlas, enemy->currentSpriteName, uvRect);
