@@ -8,6 +8,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <algorithm>
 #include <cctype>
 #include <random>
@@ -385,6 +386,10 @@ void GameMap::update(float deltaTime) {
             }
         }
     }
+
+    // Decrementar el timer del nivel
+    levelTimeRemaining -= deltaTime;
+    if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 }
 
 // Recalcula tileSize/offsets para el aspect ratio actual y centra el mapa en pantalla.
@@ -641,8 +646,194 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
     glBindVertexArray(0);
 }
 
+// Función para renderizar un score usando sprites del atlas del scoreboard
+void renderScore(uint score, glm::vec2 startPos, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, GLuint vao, GLuint uniformModel, GLuint uniformUvRect) {
+    
+    if (score > 9999999) score = 9999999; // Limitar a 7 dígitos
+
+    std::ostringstream oss;
+    oss << std::setw(7) << std::setfill('0') << score;
+    std::string scoreStr = oss.str();  // Ahora scoreStr siempre tiene 7 caracteres
+
+    glBindVertexArray(vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, scoreboardTexture);  // Bind la textura del scoreboard
+
+    float currentX = startPos.x;  // Posición X inicial
+    float y = startPos.y;         // Posición Y fija
+
+    for (char c : scoreStr) {
+        std::string spriteName = std::string(1, c);  // Nombre del sprite (e.g., "1", "2", etc.)
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+        // Obtén el UV rect del sprite desde el atlas
+        if (!getUvRectForSprite(gScoreboardAtlas, spriteName, uvRect)) {
+            std::cerr << "Advertencia: Sprite '" << spriteName << "' no encontrado en atlas del scoreboard\n";
+            continue;  // Salta si no existe
+        }
+
+        // Calcula el ancho del sprite (basado en el atlas)
+        auto it = gScoreboardAtlas.sprites.find(spriteName);
+        float scale = 0.0028f; // Escala base para ajustar el tamaño del sprite en pantalla
+        float spriteWidth = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.w * scale : 20.0f * scale; 
+        float spriteHeight = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.h * scale : 23.0f * scale;
+
+        // Matriz de modelo: posiciona y escala el sprite
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));  // Centra en X
+        model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));  // Escala (0.5f porque el quad va de -1 a 1)
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        // Avanza la posición X para el siguiente dígito
+        float interSeparation = 0.015f; // Espacio entre dígitos
+        currentX += spriteWidth + interSeparation;
+    }
+
+    glBindVertexArray(0);
+}
+
+void renderLives(uint numLives, glm::vec2 startPos, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, GLuint vao, GLuint uniformModel, GLuint uniformUvRect) {
+    
+    if (numLives > 9) numLives = 9; // Máx de vidas de 9
+    
+    glBindVertexArray(vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, scoreboardTexture);  // Bind la textura del scoreboard
+
+    float currentX = startPos.x;  // Posición X inicial
+    float y = startPos.y;         // Posición Y fija
+
+    std::string spriteName = std::to_string(numLives);
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+    // Obtén el UV rect del sprite desde el atlas
+    if (!getUvRectForSprite(gScoreboardAtlas, spriteName, uvRect)) {
+        std::cerr << "Advertencia: Sprite '" << spriteName << "' no encontrado en atlas del scoreboard\n";
+        exit;  // Salta si no existe
+    }
+
+    // Calcula el ancho del sprite (basado en el atlas)
+    auto it = gScoreboardAtlas.sprites.find(spriteName);
+    float scale = 0.0028f; // Escala base para ajustar el tamaño del sprite en pantalla
+    float spriteWidth = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.w * scale : 20.0f * scale; 
+    float spriteHeight = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.h * scale : 23.0f * scale;
+
+    // Matriz de modelo: posiciona y escala el sprite
+    glm::mat4 model = glm::mat4(1.0f);
+    model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));  // Centra en X
+    model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));  // Escala (0.5f porque el quad va de -1 a 1)
+
+    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glBindVertexArray(0);
+}
+
+void renderTimer(float time, glm::vec2 startPos, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, GLuint vao, GLuint uniformModel, GLuint uniformUvRect) {
+    int totalSeconds = (int)std::ceil(time);
+    int minutes = totalSeconds / 60;
+    int seconds = totalSeconds % 60;
+
+    std::string timerStr = std::to_string(minutes) + ":" + (seconds < 10 ? "0" : "") + std::to_string(seconds);
+
+    glBindVertexArray(vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, scoreboardTexture);
+
+    float currentX = startPos.x;
+    float y = startPos.y;
+
+    for (char c : timerStr) {
+        std::string spriteName;
+        if (c == ':') {
+            spriteName = "dos_puntos";
+            currentX += 0.005f; // Ajuste extra para el símbolo de dos puntos
+        } else {
+            spriteName = std::string(1, c);
+        }
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+        if (!getUvRectForSprite(gScoreboardAtlas, spriteName, uvRect)) {
+            std::cerr << "Advertencia: Sprite '" << spriteName << "' no encontrado en atlas del scoreboard\n";
+            continue;
+        }
+
+        auto it = gScoreboardAtlas.sprites.find(spriteName);
+        float scale = 0.0028f;
+        float spriteWidth = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.w * scale : 20.0f * scale; 
+        float spriteHeight = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.h * scale : 23.0f * scale;
+
+
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));
+        model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        float interSeparation = 0.015f;
+        currentX += spriteWidth + interSeparation;
+    }
+
+    glBindVertexArray(0);
+}
+
+void GameMap::renderCurrentLevel(glm::vec2 startPos, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, GLuint vao, GLuint uniformModel, GLuint uniformUvRect) {
+
+    glBindVertexArray(vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, scoreboardTexture);
+
+    float currentX = startPos.x;
+    float y = startPos.y;
+
+    for (char c : currentLevel) {
+        std::string spriteName;
+        if (c == '-') {
+            spriteName = "guion";
+        } else {
+            spriteName = std::string(1, c);
+        }
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+        if (!getUvRectForSprite(gScoreboardAtlas, spriteName, uvRect)) {
+            std::cerr << "Advertencia: Sprite '" << spriteName << "' no encontrado en atlas del scoreboard\n";
+            continue;
+        }
+
+        auto it = gScoreboardAtlas.sprites.find(spriteName);
+        float scale = 0.0028f;
+        float spriteWidth = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.w * scale : 20.0f * scale; 
+        float spriteHeight = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.h * scale : 23.0f * scale;
+
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));
+        model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        float interSeparation = 0.018f;
+        currentX += spriteWidth + interSeparation;
+    }
+
+    glBindVertexArray(0);
+
+}
+
 void GameMap::renderHud(GLuint vao, GLuint hudTexture,
-                        GLuint uniformModel, GLuint uniformUvRect) {
+                        GLuint uniformModel, GLuint uniformUvRect, 
+                        SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture) {
     float hudWidth = cols * tileSize;
 
     glActiveTexture(GL_TEXTURE0);
@@ -660,8 +851,51 @@ void GameMap::renderHud(GLuint vao, GLuint hudTexture,
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-}
 
+    // Scoreboard esquina superior izquierda del HUD (1er player)
+    glm::vec2 scorePos(-1.26f, 0.935f);
+    renderScore(100, scorePos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Scoreboard esquina inferior izquierda del HUD (2do player)
+    glm::vec2 scorePos2(-1.26f, 0.813f);
+    renderScore(2000, scorePos2, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    
+    // Scoreboard esquina superior derecha del HUD (3ro player)
+    glm::vec2 scorePos3(0.5675f, 0.935f);
+    renderScore(300, scorePos3, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Scoreboard esquina inferior derecha del HUD (4to player)
+    glm::vec2 scorePos4(0.5675f, 0.813f);
+    renderScore(4000, scorePos4, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Scoreboard centro (general)
+    glm::vec2 scorePos5(-0.135f, 0.935f);
+    renderScore(100 + 2000 + 300 + 4000, scorePos5, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Vidas esquina superior izquierda del HUD (1er player)
+    glm::vec2 livesPos(-0.55f, 0.935f);
+    renderLives(1, livesPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    
+    // Vidas esquina inferior izquierda del HUD (2do player)
+    glm::vec2 livesPos2(-0.55f, 0.813f);
+    renderLives(2, livesPos2, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Vidas esquina superior derecha del HUD (3ro player)
+    glm::vec2 livesPos3(1.275f, 0.935f);
+    renderLives(3, livesPos3, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Vidas esquina inferior derecha del HUD (4to player)
+    glm::vec2 livesPos4(1.275f, 0.813f);
+    renderLives(5, livesPos4, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Nivel actual
+    glm::vec2 levelPos(-0.270f, 0.813f);
+    renderCurrentLevel(levelPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // Contador del tiempo
+    glm::vec2 timePos(0.09f, 0.813f);
+    renderTimer(levelTimeRemaining, timePos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+}
 // ============================== Power-Ups ==============================
 
 // LoadTexture definido en bomberman.cpp
