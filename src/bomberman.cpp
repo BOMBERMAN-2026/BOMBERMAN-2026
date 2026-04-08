@@ -65,10 +65,10 @@ static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
 static const char* kModel3DTexturedVertexShaderPath = "shaders/model3D_textured.vs";
 static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_textured.frag";
 static const char* kPlayerGlbPath = "models/3D/cartoon astronaut 3d model.glb";
-static const char* kLeonGlbPath = "resources/purple spiky creature 3d model.glb";
-static const char* kFantasmaGlbPath = "resources/ghost character 3d model.glb";
-static const char* kBebeGlbPath = "resources/cartoon creature 3d model.glb";
-static const char* kBabosaGlbPath = "resources/poop character 3d model.glb";
+static const char* kLeonGlbPath = "models/3D/purple spiky creature 3d model.glb";
+static const char* kFantasmaGlbPath = "models/3D/ghost character 3d model.glb";
+static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
+static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
