@@ -64,6 +64,12 @@ class Game
         float cameraOrbitYaw = 0.0f;          // Yaw orbital para la camara isometrica fija
         bool cameraOrbitDragging = false;     // Estado de arrastre con raton
         double cameraOrbitLastMouseX = 0.0;   // Ultima X del cursor durante el arrastre
+        float firstPersonYaw = 0.0f;          // Yaw first-person (0 = mirando hacia arriba del mapa)
+        float firstPersonPitch = -0.18f;      // Pitch first-person en radianes
+        bool firstPersonMouseInitialized = false;
+        bool firstPersonCursorLocked = false;
+        double firstPersonLastMouseX = 0.0;
+        double firstPersonLastMouseY = 0.0;
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
