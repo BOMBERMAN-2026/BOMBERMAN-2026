@@ -17,11 +17,11 @@ static float randomFloat(float lo, float hi) {
     return lo + static_cast<float>(std::rand()) / (static_cast<float>(RAND_MAX) / (hi - lo));
 }
 
+// Velocidad de rebote inicial en diagonal (estilo pinball).
 SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase phase)
     : Enemy(pos, size, speed, /*hp=*/3, /*score=*/5000, /*passSoftBlocks=*/false, /*boss=*/true),
         currentPhase(phase), invulnerableTimer(phase != Phase::FULL ? 0.8f : 0.0f)
 {
-    // Velocidad de rebote inicial en diagonal (estilo pinball)
     float angle = randomFloat(0.1f, 1.4f); // angulo aleatorio
     
     // Incremento de velocidad principal

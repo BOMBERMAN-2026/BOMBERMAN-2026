@@ -19,15 +19,15 @@
 
 Enemy::~Enemy() {}
 
+// Extrae "leon" de "leon.derecha.0".
 static std::string baseIdFromSpriteName(const std::string& spriteName) {
-    // Extrae "leon" de "leon.derecha.0".
     const std::size_t dot = spriteName.find('.');
     if (dot == std::string::npos) return spriteName;
     return spriteName.substr(0, dot);
 }
 
+// Cuenta frames consecutivos desde 0: deathPrefix + "0", "1", ...
 static int countDeathFrames(const SpriteAtlas& atlas, const std::string& deathPrefix) {
-    // Cuenta frames consecutivos desde 0: deathPrefix + "0", "1", ...
     int count = 0;
     while (true) {
         const std::string key = deathPrefix + std::to_string(count);

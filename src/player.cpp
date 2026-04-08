@@ -147,8 +147,8 @@ void Player::updateAnimation() {
     }
 }
 
+// Avanza frames de muerte según causa; al terminar respawnea.
 void Player::updateDeathAnimation() {
-    // Avanza frames de muerte según causa; al terminar respawnea.
     static constexpr float deathFrameInterval = 0.10f;
 
     int lastFrame = 0;

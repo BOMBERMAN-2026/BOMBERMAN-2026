@@ -41,14 +41,14 @@ void DronBombardero::updateFireMode() {
 }
 
 // Coloca una bomba en la posición actual (pendiente).
+// TODO: Instanciar una bomba con explosionRange = bombExplosionRange.
 void DronBombardero::dropBomb() {
-    // TODO: Instanciar una bomba en la posición actual con explosionRange = bombExplosionRange
     bombCooldown = bombCooldownMax;
 }
 
 // Dispara una bola de fuego en la dirección dada (pendiente).
+// TODO: Instanciar un proyectil con rango infinito.
 void DronBombardero::shootFireball(EnemyDirection dir) {
-    // TODO: Instanciar un proyectil de bola de fuego en la dirección dada con rango infinito
     (void)dir;
 }
 
@@ -115,6 +115,6 @@ void DronBombardero::Update() {
 }
 
 // Render del enemigo (pendiente).
+// TODO: Dibujar sprite del dron (y efecto fuego si onFire).
 void DronBombardero::Draw() {
-    // TODO: Renderizar sprite del Dron bombardero (con efecto de fuego si onFire)
 }

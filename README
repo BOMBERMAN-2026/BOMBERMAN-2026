@@ -1,13 +1,41 @@
 Distribución de carpetas
 
-- **include** => ficheros .hpp o cabeceras
-- **levels** => niveles del juego 
-- **lib** => para las librerias externas, ficheros extraños del palo .a o .so 
-    - **lib/include** => cabeceras de apis de librerias y tal
-- **resources**
-    - **resources/sprites** => imagenes de los sprites del juego a usar
-    - **resources/sounds** => canciones y efectos de sonido del juego
-- **docs** => documentación (guía de diseño, etc.)
-- **src** => ficheros .cpp o codigo fuente
+- **CMakeLists.txt** => configuración del proyecto (CMake).
+- **build/** => carpeta generada por CMake con artefactos de compilación (se puede borrar si quieres “clean build”).
+- **src/** => código fuente (.cpp).
+- **include/** => cabeceras del juego (.hpp).
+    - **include/enemies/** => cabeceras de enemigos.
+    - **include/external/** => librerías header-only (por ejemplo stb).
+- **levels/** => niveles en texto (`level_XX.txt`).
+- **resources/** => assets del juego.
+    - **resources/sprites/** => sprites/atlases.
+    - **resources/sounds/** => música y efectos.
+- **shaders/** => shaders GLSL.
+- **tools/** => utilidades/herramientas (programas auxiliares).
+- **lib/** => librerías externas del proyecto (headers de OpenGL/GLFW/GLM, etc.).
 
-En el directorio base deberia de haber algun tipo de **CMake** o algo asi para compilar y tmb algun **fichero de configuración** de variables
+---
+
+Controles
+
+- **Intro**
+    - `ESPACIO`: ir al menú.
+
+- **Menú**
+    - `↑/↓` o `W/S`: mover selección.
+    - `ENTER`: confirmar (1P/2P).
+
+- **Juego**
+    - **Jugador 1**: `↑/↓/←/→` mover.
+        - **Jugador 1**: `CTRL derecho` poner bomba.
+        - **Jugador 1**: `ALT derecho` detonar (requiere Remote Control).
+    - **Jugador 2**: `W/A/S/D` mover.
+        - **Jugador 2**: `X` poner bomba.
+        - **Jugador 2**: `Z` detonar (requiere Remote Control).
+    - **Ratón**: no se usa.
+    - `TAB`: alternar ventana/pantalla completa.
+    - `F1`: alternar vista 2D/3D.
+    - `F2`: cambiar tipo de cámara 3D.
+
+- **Debug/Testing**
+    - `F3`: forzar avance al siguiente nivel (sin limpiar enemigos).

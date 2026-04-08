@@ -22,8 +22,8 @@ MenuIntroScreen::MenuIntroScreen()
       selectedGameMode(GameMode::OnePlayer) {
 }
 
+// Libera texturas de intro/menú (si se llegaron a crear).
 MenuIntroScreen::~MenuIntroScreen() {
-    // Limpiar texturas si es necesario
     if (introVideoTexture != 0) glDeleteTextures(1, &introVideoTexture);
     if (menuBackgroundTexture != 0) glDeleteTextures(1, &menuBackgroundTexture);
     if (menuArrowTexture != 0) glDeleteTextures(1, &menuArrowTexture);
@@ -31,8 +31,8 @@ MenuIntroScreen::~MenuIntroScreen() {
 
 // ============================== INTRO ==============================
 
+// Inicializa el intro: carga atlas/textura y reinicia contadores.
 void MenuIntroScreen::initIntro() {
-    // Cargar atlas JSON
     const std::string introAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasIntro.json");
     if (!loadSpriteAtlasMinimal(introAtlasPath, introAtlas)) {
         std::cerr << "Error cargando SpriteAtlasIntro.json\n";
@@ -108,20 +108,34 @@ void MenuIntroScreen::renderIntro(GLuint VAO, GLuint shader, GLuint uniformModel
 
 // ============================== MENU ==============================
 
+// Inicializa/reinicia el menú (resetea flags y carga recursos si faltan).
 void MenuIntroScreen::initMenu() {
-    menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreen.png").c_str());
+    // Reset de flags (evita auto-arranque al volver del juego).
+    shouldTransitionToGame = false;
+    selectedGameMode = GameMode::OnePlayer;
+
+    // Cargar sólo si falta (evita recargar al volver al menú).
     if (menuBackgroundTexture == 0) {
-        std::cerr << "Error cargando MenuScreen.png\n";
+        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreen.png").c_str());
+        if (menuBackgroundTexture == 0) {
+            std::cerr << "Error cargando MenuScreen.png\n";
+        }
     }
 
-    const std::string menuBombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasMenuBomb.json");
-    if (!loadSpriteAtlasMinimal(menuBombAtlasPath, menuBombAtlas)) {
-        std::cerr << "Error cargando SpriteAtlasMenuBomb.json\n";
+    // Reutilizar atlas si ya está cargado.
+    if (menuBombAtlas.sprites.empty()) {
+        const std::string menuBombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasMenuBomb.json");
+        if (!loadSpriteAtlasMinimal(menuBombAtlasPath, menuBombAtlas)) {
+            std::cerr << "Error cargando SpriteAtlasMenuBomb.json\n";
+        }
     }
 
-    menuArrowTexture = LoadTexture(resolveAssetPath(menuBombAtlas.imagePath).c_str());
-    if (menuArrowTexture == 0) {
-        std::cerr << "Error cargando SpriteBombaAtlas.png\n";
+    // Textura de la flecha (explosión animada).
+    if (menuArrowTexture == 0 && !menuBombAtlas.imagePath.empty()) {
+        menuArrowTexture = LoadTexture(resolveAssetPath(menuBombAtlas.imagePath).c_str());
+        if (menuArrowTexture == 0) {
+            std::cerr << "Error cargando SpriteBombaAtlas.png\n";
+        }
     }
 
     menuSelection = 0;
@@ -233,7 +247,7 @@ void MenuIntroScreen::processInputMenu(std::map<int, int>& keys) {
         }
     }
 
-    // Enter para seleccionar/confirmar
+    // Confirmar selección.
     if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuArrowSelected = true;

@@ -94,14 +94,13 @@ void KingBomber::updateShield() {
 }
 
 // Coloca una cadena de bombas hacia el jugador (pendiente).
+// TODO: Instanciar una cadena en la dirección general del jugador.
 void KingBomber::placeChainBombs() {
-    // TODO: Colocar una cadena de bombas en la dirección general del jugador
     chainBombCooldown = chainBombCooldownMax;
 }
 
 // Cuando explotan sus bombas: cae escudo y entra en retirada.
 void KingBomber::onBombsExploded() {
-    // Cuando sus propias bombas explotan, el escudo cae
     if (shieldActive) {
         shieldActive = false;
         startRetreat();
@@ -152,7 +151,6 @@ void KingBomber::Update() {
 }
 
 // Render del boss y sus drones (pendiente).
+// TODO: Dibujar sprite del boss (incl. escudo) y de los 4 drones.
 void KingBomber::Draw() {
-    // TODO: Renderizar sprite de King Bomber (con efecto de escudo si shieldActive)
-    // TODO: Renderizar los 4 drones también
 }

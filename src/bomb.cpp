@@ -48,8 +48,8 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, 
       remoteControlled(remote)
 {}
 
+// Ajusta contadores del owner si la bomba se destruye antes de terminar.
 Bomb::~Bomb() {
-    // Asegurar que activeBombs se decrementa si la bomba se destruye sin explotar
     if (owner && state != BombState::DONE) {
         owner->activeBombs--;
         owner = nullptr;

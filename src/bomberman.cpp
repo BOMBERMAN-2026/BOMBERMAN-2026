@@ -83,6 +83,9 @@ SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 std::vector<Enemy*> gEnemies;
 std::vector<Bomb*> gBombs;
 
+static constexpr float kDefaultPlayerSpeed = 0.4f;
+static constexpr glm::vec2 kDefaultPlayerSize(0.2f, 0.2f);
+
 static const char* viewModeToString(ViewMode mode) {
     return (mode == ViewMode::Mode3D) ? "3D" : "2D";
 }
@@ -368,6 +371,329 @@ void CompileShaders()
     uniformWhiteFlash = glGetUniformLocation(shader, "whiteFlash");
     uniformUvRect = glGetUniformLocation(shader, "uvRect");
     uniformFlipX = glGetUniformLocation(shader, "flipX");
+}
+
+GLuint LoadTexture(const char* filePath);
+
+// ============================== Game: run/level helpers ==============================
+
+/*
+ * Recursos de render que sólo deberían inicializarse una vez por ejecución:
+ * - VAO/VBO/EBO del quad 2D
+ * - Programas shader 2D y 3D
+ * - Geometría del cubo para modo 3D
+ * Además activamos blending para sprites con alpha.
+ */
+void Game::ensureRenderResources() {
+    if (renderResourcesInitialized) return;
+
+    CreateRectangle();
+    CompileShaders();
+    CreateCube();
+    Compile3DShaders();
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    renderResourcesInitialized = true;
+}
+
+// Carga atlas/texturas compartidas que se reutilizan entre niveles (1 vez por ejecución).
+void Game::ensureGameplayAssets() {
+    // Evita recargar texturas/atlases en cada `loadLevel()`.
+    if (gameplayAssetsLoaded) return;
+
+    // Atlas + textura del jugador
+    {
+        const std::string atlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasPlayer.json");
+        if (!loadSpriteAtlasMinimal(atlasPath, gPlayerAtlas)) {
+            std::cerr << "Error cargando atlas: " << atlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
+        texture = LoadTexture(texturePath.c_str());
+        if (texture == 0) {
+            std::cerr << "Error cargando textura: " << texturePath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Atlas + textura de enemigos
+    {
+        const std::string enemyAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasEnemy.json");
+        if (!loadSpriteAtlasMinimal(enemyAtlasPath, gEnemyAtlas)) {
+            std::cerr << "Error cargando atlas enemigos: " << enemyAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        const std::string enemyTexPath = resolveAssetPath(gEnemyAtlas.imagePath);
+        enemyTexture = LoadTexture(enemyTexPath.c_str());
+        if (enemyTexture == 0) {
+            std::cerr << "Error cargando textura enemigos: " << enemyTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Textura del mapa + HUD (por ahora fijas)
+    {
+        const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
+        mapTexture = LoadTexture(mapTexPath.c_str());
+        if (mapTexture == 0) {
+            std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
+        hudTexture = LoadTexture(hudTexPath.c_str());
+        if (hudTexture == 0) {
+            std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Atlas de bombas (misma sprite sheet del stage)
+    {
+        const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
+        if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
+            std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+        }
+    }
+
+    gameplayAssetsLoaded = true;
+}
+
+// Limpieza del contenido "dinámico" de un nivel.
+// Orden: bombas -> enemigos -> jugadores.
+void Game::cleanupGameplayEntities() {
+    for (auto* b : gBombs) delete b;
+    gBombs.clear();
+
+    for (auto* e : gEnemies) delete e;
+    gEnemies.clear();
+
+    for (auto* p : gPlayers) delete p;
+    gPlayers.clear();
+}
+
+// Condición de Game Over: todos los jugadores están sin vidas.
+bool Game::allPlayersOutOfLives() const {
+    if (gPlayers.empty()) return true;
+    for (auto* p : gPlayers) {
+        if (!p) continue;
+        if (p->lives > 0) return false;
+    }
+    return true;
+}
+
+bool Game::allEnemiesCleared() const {
+    if (!currentLevelHadEnemies) return false; // El nivel nunca tuvo enemigos
+    return gEnemies.empty();
+}
+
+// Carga completa de un nivel.
+void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
+    ensureGameplayAssets();
+    // Guardar progreso a preservar.
+    std::vector<int> savedLives;
+    if (preserveLivesAndScore) {
+        // Conserva vidas y puntuación acumulada.
+        savedLives.reserve(gPlayers.size());
+        for (auto* p : gPlayers) {
+            savedLives.push_back(p ? p->lives : 0);
+        }
+    }
+
+    // Limpiar entidades del nivel anterior.
+    cleanupGameplayEntities();
+
+    // Reset de transición de nivel (para no arrastrar timers entre niveles).
+    pendingLevelAdvance = false;
+    levelAdvanceTimer = 0.0f;
+
+    // Cargar / recargar mapa.
+    if (!gameMap) gameMap = new GameMap();
+
+    if (levelIndex < 0 || levelIndex >= (int)levelSequence.size()) {
+        // Seguridad: si algo fuerza un índice inválido, terminamos run y volvemos al menú.
+        std::cerr << "Nivel fuera de rango: " << levelIndex << std::endl;
+        returnToMenuFromGame(/*resetRun=*/true);
+        return;
+    }
+
+    if (!gameMap->loadFromFile(levelSequence[levelIndex])) {
+        std::cerr << "Error cargando mapa: " << levelSequence[levelIndex] << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json")) {
+        std::cerr << "Error cargando atlas del mapa" << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    float aspectRatio = (float)WIDTH / (float)HEIGHT;
+    gameMap->calculateTileMetrics(aspectRatio);
+
+    // Crear jugadores según el modo.
+    const int numPlayers = (mode == GameMode::TwoPlayers) ? 2 : 1;
+    if (!preserveLivesAndScore) {
+        playerScores.assign(numPlayers, 0);
+    } else {
+        if ((int)playerScores.size() < numPlayers) playerScores.resize(numPlayers, 0);
+    }
+
+    gPlayers.reserve(numPlayers);
+    for (int i = 0; i < numPlayers; ++i) {
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(i);
+        const std::string prefix = (i == 0) ? "jugadorblanco" : "jugadorrojo";
+        Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/i, prefix);
+        if (preserveLivesAndScore && i < (int)savedLives.size()) {
+            p->lives = savedLives[i];
+        }
+        gPlayers.push_back(p);
+    }
+
+    // Crear enemigos según el nivel.
+    // La lista de spawns viene del TXT (enemy <type> <x> <y>).
+    {
+        const auto& spawns = gameMap->getEnemySpawns();
+        for (const auto& s : spawns) {
+            glm::vec2 pos = gameMap->gridToNDC(s.row, s.col);
+            if (!gameMap->isWalkable(s.row, s.col)) {
+                std::cerr << "Enemy spawn no walkable (row=" << s.row << ", col=" << s.col << ")\n";
+                continue;
+            }
+
+            Enemy* enemy = nullptr;
+            switch (s.type) {
+                case EnemySpawnType::Leon: {
+                    auto* e = new Leon(pos, kDefaultPlayerSize, /*speed=*/0.10f);
+                    e->currentSpriteName = "leon.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::Babosa: {
+                    auto* e = new Babosa(pos, kDefaultPlayerSize, /*speed=*/0.06f);
+                    e->currentSpriteName = "babosa.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::BebeLloron: {
+                    auto* e = new BebeLloron(pos, kDefaultPlayerSize, /*speed=*/0.08f);
+                    e->currentSpriteName = "bebe.derecha.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::FantasmaMortal: {
+                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize, /*speed=*/0.11f);
+                    e->currentSpriteName = "fantasma.derecha.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::SolPervertido: {
+                    auto* e = new SolPervertido(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    e->currentSpriteName = "sol.grande.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::KingBomber: {
+                    auto* e = new KingBomber(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    e->currentSpriteName = "kingbomber1.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronRosa: {
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    e->currentSpriteName = "dronrosa.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronVerde: {
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    e->currentSpriteName = "dronverde.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronAmarillo: {
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    e->currentSpriteName = "dronamarillo.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DronAzul: {
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    e->currentSpriteName = "dronazul.abajo.0";
+                    enemy = e;
+                    break;
+                }
+                case EnemySpawnType::DragonJoven: {
+                    auto* e = new DragonJoven(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    e->currentSpriteName = "dragon.abajo.0";
+                    enemy = e;
+                    break;
+                }
+            }
+
+            if (!enemy) continue;
+            enemy->setContext(gameMap, &gPlayers);
+            gEnemies.push_back(enemy);
+        }
+    }
+
+    currentLevelHadEnemies = !gEnemies.empty();
+
+    // Power-Ups (texturas: se cargan una vez por instancia de GameMap)
+    gameMap->loadPowerUpTextures();
+    gameMap->placePowerUps();
+}
+
+// Arranca una partida nueva desde nivel_01 (índice 0).
+void Game::startNewRun(GameMode newMode) {
+    mode = newMode;
+    currentLevelIndex = 0;
+    currentLevelHadEnemies = false;
+    playerScores.clear();
+
+    state = GAME_PLAYING;
+    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+
+    // Por si el menú dejó la marca de transición activa.
+    menuIntroScreen.resetTransition();
+}
+
+// Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
+void Game::advanceToNextLevel() {
+    const int nextIndex = currentLevelIndex + 1;
+    if (nextIndex >= (int)levelSequence.size()) {
+        // No hay ranking ni pantalla de victoria: volver al menú.
+        returnToMenuFromGame(/*resetRun=*/true);
+        return;
+    }
+
+    currentLevelIndex = nextIndex;
+    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/true);
+}
+
+// Sale a menú desde gameplay (Game Over / fin de campaña).
+void Game::returnToMenuFromGame(bool resetRun) {
+    cleanupGameplayEntities();
+    pendingLevelAdvance = false;
+    levelAdvanceTimer = 0.0f;
+    if (resetRun) {
+        currentLevelIndex = 0;
+        currentLevelHadEnemies = false;
+        playerScores.clear();
+    }
+    state = GAME_MENU;
+    init();
+}
+
+Game::~Game() {
+    cleanupGameplayEntities();
+    // Liberar gameMap para evitar fugas.
+    if (gameMap) {
+        delete gameMap;
+        gameMap = nullptr;
+    }
 }
 
 GLuint LoadTexture(const char* filePath)
@@ -679,13 +1005,7 @@ void Game::cycleCamera3DType() {
 
 void Game::init() {
 
-    CreateRectangle();
-    CompileShaders();
-    CreateCube();
-    Compile3DShaders();
-
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    ensureRenderResources();
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
@@ -701,229 +1021,25 @@ void Game::init() {
 
     // ========== JUEGO ==========
     if (this->state == GAME_PLAYING) {
-        // Cargar atlas + textura del jugador (alpha) desde JSON
-        const std::string atlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasPlayer.json");
-        if (!loadSpriteAtlasMinimal(atlasPath, gPlayerAtlas))
-        {
-            std::cerr << "Error cargando atlas: " << atlasPath << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // Comprobación básica: si no existen los sprites esperados, avisar (ayuda a detectar nombres distintos en el JSON).
-        if (gPlayerAtlas.sprites.find("jugadorblanco.abajo.0") == gPlayerAtlas.sprites.end()) {
-            std::cerr << "[SpriteAtlas] Aviso: no existe 'jugadorblanco.abajo.0' en el atlas."
-                    << " Total sprites: " << gPlayerAtlas.sprites.size() << "\n";
-            int shown = 0;
-            for (const auto& p : gPlayerAtlas.sprites) {
-                std::cerr << "  - " << p.first << "\n";
-                if (++shown >= 10) break;
-            }
-        }
-
-        const std::string texturePath = resolveAssetPath(gPlayerAtlas.imagePath);
-        texture = LoadTexture(texturePath.c_str());
-        if (texture == 0)
-        {
-            std::cerr << "Error cargando textura: " << texturePath << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // Cargar nivel
-        gameMap = new GameMap();
-        if (!gameMap->loadFromFile("levels/level_05.txt"))
-        {
-            std::cerr << "Error cargando mapa" << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // Cargar atlas del mapa (coordenadas de sprites)
-        if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json"))
-        {
-            std::cerr << "Error cargando atlas del mapa" << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // Calcular métricas del mapa (ahora que tenemos cols, rows y aspectRatio)
-        float aspectRatio = (float)WIDTH / (float)HEIGHT;
-        gameMap->calculateTileMetrics(aspectRatio);
-
-        // Cargar textura de la sprite sheet del mapa
-        const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
-        mapTexture = LoadTexture(mapTexPath.c_str());
-        if (mapTexture == 0)
-        {
-            std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // Cargar textura del HUD
-        const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
-        hudTexture = LoadTexture(hudTexPath.c_str());
-        if (hudTexture == 0)    {
-            std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
-        // Crear jugador(es) en la posición de spawn del mapa
-        gPlayers.clear();
-
-        {
-            glm::vec2 spawnPos = gameMap->getSpawnPosition(0);
-            Player* p1 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/0, "jugadorblanco");
-            gPlayers.push_back(p1);
-        }
-
-        if (this->mode == GameMode::TwoPlayers) {
-            glm::vec2 spawnPos = gameMap->getSpawnPosition(1);
-            Player* p2 = new Player(spawnPos, glm::vec2(0.2f, 0.2f), 0.4f, /*playerId=*/1, "jugadorrojo");
-            gPlayers.push_back(p2);
-        }
-
-        // Cargar atlas + textura de enemigos
-        {
-            const std::string enemyAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasEnemy.json");
-            if (!loadSpriteAtlasMinimal(enemyAtlasPath, gEnemyAtlas))
-            {
-                std::cerr << "Error cargando atlas enemigos: " << enemyAtlasPath << std::endl;
-                std::exit(EXIT_FAILURE);
-            }
-            const std::string enemyTexPath = resolveAssetPath(gEnemyAtlas.imagePath);
-            enemyTexture = LoadTexture(enemyTexPath.c_str());
-            if (enemyTexture == 0)
-            {
-                std::cerr << "Error cargando textura enemigos: " << enemyTexPath << std::endl;
-                std::exit(EXIT_FAILURE);
-            }
-        }
-
-        for (auto enemy : gEnemies) {
-            delete enemy;
-        }
-        gEnemies.clear();
-
-        // Crear enemigos según el nivel
-        {
-            const auto& spawns = gameMap->getEnemySpawns();
-            if (spawns.empty()) {
-                std::cerr << "No hay enemigos definidos en el nivel (directivas 'enemy').\n";
-            }
-            for (const auto& s : spawns) {
-                glm::vec2 pos = gameMap->gridToNDC(s.row, s.col);
-                // Evita spawnear fuera de casillas caminables (por error en el TXT).
-                if (!gameMap->isWalkable(s.row, s.col)) {
-                    std::cerr << "Enemy spawn no walkable (row=" << s.row << ", col=" << s.col << ")\n";
-                    continue;
-                }
-
-            Enemy* enemy = nullptr;
-            switch (s.type) {
-                case EnemySpawnType::Leon: {
-                    auto* e = new Leon(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.10f);
-                    e->currentSpriteName = "leon.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::Babosa: {
-                    auto* e = new Babosa(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.06f);
-                    e->currentSpriteName = "babosa.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::BebeLloron: {
-                    auto* e = new BebeLloron(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.08f);
-                    e->currentSpriteName = "bebe.derecha.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::FantasmaMortal: {
-                    auto* e = new FantasmaMortal(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.11f);
-                    e->currentSpriteName = "fantasma.derecha.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::SolPervertido: {
-                    auto* e = new SolPervertido(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
-                    e->currentSpriteName = "sol.grande.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::KingBomber: {
-                    auto* e = new KingBomber(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
-                    e->currentSpriteName = "kingbomber1.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::DronRosa: {
-                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
-                    e->currentSpriteName = "dronrosa.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::DronVerde: {
-                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
-                    e->currentSpriteName = "dronverde.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::DronAmarillo: {
-                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
-                    e->currentSpriteName = "dronamarillo.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::DronAzul: {
-                    auto* e = new DronBombardero(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.09f);
-                    e->currentSpriteName = "dronazul.abajo.0";
-                    enemy = e;
-                    break;
-                }
-                case EnemySpawnType::DragonJoven: {
-                    auto* e = new DragonJoven(pos, glm::vec2(0.2f, 0.2f), /*speed=*/0.07f);
-                    e->currentSpriteName = "dragon.abajo.0";
-                    enemy = e;
-                    break;
-                }
-            }
-
-                if (!enemy) continue;
-                enemy->setContext(gameMap, &gPlayers);
-                gEnemies.push_back(enemy);
-            }
-        }
-
-        // Limpiar bombas anteriores
-        for (auto b : gBombs) delete b;
-        gBombs.clear();
-
-        // Cargar atlas de bombas (misma sprite sheet del stage)
-        {
-            const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
-            if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas))
-            {
-                std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
-            }
-        }
-
-        // === Power-Ups ===
-        gameMap->loadPowerUpTextures();
-        gameMap->placePowerUps();
+        // Iniciar / recargar el nivel actual.
+        loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
     }
 }
 
 // Lee teclas y aplica acciones (movimiento, animación y colocar bombas).
 void Game::processInput() {
-    // Pasar de windowed a fullscreen: Tab
+    // Alternar fullscreen.
     if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
         this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
         toggleFullscreen(this->window);
     }
 
-    // ========== INTRO: Enter para pasar al juego ==========
+    // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        return; // No procesamos input en intro (solo Enter en callback)
+        return; // No procesamos input en intro (ver callback)
     }
 
-    // ========== MENU: Flechas para seleccionar, Enter para confirmar ==========
+    // ========== MENU ==========
     if (this->state == GAME_MENU) {
         menuIntroScreen.processInputMenu(this->keys);
         return;
@@ -931,20 +1047,29 @@ void Game::processInput() {
 
     // ========== JUEGO NORMAL ==========
     if (this->state == GAME_PLAYING) {
-        // Controles de visualizacion.
+        // F1: alternar vista 2D/3D.
         if (this->keys[GLFW_KEY_F1] == GLFW_PRESS) {
             this->keys[GLFW_KEY_F1] = GLFW_REPEAT;
             toggleViewMode();
         }
+        // F2: cambiar tipo de cámara 3D.
         if (this->keys[GLFW_KEY_F2] == GLFW_PRESS) {
             this->keys[GLFW_KEY_F2] = GLFW_REPEAT;
             cycleCamera3DType();
         }
 
+        // F3: forzar el salto al siguiente nivel.
+        if (this->keys[GLFW_KEY_F3] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_F3] = GLFW_REPEAT; // acción de una sola pulsación
+            std::cout << "[Debug] Forzando avance de nivel" << std::endl;
+            advanceToNextLevel();
+            return;
+        }
+
         if (gPlayers.empty() || gPlayers[0] == nullptr) return;
         Player* p1 = gPlayers[0];
 
-        // ======================= Jugador 1 (blanco): Flechas =======================
+        // ======================= Jugador 1 =======================
 
         if (p1->isAlive()) {
             const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
@@ -1014,7 +1139,7 @@ void Game::processInput() {
             p1->isWalking = false;
         }
 
-        // ======================= Jugador 2 (rojo): WASD =======================
+        // ======================= Jugador 2 =======================
         if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
             Player* p2 = gPlayers[1];
 
@@ -1077,8 +1202,7 @@ void Game::processInput() {
             }
         }
 
-        // ======================= Colocar bombas (Botón 1) =======================
-        // P1 (flechas): Ctrl derecho — poner bomba
+        // ======================= Bombas (Botón 1) =======================
         if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
             this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT; // Evitar múltiples bombas por pulsación
 
@@ -1107,7 +1231,7 @@ void Game::processInput() {
             }
         }
 
-        // P1: Detonar (Botón 2) — Alt derecho
+        // Detonar (Botón 2)
         if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
             this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
             // Detonar la bomba MÁS ANTIGUA del jugador (una por una, estilo Arcade)
@@ -1119,7 +1243,7 @@ void Game::processInput() {
             }
         }
 
-        // P2 (WASD): X — poner bomba
+        // Bombas / detonar del jugador 2.
         if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
             Player* p2 = gPlayers[1];
             if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
@@ -1149,7 +1273,7 @@ void Game::processInput() {
                 }
             }
 
-            // P2: Detonar (Botón 2) — Z
+            // Detonar (Botón 2)
             if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
                 this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
                 for (auto* b : gBombs) {
@@ -1180,9 +1304,7 @@ void Game::update() {
     if (this->state == GAME_MENU) {
         menuIntroScreen.updateMenu(deltaTime);
         if (menuIntroScreen.shouldStartGame()) {
-            this->mode = menuIntroScreen.getSelectedMode();
-            this->state = GAME_PLAYING;
-            this->init();
+            startNewRun(menuIntroScreen.getSelectedMode());
         }
         return;
     }
@@ -1280,7 +1402,13 @@ void Game::update() {
             for (auto* enemy : gEnemies) {
                 if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
                 if (explosionHitsEntity(gameMap, b, enemy->position)) {
-                    enemy->takeDamage(gEnemyAtlas, 999);
+                    if (enemy->takeDamage(gEnemyAtlas, 999)) {
+                        // Puntuación: sólo suma una vez cuando el enemigo pasa de Alive -> Dying.
+                        // `takeDamage` devuelve true justo en ese cambio de estado.
+                        if (b && b->ownerIndex >= 0 && b->ownerIndex < (int)playerScores.size()) {
+                            playerScores[b->ownerIndex] += enemy->scoreValue;
+                        }
+                    }
                 }
             }
             // Explosión: si toca a otra bomba que aún no ha explotado, la detona.
@@ -1308,6 +1436,34 @@ void Game::update() {
             if (!p || !p->isAlive()) continue;
             if (overlapsEnemyPlayer(gameMap, enemy->position, p->position)) {
                 p->killByEnemy();
+            }
+        }
+    }
+
+    // ========== Transiciones: Game Over / Next Level ==========
+    if (this->state == GAME_PLAYING) {
+        if (allPlayersOutOfLives()) {
+            // No hay pantalla de Game Over: volver al menú.
+            returnToMenuFromGame(/*resetRun=*/true);
+            return;
+        }
+
+        // Si se ha completado el nivel, esperamos un momento antes de avanzar.
+        // Esto permite ver la animación de muerte del último enemigo y que el jugador reaccione.
+        if (!pendingLevelAdvance) {
+            if (allEnemiesCleared()) {
+                pendingLevelAdvance = true;
+                levelAdvanceTimer = 0.0f;
+            }
+        } else {
+            levelAdvanceTimer += deltaTime;
+            if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
+                pendingLevelAdvance = false;
+                levelAdvanceTimer = 0.0f;
+
+                // Pasar de nivel: se conservan vidas y puntuación; se reinician stats.
+                advanceToNextLevel();
+                return;
             }
         }
     }

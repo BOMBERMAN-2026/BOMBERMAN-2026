@@ -15,7 +15,7 @@
  * Responsabilidades:
  * - Inicializar GLFW/GLEW y crear la ventana.
  * - Construir `Game` y ejecutar el loop principal (input/update/render).
- * - Registrar el callback de teclado (flechas para P1, WASD para P2).
+ * - Registrar el callback de teclado (ver README para controles).
  */
 
 Game* bomberman;
@@ -121,12 +121,13 @@ int main() {
 }
 
 // Callback de teclado (GLFW). Guarda estado y recuerda “última dirección” por jugador.
+// Controles completos: ver README.
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if (key >= 0 && key < 1024) {
         bomberman->keys[key] = action;
 
         if (action == GLFW_PRESS) {
-            // ========== INTRO: Enter para ir al juego ==========
+            // ========== INTRO: pasar al menú ==========
             if (bomberman->state == GAME_INTRO && key == GLFW_KEY_SPACE) {
                 bomberman->state = GAME_MENU;
                 bomberman->init(); // Cargar textura del menú
@@ -145,7 +146,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     }
 }
 
+// Ajusta el viewport cuando cambia el tamaño de la ventana.
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    // Actualizamos el Viewport para que ocupe toda la nueva ventana
     glViewport(0, 0, width, height);
 }

@@ -6,6 +6,7 @@
 #include <GLFW/glfw3.h>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "menu_intro.hpp"
 
@@ -52,6 +53,41 @@ enum class Camera3DType {
 class Game
 {
     private:
+        // ============================== Partida / Niveles ==============================
+        std::vector<std::string> levelSequence = {
+            "levels/level_01.txt",
+            "levels/level_02.txt",
+            "levels/level_03.txt",
+            "levels/level_04.txt",
+            "levels/level_05.txt",
+        }; // Orden de niveles a cargar.
+
+        int currentLevelIndex = 0; // Índice actual dentro de `levelSequence`.
+
+        bool currentLevelHadEnemies = false; // Evita auto-skip en niveles sin enemigos.
+
+        // ============================== Transición de nivel ==============================
+        bool pendingLevelAdvance = false;      // Se activó el "nivel completado".
+        float levelAdvanceTimer = 0.0f;        // Tiempo acumulado desde que se completó.
+        float levelAdvanceDelaySeconds = 1.0f; // Pausa antes de cargar el siguiente nivel.
+
+        std::vector<int> playerScores; // Puntuación acumulada por jugadorId.
+
+        // ============================== Guards de recursos ==============================
+        bool renderResourcesInitialized = false; // VAO/VBO/shaders/3D creados.
+        bool gameplayAssetsLoaded = false;       // Atlases/texturas compartidas cargadas.
+
+        // ============================== Helpers (bomberman.cpp) ==============================
+        void ensureRenderResources();                         // Init VAO/VBO/shaders/cubo 3D (1 vez).
+        void ensureGameplayAssets();                          // Carga atlas/texturas compartidas (1 vez).
+        void cleanupGameplayEntities();                       // Borra bombas/enemigos/jugadores del nivel.
+        void loadLevel(int levelIndex, bool preserveLivesAndScore); // Carga mapa y spawns; recrea entidades.
+        void startNewRun(GameMode mode);                      // Arranca partida desde el primer nivel.
+        void advanceToNextLevel();                            // Avanza al siguiente nivel.
+        void returnToMenuFromGame(bool resetRun);             // Vuelve al menú (Game Over / fin).
+        bool allPlayersOutOfLives() const;                    // True si todos los jugadores tienen 0 vidas.
+        bool allEnemiesCleared() const;                       // True si el nivel se considera completado.
+
     public:
 
         // Input
