@@ -8,6 +8,7 @@
 #include "enemies/babosa.hpp"
 #include "enemies/fantasma_mortal.hpp"
 #include "resource_manager.hpp"
+#include "glb_loader.hpp"
 
 /*
  * bomberman.cpp
@@ -61,6 +62,8 @@ static const char* kSpriteVertexShaderPath = "shaders/sprite.vs";
 static const char* kSpriteFragmentShaderPath = "shaders/sprite.frag";
 static const char* kModel3DVertexShaderPath = "shaders/model3D.vs";
 static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
+static const char* kModel3DTexturedVertexShaderPath = "shaders/model3D_textured.vs";
+static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_textured.frag";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -71,11 +74,21 @@ GLuint sphereVAO = 0;
 GLuint sphereVBO = 0;
 GLuint sphereEBO = 0;
 GLsizei sphereIndexCount = 0;
+GLuint actorGlbVAO = 0;
+GLuint actorGlbVBO = 0;
+GLuint actorGlbEBO = 0;
+GLsizei actorGlbIndexCount = 0;
+GLuint actorGlbTexture = 0;
 GLuint shader3D = 0;
+GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
 GLuint uniform3DView = 0;
 GLuint uniform3DProjection = 0;
 GLuint uniform3DColor = 0;
+GLuint uniform3DTexturedModel = 0;
+GLuint uniform3DTexturedView = 0;
+GLuint uniform3DTexturedProjection = 0;
+GLuint uniform3DTexturedSampler = 0;
 
 SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
 
@@ -214,7 +227,7 @@ static std::string buildWindowTitle(ViewMode viewMode, Camera3DType camera3DType
     if (viewMode == ViewMode::Mode3D) {
         title << " | Camara: " << camera3DTypeToString(camera3DType);
     }
-    title << " | F1 Vista | F2 Camara";
+    title << " | F1 Vista | F2 Camara | TAB/F11 Fullscreen | F10 Minimizar";
     return title.str();
 }
 
@@ -429,6 +442,87 @@ void CreateSphere()
     sphereIndexCount = sphereMesh->indexCount;
 }
 
+void CreateActorGlbModel(const std::string& modelPath)
+{
+    TexturedMeshData meshData;
+    std::string loadError;
+    if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
+        std::cerr << "[Render] Aviso: no se pudo cargar GLB de actores ('" << modelPath
+                  << "'): " << loadError << "\n";
+        return;
+    }
+
+    if (meshData.vertices.empty() || meshData.indices.empty()) {
+        std::cerr << "[Render] Aviso: GLB de actores sin datos renderizables: " << modelPath << "\n";
+        return;
+    }
+
+    MeshResource* actorMesh = ResourceManager::createMesh("actorGLB", [meshData]() -> MeshResource {
+        MeshResource mesh;
+
+        glGenVertexArrays(1, &mesh.vao);
+        glBindVertexArray(mesh.vao);
+
+        glGenBuffers(1, &mesh.vbo);
+        glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
+        glBufferData(GL_ARRAY_BUFFER,
+                     meshData.vertices.size() * sizeof(GLfloat),
+                     meshData.vertices.data(),
+                     GL_STATIC_DRAW);
+
+        glGenBuffers(1, &mesh.ebo);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+                     meshData.indices.size() * sizeof(GLuint),
+                     meshData.indices.data(),
+                     GL_STATIC_DRAW);
+
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)0);
+        glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+        glEnableVertexAttribArray(1);
+        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)(6 * sizeof(GLfloat)));
+        glEnableVertexAttribArray(2);
+
+        glBindVertexArray(0);
+        mesh.indexCount = static_cast<GLsizei>(meshData.indices.size());
+        return mesh;
+    });
+
+    if (!actorMesh) {
+        std::cerr << "[Render] Aviso: no se pudo crear mesh OpenGL para GLB de actores.\n";
+        return;
+    }
+
+    actorGlbVAO = actorMesh->vao;
+    actorGlbVBO = actorMesh->vbo;
+    actorGlbEBO = actorMesh->ebo;
+    actorGlbIndexCount = actorMesh->indexCount;
+
+    if (actorGlbTexture != 0) {
+        glDeleteTextures(1, &actorGlbTexture);
+        actorGlbTexture = 0;
+    }
+
+    glGenTextures(1, &actorGlbTexture);
+    glBindTexture(GL_TEXTURE_2D, actorGlbTexture);
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGBA,
+                 meshData.textureWidth,
+                 meshData.textureHeight,
+                 0,
+                 GL_RGBA,
+                 GL_UNSIGNED_BYTE,
+                 meshData.baseColorRgba.data());
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+}
+
 void Compile3DShaders()
 {
     const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
@@ -444,6 +538,23 @@ void Compile3DShaders()
     uniform3DView = glGetUniformLocation(shader3D, "view");
     uniform3DProjection = glGetUniformLocation(shader3D, "projection");
     uniform3DColor = glGetUniformLocation(shader3D, "objectColor");
+}
+
+void Compile3DTexturedShaders()
+{
+    const std::string resolvedVertexPath = resolveAssetPath(kModel3DTexturedVertexShaderPath);
+    const std::string resolvedFragmentPath = resolveAssetPath(kModel3DTexturedFragmentShaderPath);
+
+    shader3DTextured = ResourceManager::loadShader("model3DTextured", resolvedVertexPath, resolvedFragmentPath);
+    if (shader3DTextured == 0) {
+        std::cerr << "Error creando/cargando programa shader 3D texturizado\n";
+        return;
+    }
+
+    uniform3DTexturedModel = glGetUniformLocation(shader3DTextured, "model");
+    uniform3DTexturedView = glGetUniformLocation(shader3DTextured, "view");
+    uniform3DTexturedProjection = glGetUniformLocation(shader3DTextured, "projection");
+    uniform3DTexturedSampler = glGetUniformLocation(shader3DTextured, "baseColorTex");
 }
 
 static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
@@ -1162,6 +1273,11 @@ Game::~Game() {
         VAO = 0;
     }
 
+    if (actorGlbTexture != 0) {
+        glDeleteTextures(1, &actorGlbTexture);
+        actorGlbTexture = 0;
+    }
+
     ResourceManager::clear();
 
     texture = 0;
@@ -1172,10 +1288,14 @@ Game::~Game() {
 
     shader = 0;
     shader3D = 0;
+    shader3DTextured = 0;
     cubeVAO = cubeVBO = cubeEBO = 0;
     cubeIndexCount = 0;
     sphereVAO = sphereVBO = sphereEBO = 0;
     sphereIndexCount = 0;
+    actorGlbVAO = actorGlbVBO = actorGlbEBO = 0;
+    actorGlbIndexCount = 0;
+    actorGlbTexture = 0;
 }
 
 void Game::init() {
@@ -1184,7 +1304,9 @@ void Game::init() {
     CompileShaders();
     CreateCube();
     CreateSphere();
+    CreateActorGlbModel(resolveAssetPath("models/3D/cartoon astronaut 3d model.glb"));
     Compile3DShaders();
+    Compile3DTexturedShaders();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1659,10 +1781,17 @@ void Game::processInput() {
         this->cameraOrbitDragging = false;
     }
 
-    // Pasar de windowed a fullscreen: Tab
-    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT; // Evitar múltiples toggles por pulsación
+    // Pasar de windowed a fullscreen: Tab o F11.
+    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS || this->keys[GLFW_KEY_F11] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT;
+        this->keys[GLFW_KEY_F11] = GLFW_REPEAT;
         toggleFullscreen(this->window);
+    }
+
+    // Minimizar ventana para captura/alt-tab rapido.
+    if (this->keys[GLFW_KEY_F10] == GLFW_PRESS && this->window != nullptr) {
+        this->keys[GLFW_KEY_F10] = GLFW_REPEAT;
+        glfwIconifyWindow(this->window);
     }
 }
 
@@ -2097,30 +2226,84 @@ void Game::render3D() {
         }
     }
 
-    // Sprites reales sobre el mundo 3D (billboards): mejora de legibilidad de jugador/enemigos.
+    const bool canRenderPlayerGlb =
+        (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
+
+    if (canRenderPlayerGlb) {
+        const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
+        if (wasBlendEnabled) {
+            glDisable(GL_BLEND);
+        }
+
+        glUseProgram(shader3DTextured);
+        glUniformMatrix4fv(uniform3DTexturedView, 1, GL_FALSE, glm::value_ptr(view));
+        glUniformMatrix4fv(uniform3DTexturedProjection, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform1i(uniform3DTexturedSampler, 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, actorGlbTexture);
+
+        // Ajuste de orientacion base del modelo GLB.
+        const float kPlayerModelYawOffset = 1.57079632679f;
+
+        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p || !p->isAlive()) continue;
+
+            if (camera3DType == Camera3DType::FirstPerson && i == 0) {
+                continue;
+            }
+
+            GLint modelFacingDirKey = p->facingDirKey;
+            if (this->camera3DType == Camera3DType::PerspectiveFixed ||
+                this->camera3DType == Camera3DType::PerspectiveMobile) {
+                modelFacingDirKey = remapDirectionFor3DCamera(this, modelFacingDirKey);
+            }
+
+            const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.08f);
+            const float yaw = facingKeyToYawRadians(modelFacingDirKey) + kPlayerModelYawOffset;
+
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+            model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(1.28f, 1.28f, 1.28f));
+
+            glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+            glBindVertexArray(actorGlbVAO);
+            glDrawElements(GL_TRIANGLES, actorGlbIndexCount, GL_UNSIGNED_INT, 0);
+        }
+
+        if (wasBlendEnabled) {
+            glEnable(GL_BLEND);
+        }
+    }
+
+    // Enemigos siempre como billboards 2D en 3D.
     glUseProgram(shader);
     const glm::mat4 spriteProjection3D = projection * view;
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(spriteProjection3D));
     glUniform1i(uniformTexture, 0);
 
-    for (std::size_t i = 0; i < gPlayers.size(); ++i) {
-        Player* p = gPlayers[i];
-        if (!p || !p->isAlive()) continue;
+    if (!canRenderPlayerGlb) {
+        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p || !p->isAlive()) continue;
 
-        if (camera3DType == Camera3DType::FirstPerson && i == 0) {
-            continue;
-        }
+            if (camera3DType == Camera3DType::FirstPerson && i == 0) {
+                continue;
+            }
 
-        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        bool hasUv = getUvRectForSprite(gPlayerAtlas, p->currentSpriteName, uvRect);
-        if (!hasUv) {
-            const std::string fallback = p->spritePrefix + ".abajo.0";
-            hasUv = getUvRectForSprite(gPlayerAtlas, fallback, uvRect);
-        }
+            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            bool hasUv = getUvRectForSprite(gPlayerAtlas, p->currentSpriteName, uvRect);
+            if (!hasUv) {
+                const std::string fallback = p->spritePrefix + ".abajo.0";
+                hasUv = getUvRectForSprite(gPlayerAtlas, fallback, uvRect);
+            }
 
-        if (hasUv) {
-            const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
-            drawSpriteBillboard3D(texture, uvRect, feet, 0.92f, 1.38f, p->flipX, glm::vec4(1.0f));
+            if (hasUv) {
+                const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
+                drawSpriteBillboard3D(texture, uvRect, feet, 0.92f, 1.38f, p->flipX, glm::vec4(1.0f));
+            }
         }
     }
 
