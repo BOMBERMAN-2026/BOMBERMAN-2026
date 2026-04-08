@@ -67,6 +67,8 @@ static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_texture
 static const char* kPlayerGlbPath = "models/3D/cartoon astronaut 3d model.glb";
 static const char* kLeonGlbPath = "resources/purple spiky creature 3d model.glb";
 static const char* kFantasmaGlbPath = "resources/ghost character 3d model.glb";
+static const char* kBebeGlbPath = "resources/cartoon creature 3d model.glb";
+static const char* kBabosaGlbPath = "resources/poop character 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -92,6 +94,16 @@ GLuint fantasmaGlbVBO = 0;
 GLuint fantasmaGlbEBO = 0;
 GLsizei fantasmaGlbIndexCount = 0;
 GLuint fantasmaGlbTexture = 0;
+GLuint bebeGlbVAO = 0;
+GLuint bebeGlbVBO = 0;
+GLuint bebeGlbEBO = 0;
+GLsizei bebeGlbIndexCount = 0;
+GLuint bebeGlbTexture = 0;
+GLuint babosaGlbVAO = 0;
+GLuint babosaGlbVBO = 0;
+GLuint babosaGlbEBO = 0;
+GLsizei babosaGlbIndexCount = 0;
+GLuint babosaGlbTexture = 0;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -586,6 +598,28 @@ void CreateFantasmaGlbModel(const std::string& modelPath)
                                  fantasmaGlbEBO,
                                  fantasmaGlbIndexCount,
                                  fantasmaGlbTexture);
+}
+
+void CreateBebeGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("bebeGLB",
+                                 modelPath,
+                                 bebeGlbVAO,
+                                 bebeGlbVBO,
+                                 bebeGlbEBO,
+                                 bebeGlbIndexCount,
+                                 bebeGlbTexture);
+}
+
+void CreateBabosaGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("babosaGLB",
+                                 modelPath,
+                                 babosaGlbVAO,
+                                 babosaGlbVBO,
+                                 babosaGlbEBO,
+                                 babosaGlbIndexCount,
+                                 babosaGlbTexture);
 }
 
 void Compile3DShaders()
@@ -1350,6 +1384,14 @@ Game::~Game() {
         glDeleteTextures(1, &fantasmaGlbTexture);
         fantasmaGlbTexture = 0;
     }
+    if (bebeGlbTexture != 0) {
+        glDeleteTextures(1, &bebeGlbTexture);
+        bebeGlbTexture = 0;
+    }
+    if (babosaGlbTexture != 0) {
+        glDeleteTextures(1, &babosaGlbTexture);
+        babosaGlbTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -1375,6 +1417,12 @@ Game::~Game() {
     fantasmaGlbVAO = fantasmaGlbVBO = fantasmaGlbEBO = 0;
     fantasmaGlbIndexCount = 0;
     fantasmaGlbTexture = 0;
+    bebeGlbVAO = bebeGlbVBO = bebeGlbEBO = 0;
+    bebeGlbIndexCount = 0;
+    bebeGlbTexture = 0;
+    babosaGlbVAO = babosaGlbVBO = babosaGlbEBO = 0;
+    babosaGlbIndexCount = 0;
+    babosaGlbTexture = 0;
 }
 
 void Game::init() {
@@ -1386,6 +1434,8 @@ void Game::init() {
     CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
     CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
     CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
+    CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
+    CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -2313,8 +2363,12 @@ void Game::render3D() {
         (leonGlbVAO != 0 && leonGlbIndexCount > 0 && leonGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFantasmaGlb =
         (fantasmaGlbVAO != 0 && fantasmaGlbIndexCount > 0 && fantasmaGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderBebeGlb =
+        (bebeGlbVAO != 0 && bebeGlbIndexCount > 0 && bebeGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderBabosaGlb =
+        (babosaGlbVAO != 0 && babosaGlbIndexCount > 0 && babosaGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -2418,6 +2472,64 @@ void Game::render3D() {
             }
         }
 
+        if (canRenderBebeGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, bebeGlbTexture);
+
+            // Ajuste de orientacion base del modelo GLB de Bebe Lloron.
+            const float kBebeModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool isBebeEnemy =
+                    (enemy->spriteBaseId == "bebe") ||
+                    (enemy->currentSpriteName.size() >= 5 && enemy->currentSpriteName.compare(0, 5, "bebe.") == 0);
+                if (!isBebeEnemy) continue;
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(enemy->facing) + kBebeModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.98f, 0.98f, 0.98f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(bebeGlbVAO);
+                glDrawElements(GL_TRIANGLES, bebeGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
+        if (canRenderBabosaGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, babosaGlbTexture);
+
+            // Ajuste de orientacion base del modelo GLB de Babosa.
+            const float kBabosaModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool isBabosaEnemy =
+                    (enemy->spriteBaseId == "babosa") ||
+                    (enemy->currentSpriteName.size() >= 7 && enemy->currentSpriteName.compare(0, 7, "babosa.") == 0);
+                if (!isBabosaEnemy) continue;
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(enemy->facing) + kBabosaModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(1.02f, 1.02f, 1.02f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(babosaGlbVAO);
+                glDrawElements(GL_TRIANGLES, babosaGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
         if (wasBlendEnabled) {
             glEnable(GL_BLEND);
         }
@@ -2461,10 +2573,22 @@ void Game::render3D() {
         const bool isFantasmaEnemy =
             (enemy->spriteBaseId == "fantasma") ||
             (enemy->currentSpriteName.size() >= 9 && enemy->currentSpriteName.compare(0, 9, "fantasma.") == 0);
+        const bool isBebeEnemy =
+            (enemy->spriteBaseId == "bebe") ||
+            (enemy->currentSpriteName.size() >= 5 && enemy->currentSpriteName.compare(0, 5, "bebe.") == 0);
+        const bool isBabosaEnemy =
+            (enemy->spriteBaseId == "babosa") ||
+            (enemy->currentSpriteName.size() >= 7 && enemy->currentSpriteName.compare(0, 7, "babosa.") == 0);
         if (canRenderLeonGlb && isLeonEnemy) {
             continue;
         }
         if (canRenderFantasmaGlb && isFantasmaEnemy) {
+            continue;
+        }
+        if (canRenderBebeGlb && isBebeEnemy) {
+            continue;
+        }
+        if (canRenderBabosaGlb && isBabosaEnemy) {
             continue;
         }
 
