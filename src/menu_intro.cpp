@@ -172,6 +172,7 @@ void MenuIntroScreen::renderMenu(GLuint VAO, GLuint shader, GLuint uniformModel,
                                   GLuint uniformTexture, GLuint uniformUvRect, GLuint uniformTintColor, GLuint uniformFlipX,
                                   int WIDTH, int HEIGHT) {
     glUseProgram(shader);
+    glUniform1f(uniformFlipX, 0.0f);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, menuBackgroundTexture);
     glBindVertexArray(VAO);
