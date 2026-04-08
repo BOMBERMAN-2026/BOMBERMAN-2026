@@ -47,6 +47,7 @@ static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
 GLuint hudTexture;
+GLuint horizonTexture;
 
 // ============================== OpenGL: estado global ==============================
 
@@ -60,6 +61,7 @@ static const char* kSpriteVertexShaderPath = "shaders/sprite.vs";
 static const char* kSpriteFragmentShaderPath = "shaders/sprite.frag";
 static const char* kModel3DVertexShaderPath = "shaders/model3D.vs";
 static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
+static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
 GLuint cubeVBO = 0;
@@ -1115,6 +1117,7 @@ Game::~Game() {
     texture = 0;
     mapTexture = 0;
     hudTexture = 0;
+    horizonTexture = 0;
     enemyTexture = 0;
 
     shader = 0;
@@ -1197,6 +1200,17 @@ void Game::init() {
     if (hudTexture == 0)    {
         std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
         std::exit(EXIT_FAILURE);
+    }
+
+    const std::string horizonTexPath = resolveAssetPath(kHorizonBackgroundPath);
+    horizonTexture = ResourceManager::loadTexture("horizon3D", horizonTexPath, LoadTexture);
+    if (horizonTexture != 0) {
+        // Fondo fotografico: usar filtrado lineal para evitar pixelado fuerte.
+        glBindTexture(GL_TEXTURE_2D, horizonTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    } else {
+        std::cerr << "[Render] Aviso: no se pudo cargar fondo 3D desde: " << horizonTexPath << "\n";
     }
 
     // Crear jugador(es) en la posición de spawn del mapa
@@ -1647,6 +1661,31 @@ void Game::update() {
 void Game::render3D() {
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    if (horizonTexture != 0 && shader != 0 && VAO != 0) {
+        glDepthMask(GL_FALSE);
+        glDisable(GL_DEPTH_TEST);
+
+        glUseProgram(shader);
+        const glm::mat4 identity(1.0f);
+        const glm::vec4 fullUv(0.0f, 0.0f, 1.0f, 1.0f);
+        const glm::vec4 fullTint(1.0f, 1.0f, 1.0f, 1.0f);
+
+        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(identity));
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(identity));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(fullUv));
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(fullTint));
+        glUniform1f(uniformFlipX, 0.0f);
+        glUniform1i(uniformTexture, 0);
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, horizonTexture);
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        glDepthMask(GL_TRUE);
+        glEnable(GL_DEPTH_TEST);
+    }
 
     glUseProgram(shader3D);
 
