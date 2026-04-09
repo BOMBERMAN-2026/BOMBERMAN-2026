@@ -74,6 +74,7 @@ static const char* kLeonGlbPath = "models/3D/monstrous creature 3d model.glb";
 static const char* kFantasmaGlbPath = "models/3D/ghost character 3d model.glb";
 static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
 static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
+static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -109,6 +110,11 @@ GLuint babosaGlbVBO = 0;
 GLuint babosaGlbEBO = 0;
 GLsizei babosaGlbIndexCount = 0;
 GLuint babosaGlbTexture = 0;
+GLuint bombGlbVAO = 0;
+GLuint bombGlbVBO = 0;
+GLuint bombGlbEBO = 0;
+GLsizei bombGlbIndexCount = 0;
+GLuint bombGlbTexture = 0;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -672,6 +678,17 @@ void CreateBabosaGlbModel(const std::string& modelPath)
                                  babosaGlbTexture);
 }
 
+void CreateBombGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("bombGLB",
+                                 modelPath,
+                                 bombGlbVAO,
+                                 bombGlbVBO,
+                                 bombGlbEBO,
+                                 bombGlbIndexCount,
+                                 bombGlbTexture);
+}
+
 void Compile3DShaders()
 {
     const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
@@ -1087,6 +1104,7 @@ void Game::ensureRenderResources() {
     CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
     CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
     CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
+    CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -1786,6 +1804,10 @@ Game::~Game() {
         glDeleteTextures(1, &babosaGlbTexture);
         babosaGlbTexture = 0;
     }
+    if (bombGlbTexture != 0) {
+        glDeleteTextures(1, &bombGlbTexture);
+        bombGlbTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -1817,6 +1839,9 @@ Game::~Game() {
     babosaGlbVAO = babosaGlbVBO = babosaGlbEBO = 0;
     babosaGlbIndexCount = 0;
     babosaGlbTexture = 0;
+    bombGlbVAO = bombGlbVBO = bombGlbEBO = 0;
+    bombGlbIndexCount = 0;
+    bombGlbTexture = 0;
 }
 
 void Game::init() {
@@ -2723,12 +2748,24 @@ void Game::render3D() {
 
     const GLuint fuseMesh = sphereOrCubeVAO;
     const GLsizei fuseMeshIndexCount = sphereOrCubeIndexCount;
+    const bool canRenderBombGlb =
+        (bombGlbVAO != 0 && bombGlbIndexCount > 0 && bombGlbTexture != 0 && shader3DTextured != 0);
 
     // Bombas y explosiones en 3D.
     for (auto* b : gBombs) {
         if (!b || b->state == BombState::DONE) continue;
 
         if (b->state == BombState::FUSE) {
+            if (canRenderBombGlb) {
+                const glm::vec3 feet = ndcToWorld3D(gameMap, b->position, 0.02f);
+                drawMesh3D(sphereOrCubeVAO,
+                           sphereOrCubeIndexCount,
+                           glm::vec3(feet.x, 0.03f, feet.z),
+                           glm::vec3(0.34f, 0.02f, 0.34f),
+                           glm::vec3(0.05f, 0.05f, 0.05f));
+                continue;
+            }
+
             const glm::vec3 center = ndcToWorld3D(gameMap, b->position, 0.30f);
             drawMesh3D(fuseMesh, fuseMeshIndexCount, center, glm::vec3(0.45f, 0.45f, 0.45f), glm::vec3(0.08f, 0.08f, 0.08f));
             drawMesh3D(cubeVAO, cubeIndexCount, center + glm::vec3(0.0f, 0.34f, 0.0f), glm::vec3(0.06f, 0.18f, 0.06f), glm::vec3(0.95f, 0.70f, 0.20f));
@@ -2756,7 +2793,7 @@ void Game::render3D() {
     const bool canRenderBabosaGlb =
         (babosaGlbVAO != 0 && babosaGlbIndexCount > 0 && babosaGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderBombGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -2772,6 +2809,32 @@ void Game::render3D() {
         glUniform1f(uniform3DTexturedAmbientStrength, 0.30f);
         glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
         glUniform1f(uniform3DTexturedShininess, 28.0f);
+
+        if (canRenderBombGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, bombGlbTexture);
+
+            for (auto* b : gBombs) {
+                if (!b || b->state != BombState::FUSE) {
+                    continue;
+                }
+
+                const float animT = b->remoteControlled
+                    ? ((float)b->animStep * 0.55f)
+                    : (b->fuseTimer * 2.8f);
+                const float bob = 0.018f * std::sin(animT * 4.0f);
+                const float pulse = 1.00f + 0.05f * std::sin(animT * 7.0f);
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, ndcToWorld3D(gameMap, b->position, 0.08f) + glm::vec3(0.0f, bob, 0.0f));
+                model = glm::rotate(model, animT * 0.65f, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.92f * pulse, 0.92f * pulse, 0.92f * pulse));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(bombGlbVAO);
+                glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
 
         if (canRenderPlayerGlb) {
             glActiveTexture(GL_TEXTURE0);
