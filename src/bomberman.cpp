@@ -77,6 +77,7 @@ static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
 static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
 static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
+static const char* kDragonGlbPath = "models/3D/teal creature 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -127,6 +128,11 @@ GLuint solGlbVBO = 0;
 GLuint solGlbEBO = 0;
 GLsizei solGlbIndexCount = 0;
 GLuint solGlbTexture = 0;
+GLuint dragonGlbVAO = 0;
+GLuint dragonGlbVBO = 0;
+GLuint dragonGlbEBO = 0;
+GLsizei dragonGlbIndexCount = 0;
+GLuint dragonGlbTexture = 0;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -723,6 +729,17 @@ void CreateSolGlbModel(const std::string& modelPath)
                                  solGlbTexture);
 }
 
+void CreateDragonGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("dragonGLB",
+                                 modelPath,
+                                 dragonGlbVAO,
+                                 dragonGlbVBO,
+                                 dragonGlbEBO,
+                                 dragonGlbIndexCount,
+                                 dragonGlbTexture);
+}
+
 void Compile3DShaders()
 {
     const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
@@ -1141,6 +1158,7 @@ void Game::ensureRenderResources() {
     CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
     CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
+    CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -1852,6 +1870,10 @@ Game::~Game() {
         glDeleteTextures(1, &solGlbTexture);
         solGlbTexture = 0;
     }
+    if (dragonGlbTexture != 0) {
+        glDeleteTextures(1, &dragonGlbTexture);
+        dragonGlbTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -1892,6 +1914,9 @@ Game::~Game() {
     solGlbVAO = solGlbVBO = solGlbEBO = 0;
     solGlbIndexCount = 0;
     solGlbTexture = 0;
+    dragonGlbVAO = dragonGlbVBO = dragonGlbEBO = 0;
+    dragonGlbIndexCount = 0;
+    dragonGlbTexture = 0;
 }
 
 void Game::init() {
@@ -2850,6 +2875,34 @@ void Game::render3D() {
         }
     }
 
+    if (canRenderFlameGlb) {
+        for (auto* enemy : gEnemies) {
+            auto* dragon = dynamic_cast<DragonJoven*>(enemy);
+            if (!dragon || dragon->lifeState != EnemyLifeState::Alive || !dragon->isFiringAttack()) {
+                continue;
+            }
+
+            const int activeSegments = dragon->getActiveFireSegmentCount();
+            if (activeSegments <= 0) {
+                continue;
+            }
+
+            const auto& fireSegments = dragon->getFireSegments();
+            const std::size_t drawCount = std::min<std::size_t>((std::size_t)activeSegments, fireSegments.size());
+            for (std::size_t i = 0; i < drawCount; ++i) {
+                const ExplosionSegment& seg = fireSegments[i];
+                const bool isEnd = (seg.baseName == "explosion_end");
+                const float shadowSize = isEnd ? 0.30f : 0.35f;
+                const glm::vec3 feet = ndcToWorld3D(gameMap, seg.pos, 0.02f);
+                drawMesh3D(sphereOrCubeVAO,
+                           sphereOrCubeIndexCount,
+                           glm::vec3(feet.x, 0.03f, feet.z),
+                           glm::vec3(shadowSize, 0.02f, shadowSize),
+                           glm::vec3(0.06f, 0.04f, 0.04f));
+            }
+        }
+    }
+
     const bool canRenderPlayerGlb =
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderLeonGlb =
@@ -2862,8 +2915,10 @@ void Game::render3D() {
         (babosaGlbVAO != 0 && babosaGlbIndexCount > 0 && babosaGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderSolGlb =
         (solGlbVAO != 0 && solGlbIndexCount > 0 && solGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDragonGlb =
+        (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderBombGlb || canRenderFlameGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderBombGlb || canRenderFlameGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -2931,6 +2986,40 @@ void Game::render3D() {
 
                     const float baseScale = isCenter ? 1.02f : (isEnd ? 0.72f : 0.84f);
                     const float animT = now * 14.0f + ((float)b->animFrame * 1.75f) + ((float)i * 0.95f);
+                    const float flicker = 1.0f + 0.12f * std::sin(animT);
+                    const float bob = 0.06f + 0.02f * std::sin(animT * 0.85f);
+
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, ndcToWorld3D(gameMap, seg.pos, 0.08f) + glm::vec3(0.0f, bob, 0.0f));
+                    model = glm::rotate(model, seg.rotation + kPiHalf, glm::vec3(0.0f, 1.0f, 0.0f));
+                    model = glm::scale(model, glm::vec3(baseScale * flicker, baseScale * flicker, baseScale * flicker));
+
+                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glBindVertexArray(flameGlbVAO);
+                    glDrawElements(GL_TRIANGLES, flameGlbIndexCount, GL_UNSIGNED_INT, 0);
+                }
+            }
+
+            for (auto* enemy : gEnemies) {
+                auto* dragon = dynamic_cast<DragonJoven*>(enemy);
+                if (!dragon || dragon->lifeState != EnemyLifeState::Alive || !dragon->isFiringAttack()) {
+                    continue;
+                }
+
+                const int activeSegments = dragon->getActiveFireSegmentCount();
+                if (activeSegments <= 0) {
+                    continue;
+                }
+
+                const auto& fireSegments = dragon->getFireSegments();
+                const std::size_t drawCount = std::min<std::size_t>((std::size_t)activeSegments, fireSegments.size());
+                for (std::size_t i = 0; i < drawCount; ++i) {
+                    const ExplosionSegment& seg = fireSegments[i];
+                    const bool isEnd = (seg.baseName == "explosion_end");
+
+                    const float baseScale = isEnd ? 0.72f : 0.84f;
+                    const float animT = now * 14.0f + ((float)i * 0.95f)
+                        + (dragon->position.x * 0.40f) + (dragon->position.y * 0.45f);
                     const float flicker = 1.0f + 0.12f * std::sin(animT);
                     const float bob = 0.06f + 0.02f * std::sin(animT * 0.85f);
 
@@ -3143,6 +3232,35 @@ void Game::render3D() {
             }
         }
 
+        if (canRenderDragonGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, dragonGlbTexture);
+
+            // Ajuste de orientacion base del modelo GLB de Dragon Joven.
+            const float kDragonModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool isDragonEnemy =
+                    (enemy->spriteBaseId == "dragon") ||
+                    (enemy->currentSpriteName.size() >= 7 && enemy->currentSpriteName.compare(0, 7, "dragon.") == 0);
+                if (!isDragonEnemy) continue;
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(enemy->facing) + kDragonModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.04f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(1.12f, 1.12f, 1.12f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(dragonGlbVAO);
+                glDrawElements(GL_TRIANGLES, dragonGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
         if (wasBlendEnabled) {
             glEnable(GL_BLEND);
         }
@@ -3195,6 +3313,9 @@ void Game::render3D() {
         const bool isSolEnemy =
             (enemy->spriteBaseId == "sol") ||
             (enemy->currentSpriteName.size() >= 4 && enemy->currentSpriteName.compare(0, 4, "sol.") == 0);
+        const bool isDragonEnemy =
+            (enemy->spriteBaseId == "dragon") ||
+            (enemy->currentSpriteName.size() >= 7 && enemy->currentSpriteName.compare(0, 7, "dragon.") == 0);
         if (canRenderLeonGlb && isLeonEnemy) {
             continue;
         }
@@ -3208,6 +3329,9 @@ void Game::render3D() {
             continue;
         }
         if (canRenderSolGlb && isSolEnemy) {
+            continue;
+        }
+        if (canRenderDragonGlb && isDragonEnemy) {
             continue;
         }
 
