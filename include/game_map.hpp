@@ -106,6 +106,9 @@ public:
     int getCols() const { return cols; }
 
     int getSpriteId(int row, int col) const;
+    BlockType getBlockType(int row, int col) const;
+    bool getUvRectForTile(int row, int col, glm::vec4& uvRect) const;
+    bool getUvRectForSpriteId(int spriteId, glm::vec4& uvRect) const;
 
     // True si la celda permite caminar.
     bool isWalkable(int row, int col) const;

@@ -42,7 +42,7 @@ set(OpenGL_GL_PREFERENCE GLVND)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 1. Configuración de archivos
-file(GLOB SOURCES "src/*.cpp" "src/enemies/*.cpp")
+file(GLOB SOURCES CONFIGURE_DEPENDS "src/*.cpp" "src/enemies/*.cpp")
 
 # 2. Directorios de inclusión
 include_directories(include lib/include)

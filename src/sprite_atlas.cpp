@@ -23,6 +23,7 @@ Importante:
 #include <fstream>
 #include <sstream>
 #include <cctype>
+#include <vector>
 
 static bool fileExists(const std::string& path)
 {
@@ -30,12 +31,54 @@ static bool fileExists(const std::string& path)
     return f.good();
 }
 
+static bool startsWith(const std::string& value, const std::string& prefix)
+{
+    return value.size() >= prefix.size() && value.compare(0, prefix.size(), prefix) == 0;
+}
+
+static void addUniqueCandidate(std::vector<std::string>& out, const std::string& candidate)
+{
+    for (const std::string& existing : out) {
+        if (existing == candidate) {
+            return;
+        }
+    }
+    out.push_back(candidate);
+}
+
 // Si el exe corre desde build/, prueba también con "../" + path.
 std::string resolveAssetPath(const std::string& path)
 {
-    if (fileExists(path)) return path;
-    std::string prefixed = "../" + path;
-    if (fileExists(prefixed)) return prefixed;
+    std::vector<std::string> candidates;
+
+    auto addMappedPair = [&](const std::string& fromPrefix, const std::string& toPrefix) {
+        if (!startsWith(path, fromPrefix)) return;
+
+        const std::string suffix = path.substr(fromPrefix.size());
+        addUniqueCandidate(candidates, toPrefix + suffix);
+        addUniqueCandidate(candidates, "../" + toPrefix + suffix);
+    };
+
+    // Priorizamos nuevos directorios (img/models), pero mantenemos fallback a resources.
+    addMappedPair("resources/sprites/atlases/", "img/atlases/");
+    addMappedPair("resources/sprites/mapas/", "img/mapas/");
+    addMappedPair("resources/sprites/", "img/sprites/");
+    addMappedPair("resources/models/", "models/");
+
+    addUniqueCandidate(candidates, path);
+    addUniqueCandidate(candidates, "../" + path);
+
+    addMappedPair("img/atlases/", "resources/sprites/atlases/");
+    addMappedPair("img/mapas/", "resources/sprites/mapas/");
+    addMappedPair("img/sprites/", "resources/sprites/");
+    addMappedPair("models/", "resources/models/");
+
+    for (const std::string& candidate : candidates) {
+        if (fileExists(candidate)) {
+            return candidate;
+        }
+    }
+
     return path;
 }
 
