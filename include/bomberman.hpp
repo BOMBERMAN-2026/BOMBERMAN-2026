@@ -26,6 +26,7 @@
 enum GameState {
     GAME_INTRO,      // Pantalla de intro
     GAME_MENU,       // Pantalla selección de modo de juego
+    GAME_CINEMATIC,  // Cinemáticas antes del juego
     GAME_PLAYING
 };
 

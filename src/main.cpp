@@ -133,6 +133,12 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 return;
             }
 
+            //if (bomberman->state == GAME_MENU && bomberman->mode == GameMode::TwoPlayers) {
+            //    // Si es OnePlayer, ir a cinemática
+            //    bomberman->state = GAME_CINEMATIC;
+            //    bomberman->init();
+            //}
+//
             // ========== JUEGO NORMAL ==========
             if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
                 bomberman->lastDirKey = key;

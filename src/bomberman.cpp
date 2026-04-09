@@ -49,7 +49,26 @@
 static std::vector<Player*> gPlayers;
 GameMap* gameMap;
 GLuint mapTexture;
-GLuint hudTexture;  
+GLuint hudTexture;
+
+// Variables para cinemáticas
+SpriteAtlas cinematicAtlasP1;
+SpriteAtlas cinematicAtlasP2;
+SpriteAtlas cinematicAtlasP3;
+SpriteAtlas cinematicAtlasP4;
+GLuint cinematicTextureP1;
+GLuint cinematicTextureP2;
+GLuint cinematicTextureP3;
+GLuint cinematicTextureP4;
+int currentCinematicFrame;
+float cinematicFrameTimer;
+int currentCinematicPart;  // 0 = P1, 1 = P2
+const int CINEMATIC_P1_FRAME_COUNT = 63;
+const int CINEMATIC_P2_FRAME_COUNT = 64;
+const int CINEMATIC_P3_FRAME_COUNT = 64;
+const int CINEMATIC_P4_FRAME_COUNT = 64;
+const float CINEMATIC_VIDEO_FPS = 15.0f;
+bool skipCinematic;
 
 // ============================== OpenGL: estado global ==============================
 
@@ -652,6 +671,153 @@ static std::string getKeyName(GLint key){
     return str;
 }
 
+
+// ============================== Cinemáticas ==============================
+
+static void initCinematic(Game* game) {
+    currentCinematicFrame = 0;
+    cinematicFrameTimer = 0.0f;
+    currentCinematicPart = 0;  // 0 = P1, 1 = P2, 2 = P3, 3 = P4
+    skipCinematic = false;
+
+    // Cargar atlas P1 (63 frames)
+    const std::string atlasP1Path = resolveAssetPath("resources/sprites/atlases/SpriteAtlasHistoryP1.json");
+    if (!loadSpriteAtlasMinimal(atlasP1Path, cinematicAtlasP1)) {
+        std::cerr << "Error cargando atlas cinemática P1: " << atlasP1Path << std::endl;
+    }
+    const std::string textureP1Path = resolveAssetPath(cinematicAtlasP1.imagePath);
+    cinematicTextureP1 = LoadTexture(textureP1Path.c_str());
+    if (cinematicTextureP1 == 0) {
+        std::cerr << "Error cargando textura cinemática P1: " << textureP1Path << std::endl;
+    }
+
+    // Cargar atlas P2 (64 frames)
+    const std::string atlasP2Path = resolveAssetPath("resources/sprites/atlases/SpriteAtlasHistoryP2.json");
+    if (!loadSpriteAtlasMinimal(atlasP2Path, cinematicAtlasP2)) {
+        std::cerr << "Error cargando atlas cinemática P2: " << atlasP2Path << std::endl;
+    }
+    const std::string textureP2Path = resolveAssetPath(cinematicAtlasP2.imagePath);
+    cinematicTextureP2 = LoadTexture(textureP2Path.c_str());
+    if (cinematicTextureP2 == 0) {
+        std::cerr << "Error cargando textura cinemática P2: " << textureP2Path << std::endl;
+    }
+
+    // Cargar atlas P3 (64 frames)
+    const std::string atlasP3Path = resolveAssetPath("resources/sprites/atlases/SpriteAtlasHistoryP3.json");
+    if (!loadSpriteAtlasMinimal(atlasP3Path, cinematicAtlasP3)) {
+        std::cerr << "Error cargando atlas cinemática P3: " << atlasP3Path << std::endl;
+    }
+    const std::string textureP3Path = resolveAssetPath(cinematicAtlasP3.imagePath);
+    cinematicTextureP3 = LoadTexture(textureP3Path.c_str());
+    if (cinematicTextureP3 == 0) {
+        std::cerr << "Error cargando textura cinemática P2: " << textureP3Path << std::endl;
+    }
+
+    // Cargar atlas P4 (64 frames)
+    const std::string atlasP4Path = resolveAssetPath("resources/sprites/atlases/SpriteAtlasHistoryP4.json");
+    if (!loadSpriteAtlasMinimal(atlasP4Path, cinematicAtlasP4)) {
+        std::cerr << "Error cargando atlas cinemática P4: " << atlasP4Path << std::endl;
+    }
+    const std::string textureP4Path = resolveAssetPath(cinematicAtlasP4.imagePath);
+    cinematicTextureP4 = LoadTexture(textureP4Path.c_str());
+    if (cinematicTextureP4 == 0) {
+        std::cerr << "Error cargando textura cinemática P2: " << textureP4Path << std::endl;
+    }
+
+    std::cout << "[Cinematic] Iniciada - P1 (63 frames) + P2 (64 frames) + P3 (64 frames) + P4 (64 frames)\n";
+}
+
+static bool updateCinematic(float deltaTime) {
+    cinematicFrameTimer += deltaTime;
+    
+    // 15 FPS: cada frame dura 1/15 = 0.0667 segundos
+    if (cinematicFrameTimer >= 1.0f / CINEMATIC_VIDEO_FPS) {
+        currentCinematicFrame++;
+        cinematicFrameTimer = 0.0f;
+
+        // Comprobar si terminamos la parte actual
+        if (currentCinematicPart == 0 && currentCinematicFrame >= CINEMATIC_P1_FRAME_COUNT) {
+            // Pasar a P2
+            currentCinematicPart = 1;
+            currentCinematicFrame = 0;
+            std::cout << "[Cinematic] Transicion P1 -> P2\n";
+        }
+        else if (currentCinematicPart == 1 && currentCinematicFrame >= CINEMATIC_P2_FRAME_COUNT) {
+            // Pasar a P3
+            currentCinematicPart = 2;
+            currentCinematicFrame = 0;
+            std::cout << "[Cinematic] Transicion P2 -> P3\n";
+        }
+        else if (currentCinematicPart == 2 && currentCinematicFrame >= CINEMATIC_P3_FRAME_COUNT) {
+            // Pasar a P4
+            currentCinematicPart = 3;
+            currentCinematicFrame = 0;
+            std::cout << "[Cinematic] Transicion P3 -> P4\n";
+        }
+        else if (currentCinematicPart == 3 && currentCinematicFrame >= CINEMATIC_P4_FRAME_COUNT) {
+            // Cinemática terminada
+            currentCinematicFrame = 0;
+            cinematicFrameTimer = 0.0f;
+            return true;  // Indica que cinemática terminó
+        }
+    }
+    
+    return false;  // Cinemática en reproducción
+}
+
+static void renderCinematic(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection,
+                           GLuint uniformTexture, GLuint uniformUvRect, GLuint uniformTintColor, 
+                           GLuint uniformFlipX, int WIDTH, int HEIGHT) {
+    glUseProgram(shader);
+
+    float windowAspect = (float)WIDTH / (float)HEIGHT;
+    float imageAspect = 768.0f / 432.0f;  // 16:9
+
+    glm::mat4 projection;
+    if (windowAspect > imageAspect) {
+        float scale = windowAspect / imageAspect;
+        projection = glm::ortho(-scale, scale, -1.0f, 1.0f, -1.0f, 1.0f);
+    } else {
+        float scale = imageAspect / windowAspect;
+        projection = glm::ortho(-1.0f, 1.0f, -scale, scale, -1.0f, 1.0f);
+    }
+
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform1i(uniformTexture, 0);
+
+    glActiveTexture(GL_TEXTURE0);
+    
+    // Seleccionar texture y atlas según la parte actual
+    if (currentCinematicPart == 0) {
+        glBindTexture(GL_TEXTURE_2D, cinematicTextureP1);
+    } else if (currentCinematicPart == 1) {
+        glBindTexture(GL_TEXTURE_2D, cinematicTextureP2);
+    } else if (currentCinematicPart == 2) {
+        glBindTexture(GL_TEXTURE_2D, cinematicTextureP3);
+    } else if (currentCinematicPart == 3) {
+        glBindTexture(GL_TEXTURE_2D, cinematicTextureP4);
+    }
+
+    glBindVertexArray(VAO);
+
+    std::string frameName = "frame_" + std::to_string(currentCinematicFrame);
+    glm::vec4 uvRect;
+    
+    SpriteAtlas& currentAtlas = (currentCinematicPart == 0) ? cinematicAtlasP1 : cinematicAtlasP2;
+    
+    if (getUvRectForSprite(currentAtlas, frameName, uvRect)) {
+        glm::mat4 model = glm::mat4(1.0f);
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glUniform4f(uniformTintColor, 1.0f, 1.0f, 1.0f, 1.0f);
+        glUniform1i(uniformFlipX, 0);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+
+    glBindVertexArray(0);
+    glUseProgram(0);
+}
+
 // ============================== Game lifecycle ==============================
 
 void Game::toggleViewMode() {
@@ -696,6 +862,12 @@ void Game::init() {
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
         menuIntroScreen.initMenu();
+        return;
+    }
+
+    // ========== CINEMÁTICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        initCinematic(this);
         return;
     }
 
@@ -926,6 +1098,15 @@ void Game::processInput() {
     // ========== MENU: Flechas para seleccionar, Enter para confirmar ==========
     if (this->state == GAME_MENU) {
         menuIntroScreen.processInputMenu(this->keys);
+        return;
+    }
+
+    // ========== CINEMÁTICA: Espacio para saltar ==========
+    if (this->state == GAME_CINEMATIC) {
+        if (this->keys[GLFW_KEY_SPACE] == GLFW_PRESS) {
+            skipCinematic = true;
+            this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;  // Evitar múltiples saltos
+        }
         return;
     }
 
@@ -1181,8 +1362,28 @@ void Game::update() {
         menuIntroScreen.updateMenu(deltaTime);
         if (menuIntroScreen.shouldStartGame()) {
             this->mode = menuIntroScreen.getSelectedMode();
-            this->state = GAME_PLAYING;
+            if (this->mode == GameMode::TwoPlayers) {
+                this->state = GAME_CINEMATIC;
+                std::cout << "[Game] Modo seleccionado: DOS JUGADORES\n";
+            } else {
+                this->state = GAME_PLAYING;
+                std::cout << "[Game] Modo seleccionado: UN JUGADOR\n";
+            }
             this->init();
+        }
+        return;
+    }
+
+    // ========== CINEMÁTICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        bool cinematicEnded = updateCinematic(deltaTime);
+        
+        if (cinematicEnded || skipCinematic) {
+            // Pasar a juego
+            this->state = GAME_PLAYING;
+            skipCinematic = false;
+            this->init();  // Inicializar el juego
+            std::cout << "[Game] Transicion CINEMATICA -> PLAYING\n";
         }
         return;
     }
@@ -1331,6 +1532,13 @@ void Game::render() {
         menuIntroScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
+        return;
+    }
+
+    // ========== CINEMÁTICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        renderCinematic(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                       uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         return;
     }
 
@@ -1567,3 +1775,4 @@ void Game::toggleFullscreen(GLFWwindow* window) {
         glfwSetWindowMonitor(window, nullptr, windowedXPos, windowedYPos, WIDTH, HEIGHT, 0);
     }
 }
+
