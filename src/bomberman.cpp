@@ -110,10 +110,22 @@ GLuint uniform3DModel = 0;
 GLuint uniform3DView = 0;
 GLuint uniform3DProjection = 0;
 GLuint uniform3DColor = 0;
+GLuint uniform3DLightPos = 0;
+GLuint uniform3DViewPos = 0;
+GLuint uniform3DLightColor = 0;
+GLuint uniform3DAmbientStrength = 0;
+GLuint uniform3DSpecularStrength = 0;
+GLuint uniform3DShininess = 0;
 GLuint uniform3DTexturedModel = 0;
 GLuint uniform3DTexturedView = 0;
 GLuint uniform3DTexturedProjection = 0;
 GLuint uniform3DTexturedSampler = 0;
+GLuint uniform3DTexturedLightPos = 0;
+GLuint uniform3DTexturedViewPos = 0;
+GLuint uniform3DTexturedLightColor = 0;
+GLuint uniform3DTexturedAmbientStrength = 0;
+GLuint uniform3DTexturedSpecularStrength = 0;
+GLuint uniform3DTexturedShininess = 0;
 
 SpriteAtlas gPlayerAtlas; // No estático para usarlo en player.cpp
 
@@ -356,15 +368,16 @@ void CreateCube()
     MeshResource* cubeMesh = ResourceManager::createMesh("cube", []() -> MeshResource {
         MeshResource mesh;
 
+        const GLfloat n = 0.57735026919f;
         const GLfloat vertices[] = {
-            -0.5f, -0.5f, -0.5f,
-             0.5f, -0.5f, -0.5f,
-             0.5f,  0.5f, -0.5f,
-            -0.5f,  0.5f, -0.5f,
-            -0.5f, -0.5f,  0.5f,
-             0.5f, -0.5f,  0.5f,
-             0.5f,  0.5f,  0.5f,
-            -0.5f,  0.5f,  0.5f
+            -0.5f, -0.5f, -0.5f, -n, -n, -n,
+             0.5f, -0.5f, -0.5f,  n, -n, -n,
+             0.5f,  0.5f, -0.5f,  n,  n, -n,
+            -0.5f,  0.5f, -0.5f, -n,  n, -n,
+            -0.5f, -0.5f,  0.5f, -n, -n,  n,
+             0.5f, -0.5f,  0.5f,  n, -n,  n,
+             0.5f,  0.5f,  0.5f,  n,  n,  n,
+            -0.5f,  0.5f,  0.5f, -n,  n,  n
         };
 
         const GLuint indices[] = {
@@ -387,8 +400,10 @@ void CreateCube()
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
         glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+        glEnableVertexAttribArray(1);
 
         glBindVertexArray(0);
         mesh.indexCount = 36;
@@ -416,7 +431,7 @@ void CreateSphere()
 
         std::vector<GLfloat> vertices;
         std::vector<GLuint> indices;
-        vertices.reserve((stacks + 1) * (slices + 1) * 3);
+        vertices.reserve((stacks + 1) * (slices + 1) * 6);
         indices.reserve(stacks * slices * 6);
 
         for (unsigned int i = 0; i <= stacks; ++i) {
@@ -428,9 +443,16 @@ void CreateSphere()
             for (unsigned int j = 0; j <= slices; ++j) {
                 const float u = (float)j / (float)slices;
                 const float theta = u * (2.0f * kPi);
-                vertices.push_back(ringRadius * std::cos(theta));
+                const float x = ringRadius * std::cos(theta);
+                const float z = ringRadius * std::sin(theta);
+                const glm::vec3 normal = glm::normalize(glm::vec3(x, y, z));
+
+                vertices.push_back(x);
                 vertices.push_back(y);
-                vertices.push_back(ringRadius * std::sin(theta));
+                vertices.push_back(z);
+                vertices.push_back(normal.x);
+                vertices.push_back(normal.y);
+                vertices.push_back(normal.z);
             }
         }
 
@@ -460,8 +482,10 @@ void CreateSphere()
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.ebo);
         glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(GLuint), indices.data(), GL_STATIC_DRAW);
 
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(GLfloat), (GLvoid*)0);
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)0);
         glEnableVertexAttribArray(0);
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+        glEnableVertexAttribArray(1);
 
         glBindVertexArray(0);
         mesh.indexCount = static_cast<GLsizei>(indices.size());
@@ -637,6 +661,12 @@ void Compile3DShaders()
     uniform3DView = glGetUniformLocation(shader3D, "view");
     uniform3DProjection = glGetUniformLocation(shader3D, "projection");
     uniform3DColor = glGetUniformLocation(shader3D, "objectColor");
+    uniform3DLightPos = glGetUniformLocation(shader3D, "lightPos");
+    uniform3DViewPos = glGetUniformLocation(shader3D, "viewPos");
+    uniform3DLightColor = glGetUniformLocation(shader3D, "lightColor");
+    uniform3DAmbientStrength = glGetUniformLocation(shader3D, "ambientStrength");
+    uniform3DSpecularStrength = glGetUniformLocation(shader3D, "specularStrength");
+    uniform3DShininess = glGetUniformLocation(shader3D, "shininess");
 }
 
 void Compile3DTexturedShaders()
@@ -654,6 +684,12 @@ void Compile3DTexturedShaders()
     uniform3DTexturedView = glGetUniformLocation(shader3DTextured, "view");
     uniform3DTexturedProjection = glGetUniformLocation(shader3DTextured, "projection");
     uniform3DTexturedSampler = glGetUniformLocation(shader3DTextured, "baseColorTex");
+    uniform3DTexturedLightPos = glGetUniformLocation(shader3DTextured, "lightPos");
+    uniform3DTexturedViewPos = glGetUniformLocation(shader3DTextured, "viewPos");
+    uniform3DTexturedLightColor = glGetUniformLocation(shader3DTextured, "lightColor");
+    uniform3DTexturedAmbientStrength = glGetUniformLocation(shader3DTextured, "ambientStrength");
+    uniform3DTexturedSpecularStrength = glGetUniformLocation(shader3DTextured, "specularStrength");
+    uniform3DTexturedShininess = glGetUniformLocation(shader3DTextured, "shininess");
 }
 
 static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
@@ -2128,8 +2164,17 @@ void Game::render3D() {
         projection = glm::perspective(glm::radians(fovDegrees), aspect, 0.05f, 140.0f);
     }
 
+    const glm::vec3 keyLightPos = mapCenter + glm::vec3(mapRadius * 0.30f, mapRadius * 1.85f + 3.5f, mapRadius * 0.24f);
+    const glm::vec3 keyLightColor(1.0f, 0.97f, 0.92f);
+
     glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform3fv(uniform3DLightPos, 1, glm::value_ptr(keyLightPos));
+    glUniform3fv(uniform3DViewPos, 1, glm::value_ptr(cameraPos));
+    glUniform3fv(uniform3DLightColor, 1, glm::value_ptr(keyLightColor));
+    glUniform1f(uniform3DAmbientStrength, 0.34f);
+    glUniform1f(uniform3DSpecularStrength, 0.38f);
+    glUniform1f(uniform3DShininess, 24.0f);
 
     auto drawMesh3D = [&](GLuint vao, GLsizei indexCount, const glm::vec3& center, const glm::vec3& scale, const glm::vec3& color) {
         if (vao == 0 || indexCount <= 0) {
@@ -2311,6 +2356,12 @@ void Game::render3D() {
     glUseProgram(shader3D);
     glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform3fv(uniform3DLightPos, 1, glm::value_ptr(keyLightPos));
+    glUniform3fv(uniform3DViewPos, 1, glm::value_ptr(cameraPos));
+    glUniform3fv(uniform3DLightColor, 1, glm::value_ptr(keyLightColor));
+    glUniform1f(uniform3DAmbientStrength, 0.34f);
+    glUniform1f(uniform3DSpecularStrength, 0.38f);
+    glUniform1f(uniform3DShininess, 24.0f);
 
     const bool hasSphereMesh = (sphereVAO != 0 && sphereIndexCount > 0);
     const GLuint sphereOrCubeVAO = hasSphereMesh ? sphereVAO : cubeVAO;
@@ -2378,6 +2429,12 @@ void Game::render3D() {
         glUniformMatrix4fv(uniform3DTexturedView, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(uniform3DTexturedProjection, 1, GL_FALSE, glm::value_ptr(projection));
         glUniform1i(uniform3DTexturedSampler, 0);
+        glUniform3fv(uniform3DTexturedLightPos, 1, glm::value_ptr(keyLightPos));
+        glUniform3fv(uniform3DTexturedViewPos, 1, glm::value_ptr(cameraPos));
+        glUniform3fv(uniform3DTexturedLightColor, 1, glm::value_ptr(keyLightColor));
+        glUniform1f(uniform3DTexturedAmbientStrength, 0.30f);
+        glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
+        glUniform1f(uniform3DTexturedShininess, 28.0f);
 
         if (canRenderPlayerGlb) {
             glActiveTexture(GL_TEXTURE0);
