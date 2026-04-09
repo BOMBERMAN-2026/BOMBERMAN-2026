@@ -4,12 +4,12 @@
 #include "sprite_atlas.hpp"
 #include "bomb.hpp"
 #include <cstdlib>
-#include <cmath>
+    #include <cmath>
 
-Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
-             int hp, int score, bool passSoftBlocks, bool boss)
-    : Entity(pos, size, speed),
-      hitPoints(hp), maxHitPoints(hp), scoreValue(score),
+    Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
+                int hp, int score, bool passSoftBlocks, bool boss)
+        : Entity(pos, size, speed),
+        hitPoints(hp), maxHitPoints(hp), scoreValue(score),
       alive(true), canPassSoftBlocks(passSoftBlocks), isBoss(boss),
     lifeState(EnemyLifeState::Alive),
     facing(EnemyDirection::LEFT),
@@ -19,15 +19,15 @@ Enemy::Enemy(glm::vec2 pos, glm::vec2 size, float speed,
 
 Enemy::~Enemy() {}
 
+// Extrae "leon" de "leon.derecha.0".
 static std::string baseIdFromSpriteName(const std::string& spriteName) {
-    // Extrae "leon" de "leon.derecha.0".
     const std::size_t dot = spriteName.find('.');
     if (dot == std::string::npos) return spriteName;
     return spriteName.substr(0, dot);
 }
 
+// Cuenta frames consecutivos desde 0: deathPrefix + "0", "1", ...
 static int countDeathFrames(const SpriteAtlas& atlas, const std::string& deathPrefix) {
-    // Cuenta frames consecutivos desde 0: deathPrefix + "0", "1", ...
     int count = 0;
     while (true) {
         const std::string key = deathPrefix + std::to_string(count);
@@ -180,80 +180,66 @@ EnemyDirection Enemy::randomDirection() {
 // Intenta moverse en la dirección dada; devuelve true si pudo avanzar.
 bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
     if (!gameMap) return false;
-    const float halfTile = gameMap->getTileSize() / 2.0f;
 
-    // Snap perpendicular al movimiento hacia el centro del tile actual.
-    {
-        const float snapStrength = 0.2f;
-        const float snapMaxDist  = halfTile * 0.45f;
-        int tr, tc;
-        gameMap->ndcToGrid(position, tr, tc);
-        glm::vec2 tileCenter = gameMap->gridToNDC(tr, tc);
-
-        if (dir == EnemyDirection::LEFT || dir == EnemyDirection::RIGHT) {
-            float dy = tileCenter.y - position.y;
-            if (std::abs(dy) <= snapMaxDist)
-                position.y += dy * snapStrength;
-        } else if (dir == EnemyDirection::UP || dir == EnemyDirection::DOWN) {
-            float dx = tileCenter.x - position.x;
-            if (std::abs(dx) <= snapMaxDist)
-                position.x += dx * snapStrength;
+    if (movingToTarget) {
+        glm::vec2 d = targetPos - position;
+        float distToTarget = std::sqrt(d.x * d.x + d.y * d.y);
+        
+        if (distToTarget <= stepSize) {
+            position = targetPos;
+            movingToTarget = false;
+        } else {
+            glm::vec2 dirVec = d / distToTarget;
+            position += dirVec * stepSize;
         }
+        return true; 
     }
 
-    glm::vec2 newPos = position + dirToVec(dir) * stepSize;
+    if (dir == EnemyDirection::NONE) return true;
 
-    // Sondas de colisión: dos esquinas en el borde frontal.
-    {
-        int r, c;
-        const float eFront = halfTile;          // siempre cae en el tile vecino
-        const float eSide  = halfTile * 0.60f;
+    int currentR, currentC;
+    gameMap->ndcToGrid(this->position, currentR, currentC);
+    
+    int targetR = currentR;
+    int targetC = currentC;
+    
+    if (dir == EnemyDirection::UP) targetR--;
+    if (dir == EnemyDirection::DOWN) targetR++;
+    if (dir == EnemyDirection::LEFT) targetC--;
+    if (dir == EnemyDirection::RIGHT) targetC++;
 
-        // Las bombas activas ocupan tile completo y bloquean a los enemigos.
-        auto bombBlocks = [&](int rr, int cc) {
-            for (auto* b : gBombs) {
-                if (!b) continue;
-                if (b->state == BombState::DONE) continue;
-                if (b->gridRow == rr && b->gridCol == cc) return true;
-            }
-            return false;
-        };
+    auto bombBlocks = [&](int rr, int cc) {
+        for (auto* b : gBombs) {
+            if (!b) continue;
+            if (b->state == BombState::DONE) continue;
+            if (b->gridRow == rr && b->gridCol == cc) return true;
+        }
+        return false;
+    };
 
-        auto tileBlocks = [&](int rr, int cc) {
-            const bool blockedByMap =
-                !gameMap->isWalkable(rr, cc) && !(canPassSoftBlocks && gameMap->isDestructible(rr, cc));
-            return blockedByMap || bombBlocks(rr, cc);
-        };
+    auto tileBlocks = [&](int rr, int cc) {
+        const bool blockedByMap =
+            !gameMap->isWalkable(rr, cc) && !(canPassSoftBlocks && gameMap->isDestructible(rr, cc));
+        return blockedByMap || bombBlocks(rr, cc);
+    };
 
-        if (dir == EnemyDirection::UP) {
-            gameMap->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
-            if (tileBlocks(r, c)) return false;
-            gameMap->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
-            if (tileBlocks(r, c)) return false;
+    if (!tileBlocks(targetR, targetC)) {
+        targetPos = gameMap->gridToNDC(targetR, targetC);
+        movingToTarget = true;
+        
+        glm::vec2 d = targetPos - this->position;
+        float distToTarget = std::sqrt(d.x * d.x + d.y * d.y);
+        if (distToTarget > 0.0f) {
+            glm::vec2 dirVec = d / distToTarget;
+            position += dirVec * std::min(stepSize, distToTarget);
         }
-        if (dir == EnemyDirection::DOWN) {
-            gameMap->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
-            if (tileBlocks(r, c)) return false;
-            gameMap->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
-            if (tileBlocks(r, c)) return false;
-        }
-        if (dir == EnemyDirection::LEFT) {
-            gameMap->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
-            if (tileBlocks(r, c)) return false;
-            gameMap->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
-            if (tileBlocks(r, c)) return false;
-        }
-        if (dir == EnemyDirection::RIGHT) {
-            gameMap->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
-            if (tileBlocks(r, c)) return false;
-            gameMap->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
-            if (tileBlocks(r, c)) return false;
-        }
+        facing = dir;
+        return true;
+    } else {
+        targetPos = gameMap->gridToNDC(currentR, currentC);
+        position = targetPos;
+        return false;
     }
-
-    position = newPos;
-    facing = dir;
-    return true;
 }
 
 // Comprueba si la casilla en esa dirección es transitable.

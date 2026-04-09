@@ -16,10 +16,12 @@
  * Responsabilidades:
  * - Inicializar GLFW/GLEW y crear la ventana.
  * - Construir `Game` y ejecutar el loop principal (input/update/render).
- * - Registrar el callback de teclado (flechas para P1, WASD para P2).
+ * - Registrar el callback de teclado (ver README para controles).
  */
 
 Game* bomberman;
+
+extern int menuSelection;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
@@ -120,6 +122,7 @@ int main() {
 }
 
 // Callback de teclado (GLFW). Guarda estado y recuerda “última dirección” por jugador.
+// Controles completos: ver README.
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
     if (bomberman == nullptr) {
         return;
@@ -129,12 +132,20 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         bomberman->keys[key] = action;
 
         if (action == GLFW_PRESS) {
-            if (key == GLFW_KEY_F1) {
-                bomberman->toggleViewMode();
+            // ========== INTRO: pasar al menú ==========
+            if (bomberman->state == GAME_INTRO && key == GLFW_KEY_SPACE) {
+                bomberman->state = GAME_MENU;
+                bomberman->init(); // Cargar textura del menú
+                return;
             }
 
-            if (key == GLFW_KEY_F2) {
-                if (bomberman->is3DViewEnabled()) {
+            // ========== JUEGO NORMAL ==========
+            if (bomberman->state == GAME_PLAYING) {
+                if (key == GLFW_KEY_F1) {
+                    bomberman->toggleViewMode();
+                }
+
+                if (key == GLFW_KEY_F2 && bomberman->is3DViewEnabled()) {
                     bomberman->cycleCamera3DType();
                 }
             }
@@ -150,8 +161,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     }
 }
 
+// Ajusta el viewport cuando cambia el tamaño de la ventana.
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    // Actualizamos el Viewport para que ocupe toda la nueva ventana
     glViewport(0, 0, width, height);
 
     if (bomberman != nullptr) {

@@ -2,6 +2,7 @@
 #define PLAYER_H
 
 #include "entity.hpp"
+#include "power_up.hpp"
 #include <string>
 
 /*
@@ -45,6 +46,22 @@ class Player : public Entity {
 
         int playerId = 0;               // Identificador estable (0=P1, 1=P2)
 
+        // === Power-Up Stats (Arcade 1991) ===
+        int maxBombs = 1;                // Bombas simultáneas permitidas (cap: 8)
+        int activeBombs = 0;             // Bombas activas en el mapa (contador O(1))
+        int explosionPower = 2;          // Radio de explosión (cap: 10)
+        float baseSpeed;                 // Velocidad base actual (cap: 0.8f)
+        int lives = 3;                   // Vidas
+
+        // Invulnerabilidad ("Armadura" o spawn/respawn)
+        bool invincible = false;                 // Si true, el jugador no puede morir por contacto/explosión
+        float invincibilityTimer = 0.0f;         // Tiempo restante (segundos)
+        float invincibilityTotalSeconds = 0.0f;  // Duración total activada (segundos). Útil para VFX/UI.
+        bool invincibilityFromPowerUp = false;   // true si viene del power-up "Armadura" (16s)
+
+        // Remote Control
+        bool hasRemoteControl = false;
+
         // Vida / respawn
         PlayerLifeState lifeState = PlayerLifeState::Alive; // Estado de vida
         glm::vec2 spawnPosition;                          // Punto de respawn (por ahora: el spawn inicial)
@@ -58,7 +75,7 @@ class Player : public Entity {
         // Tick de lógica
         void Update() override;
         
-        // Tick de render (placeholder). El render real se hace desde `bomberman.cpp`.
+        // Render del jugador (llamado desde `bomberman.cpp`).
         void Draw() override;
 
         // Intenta mover el jugador un paso en la dirección indicada.
@@ -66,6 +83,11 @@ class Player : public Entity {
         void UpdateSprite(Move mov, const GameMap* map, float deltaTime);
 
         bool isAlive() const { return lifeState == PlayerLifeState::Alive; }
+        bool canPlaceBomb() const { return activeBombs < maxBombs; }
+        bool isGameOver() const { return lives <= 0; }
+
+        // Aplica un power-up (respeta ArcadeCaps).
+        void applyPowerUp(PowerUpType type);
 
         // Mata al jugador por contacto con enemigo (usa "jugador(color).muerto.N").
         void killByEnemy();

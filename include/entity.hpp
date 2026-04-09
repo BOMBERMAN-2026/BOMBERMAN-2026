@@ -32,10 +32,13 @@ class Entity {
 
         // Movimiento
         float speed;          // Velocidad base
+        bool movingToTarget = false;
+        glm::vec2 targetPos;
 
         Entity(glm::vec2 pos, glm::vec2 size, float speed) // Crea entidad con posición/tamaño (NDC) y velocidad base.
             : position(pos), size(size), speed(speed),
-              direction(glm::vec2(0.0f)), tintColor(glm::vec4(1.0f)) {}
+              direction(glm::vec2(0.0f)), tintColor(glm::vec4(1.0f)),
+              movingToTarget(false), targetPos(pos) {}
 
         // Destructor virtual: necesario para delete a través de puntero base.
         virtual ~Entity() {}

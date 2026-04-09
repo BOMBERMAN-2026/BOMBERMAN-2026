@@ -1,5 +1,16 @@
+# Jugadores con coordenadas x y (columna, fila)
 spawn white 8 5
 spawn red 12 7
+
+# Power-ups con coordenadas x y (columna, fila)
+
+# Enemigos con coordenadas x y (columna, fila)
+enemy bebe 2 1
+enemy bebe 18 1
+enemy bebe 2 11
+enemy bebe 18 11
+enemy Leon 16 3
+enemy Leon 4 9
 
 12 3 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 13
 12 0 6 7 7 7 7 7 7 7 8 7 7 7 7 7 7 7 7 0 13

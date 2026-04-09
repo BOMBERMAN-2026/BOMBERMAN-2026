@@ -29,6 +29,9 @@ public:
     void Update() override;
     void Draw()   override;
 
+    bool takeDamage(const SpriteAtlas& atlas, int amount = 1) override;
+    void updateDeath(float dt) override;
+
     // Al recibir daño, genera las subdivisiones.
     // Devuelve una lista de nuevos enemigos hijos (vacía si muere definitivamente).
     std::vector<std::unique_ptr<SolPervertido>> split();
@@ -38,6 +41,7 @@ public:
 private:
     Phase currentPhase;
     glm::vec2 velocity;  // Dirección + magnitud del rebote estilo pinball
+    float invulnerableTimer; // Tiempo de inmunidad post-split
 
     void bounce();       // Lógica de rebote contra paredes/bloques
 };

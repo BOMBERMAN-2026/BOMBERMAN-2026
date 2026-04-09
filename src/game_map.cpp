@@ -1,5 +1,6 @@
 #include "game_map.hpp"
 #include "sprite_atlas.hpp" // for resolveAssetPath, loadSpriteAtlasMinimal, getUvRectForSprite
+#include "player.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -9,6 +10,59 @@
 #include <sstream>
 #include <algorithm>
 #include <cctype>
+#include <random>
+#include <chrono>
+
+// Convierte un string de nivel (p.ej. "flame", "bomba", "velocidad") a PowerUpType.
+// Se usa para la directiva: `powerup <type> <x> <y>` dentro de `levels/*.txt`.
+// Nota: normaliza a minúsculas y elimina espacios/guiones/guiones bajos.
+static bool parsePowerUpTypeFromString(const std::string& raw, PowerUpType& outType) {
+    // Normalizar: minúsculas y sin guiones/espacios
+    std::string s;
+    s.reserve(raw.size());
+    for (unsigned char ch : raw) {
+        if (std::isspace(ch) || ch == '-' || ch == '_') continue;
+        s.push_back((char)std::tolower(ch));
+    }
+
+    // Stackeables
+    if (s == "bomb" || s == "bomba" || s == "bombup") { outType = PowerUpType::BombUp; return true; }
+    if (s == "flame" || s == "fire" || s == "llama" || s == "fireup" || s == "flameup") { outType = PowerUpType::FireUp; return true; }
+    if (s == "speed" || s == "velocidad" || s == "speedup") { outType = PowerUpType::SpeedUp; return true; }
+
+    // No stackeables
+    if (s == "1up" || s == "extralife" || s == "vida") { outType = PowerUpType::ExtraLife; return true; }
+    if (s == "invincibility" || s == "invencibilidad") { outType = PowerUpType::Invincibility; return true; }
+    if (s == "remote" || s == "remotecontrol" || s == "detonador") { outType = PowerUpType::RemoteControl; return true; }
+
+    return false;
+}
+
+// Convierte un string de nivel (p.ej. "leon", "bebe", "fantasma", "king", "dron") a EnemySpawnType.
+// Se usa para la directiva: `enemy <type> <x> <y>` dentro de `levels/*.txt`.
+static bool parseEnemySpawnTypeFromString(const std::string& raw, EnemySpawnType& outType) {
+    // Normaliza a minúsculas y elimina espacios/guiones/guiones bajos.
+    std::string s;
+    s.reserve(raw.size());
+    for (unsigned char ch : raw) {
+        if (std::isspace(ch) || ch == '-' || ch == '_') continue;
+        s.push_back((char)std::tolower(ch));
+    }
+
+    if (s == "leon") { outType = EnemySpawnType::Leon; return true; }
+    if (s == "babosa") { outType = EnemySpawnType::Babosa; return true; }
+    if (s == "bebe" || s == "bebelloron") { outType = EnemySpawnType::BebeLloron; return true; }
+    if (s == "fantasma" || s == "fantasmamortal") { outType = EnemySpawnType::FantasmaMortal; return true; }
+    if (s == "sol" || s == "solpervertido" || s == "sol_pervertido") { outType = EnemySpawnType::SolPervertido; return true; }
+    if (s == "king" || s == "kingbomber" || s == "king_bomber") { outType = EnemySpawnType::KingBomber; return true; }
+    if (s == "dronrosa") { outType = EnemySpawnType::DronRosa; return true; }
+    if (s == "dronverde") { outType = EnemySpawnType::DronVerde; return true; }
+    if (s == "dronamarillo") { outType = EnemySpawnType::DronAmarillo; return true; }
+    if (s == "dronazul") { outType = EnemySpawnType::DronAzul; return true; }
+    if (s == "dragon" || s == "dragonjoven" || s == "dragon_joven") { outType = EnemySpawnType::DragonJoven; return true; }
+
+    return false;
+}
 
 /*
  * game_map.cpp
@@ -23,7 +77,7 @@
  *
  * Coordenadas de grid:
  * - Se usan como (row, col) internamente en la mayoría de funciones.
- * - En directivas `spawn`, el fichero habla en (x,y) = (col,row) con (0,0) arriba-izquierda.
+ * - En directivas `spawn`, `powerup`, `enemy`, el fichero habla en (x,y) = (col,row) con (0,0) arriba-izquierda.
  */
 
 // ============================== Ctor / dtor ==============================
@@ -52,6 +106,7 @@ bool GameMap::loadFromFile(const std::string& filePath) {
 
     grid.clear();
     spawnCells.clear();
+    enemySpawns.clear();
 
     struct PendingSpawn {
         int index = -1;
@@ -60,6 +115,21 @@ bool GameMap::loadFromFile(const std::string& filePath) {
         bool inner = true; // si true: coordenadas en el área jugable (sin borde) => +1
     };
     std::vector<PendingSpawn> pendingSpawns;
+
+    struct PendingPowerUp {
+        PowerUpType type = PowerUpType::ExtraLife;
+        int row = 0;
+        int col = 0;
+    };
+    std::vector<PendingPowerUp> pendingPowerUps;
+
+    struct PendingEnemy {
+        // Enemigo definido por directiva `enemy` en el TXT.
+        EnemySpawnType type = EnemySpawnType::Leon;
+        int row = 0;
+        int col = 0;
+    };
+    std::vector<PendingEnemy> pendingEnemies;
 
     std::string line;
     int maxCols = 0;
@@ -114,6 +184,62 @@ bool GameMap::loadFromFile(const std::string& filePath) {
                 ps.y = y;
                 ps.inner = (kw == "spawn");
                 pendingSpawns.push_back(ps);
+                continue;
+            }
+        }
+
+        // Directivas: powerup <type> <x> <y>
+        {
+            std::istringstream issDir(trimmed);
+            std::string kw;
+            issDir >> kw;
+            if (kw == "powerup") {
+                std::string typeStr;
+                int x = 0, y = 0;
+                if (!(issDir >> typeStr >> x >> y)) {
+                    std::cerr << "GameMap: directiva powerup inválida: '" << trimmed << "'\n";
+                    continue;
+                }
+
+                PowerUpType type;
+                if (!parsePowerUpTypeFromString(typeStr, type)) {
+                    std::cerr << "GameMap: powerup: tipo desconocido '" << typeStr << "'\n";
+                    continue;
+                }
+
+                PendingPowerUp pp;
+                pp.type = type;
+                pp.row = y;
+                pp.col = x;
+                pendingPowerUps.push_back(pp);
+                continue;
+            }
+        }
+
+        // Directivas: enemy <type> <x> <y>
+        {
+            std::istringstream issDir(trimmed);
+            std::string kw;
+            issDir >> kw;
+            if (kw == "enemy") {
+                std::string typeStr;
+                int x = 0, y = 0;
+                if (!(issDir >> typeStr >> x >> y)) {
+                    std::cerr << "GameMap: directiva enemy inválida: '" << trimmed << "'\n";
+                    continue;
+                }
+
+                EnemySpawnType type;
+                if (!parseEnemySpawnTypeFromString(typeStr, type)) {
+                    std::cerr << "GameMap: enemy: tipo desconocido '" << typeStr << "'\n";
+                    continue;
+                }
+
+                PendingEnemy pe;
+                pe.type = type;
+                pe.row = y;
+                pe.col = x;
+                pendingEnemies.push_back(pe);
                 continue;
             }
         }
@@ -177,6 +303,35 @@ bool GameMap::loadFromFile(const std::string& filePath) {
         }
     }
 
+    // Aplicar power-ups definidos por directiva.
+    // Nota: aquí aún no sabemos si una celda es destructible (eso llega tras loadAtlas).
+    // De momento marcamos el power-up; placePowerUps() ajustará visible/oculto según tipo de bloque.
+    for (const auto& pp : pendingPowerUps) {
+        if (pp.row < 0 || pp.row >= rows || pp.col < 0 || pp.col >= cols) {
+            std::cerr << "GameMap: powerup fuera de rango (x=" << pp.col << ", y=" << pp.row << ")\n";
+            continue;
+        }
+        Block& b = grid[pp.row][pp.col];
+        b.hasPowerUp = true;
+        b.powerUpType = pp.type;
+        b.powerUpCollected = false;
+        // provisional: visible; se corrige tras loadAtlas en placePowerUps()
+        b.powerUpRevealed = true;
+    }
+
+    // Registrar spawns de enemigos definidos por directiva.
+    for (const auto& pe : pendingEnemies) {
+        if (pe.row < 0 || pe.row >= rows || pe.col < 0 || pe.col >= cols) {
+            std::cerr << "GameMap: enemy fuera de rango (x=" << pe.col << ", y=" << pe.row << ")\n";
+            continue;
+        }
+        EnemySpawn es;
+        es.type = pe.type;
+        es.row = pe.row;
+        es.col = pe.col;
+        enemySpawns.push_back(es);
+    }
+
     std::cout << "GameMap: cargado " << cols << "x" << rows << std::endl;
     return true;
 }
@@ -225,6 +380,10 @@ void GameMap::update(float deltaTime) {
                     if (b.breakFrame >= 4) {
                         b.breaking = false;
                         b.destroyed = true; // finalmente se destruye y pasa a ser suelo 100% transitable
+                        // Revelar power-up si tenía uno escondido
+                        if (b.hasPowerUp && !b.powerUpCollected) {
+                            b.powerUpRevealed = true;
+                        }
                     }
                 }
             }
@@ -455,11 +614,20 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
                 if (wallLeft && wallUp) floorId = 6;   // Esquina arriba izquierda
                 else if (wallLeft)      floorId = 9;   // Sombra izquierda (por muro/barrera)
                 else if (wallUp)        floorId = 7;   // Sombra arriba (por muro/barrera)
-                else if (indestUp && indestLeft) floorId = 9;  // Arriba e izquierda por indestructible -> Sombra izquierda
-                else if (indestUp)       floorId = 11;  // Sombra arriba (por indestructible)
-                else if (indestLeft)     floorId = 9;   // Sombra izquierda (por indestructible)
+                else if (indestUp)      floorId = 11;  // Sombra arriba (por indestructible)
+                else if (indestLeft)    floorId = 21;  // Sombra izquierda (por indestructible)
                 
                 displayId = floorId;
+            } else if (block.type == BlockType::FLOOR) {
+                // Forzar visualmente el sprite si es un suelo base
+                bool indestLeft = (c > 0 && grid[r][c-1].type == BlockType::INDESTRUCTIBLE);
+                bool indestUp   = (r > 0 && grid[r-1][c].type == BlockType::INDESTRUCTIBLE);
+                
+                if (indestUp) {
+                    displayId = 11;
+                } else if (indestLeft) {
+                    displayId = 21;
+                }
             }
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
             float scaleX = scale;
@@ -539,4 +707,207 @@ void GameMap::renderHud(GLuint vao, GLuint hudTexture,
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+}
+
+// ============================== Power-Ups ==============================
+
+// LoadTexture definido en bomberman.cpp
+extern GLuint LoadTexture(const char* filePath);
+
+void GameMap::loadPowerUpTextures() {
+    if (powerUpTexturesLoaded) return;
+
+    // Rutas de cada power-up indexadas por PowerUpType
+    const char* paths[] = {
+        "resources/sprites/power_ups/Bomberman_AC_-_1-UP.png",           // ExtraLife
+        "resources/sprites/power_ups/Bomberman_AC_-_Bomb_Up.png",       // BombUp
+        "resources/sprites/power_ups/Bomberman_AC_-_Fire_Up.png",       // FireUp
+        "resources/sprites/power_ups/Bomberman_AC_-_Speed_Up.png",      // SpeedUp
+        "resources/sprites/power_ups/Bomberman_AC_-_Invincibility.png", // Invincibility
+        "resources/sprites/power_ups/Bomberman_AC_-_Remote_Control.png"  // RemoteControl
+    };
+
+    for (int i = 0; i < POWER_UP_TYPE_COUNT; i++) {
+        std::string resolved = resolveAssetPath(paths[i]);
+        powerUpTextures[i] = LoadTexture(resolved.c_str());
+        if (powerUpTextures[i] == 0) {
+            std::cerr << "GameMap: Error cargando textura power-up: " << resolved << std::endl;
+        }
+    }
+
+    powerUpTexturesLoaded = true;
+    std::cout << "GameMap: power-up textures loaded" << std::endl;
+}
+
+void GameMap::placePowerUps() {
+    // 1) Si el nivel define power-ups explícitos (directiva `powerup`),
+    //    no usamos colocación aleatoria; solo ajustamos si son visibles u ocultos.
+    bool hasExplicit = false;
+    for (int r = 0; r < rows && !hasExplicit; r++) {
+        for (int c = 0; c < cols; c++) {
+            if (grid[r][c].hasPowerUp) { hasExplicit = true; break; }
+        }
+    }
+
+    if (hasExplicit) {
+        int visibleNow = 0;
+        int hiddenNow = 0;
+        for (int r = 0; r < rows; r++) {
+            for (int c = 0; c < cols; c++) {
+                Block& b = grid[r][c];
+                if (!b.hasPowerUp || b.powerUpCollected) continue;
+
+                // Si el tile es destructible y aún no fue destruido, queda oculto.
+                if (b.type == BlockType::DESTRUCTIBLE && !b.destroyed && !b.breaking) {
+                    b.powerUpRevealed = false;
+                    hiddenNow++;
+                } else {
+                    b.powerUpRevealed = true;
+                    visibleNow++;
+                }
+            }
+        }
+
+        std::cout << "GameMap: power-ups estáticos: " << visibleNow << " visibles, "
+                  << hiddenNow << " ocultos" << std::endl;
+        return;
+    }
+
+    // 2) Fallback legacy: si el nivel no define power-ups, usar el sistema aleatorio anterior.
+    // Recopilar todas las celdas destructibles
+    struct Cell { int r, c; };
+    std::vector<Cell> destructibles;
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            if (grid[r][c].type == BlockType::DESTRUCTIBLE && !grid[r][c].destroyed) {
+                destructibles.push_back({r, c});
+            }
+        }
+    }
+
+    if (destructibles.empty()) {
+        std::cerr << "GameMap: no hay bloques destructibles para colocar power-ups" << std::endl;
+        return;
+    }
+
+    // Shuffle aleatorio
+    unsigned seed = (unsigned)std::chrono::system_clock::now().time_since_epoch().count();
+    std::mt19937 rng(seed);
+    std::shuffle(destructibles.begin(), destructibles.end(), rng);
+
+    // Power-ups a colocar:
+    // Stackeables (2 de cada): BombUp, FireUp, SpeedUp
+    // No stackeables (1 de cada): ExtraLife, Invincibility, RemoteControl
+    struct PowerUpPlacement {
+        PowerUpType type;
+        int count;
+    };
+
+    PowerUpPlacement placements[] = {
+        { PowerUpType::BombUp,         2 },  // Stackeable
+        { PowerUpType::FireUp,         2 },  // Stackeable
+        { PowerUpType::SpeedUp,        2 },  // Stackeable
+        { PowerUpType::ExtraLife,      1 },  // No stackeable
+        { PowerUpType::Invincibility,  1 },  // No stackeable
+        { PowerUpType::RemoteControl,  1 },  // No stackeable
+    };
+
+    int cellIndex = 0;
+    int totalPlaced = 0;
+
+    for (const auto& p : placements) {
+        for (int i = 0; i < p.count; i++) {
+            if (cellIndex >= (int)destructibles.size()) break;
+            Cell& cell = destructibles[cellIndex++];
+            Block& b = grid[cell.r][cell.c];
+            b.hasPowerUp = true;
+            b.powerUpType = p.type;
+            b.powerUpRevealed = false;
+            b.powerUpCollected = false;
+            totalPlaced++;
+        }
+    }
+
+    std::cout << "GameMap: " << totalPlaced << " power-ups colocados en "
+              << destructibles.size() << " bloques destructibles" << std::endl;
+}
+
+void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
+                             GLuint uniformTintColor, GLuint uniformFlipX) {
+    if (!powerUpTexturesLoaded) return;
+
+    glBindVertexArray(vao);
+    glUniform1f(uniformFlipX, 0.0f);
+    glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+    float scale = tileSize / 2.0f;
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            const Block& block = grid[r][c];
+            if (!block.hasPowerUp || !block.powerUpRevealed || block.powerUpCollected)
+                continue;
+
+            int texIdx = (int)block.powerUpType;
+            if (texIdx < 0 || texIdx >= POWER_UP_TYPE_COUNT || powerUpTextures[texIdx] == 0)
+                continue;
+
+            // Bind la textura del power-up
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
+
+            glm::vec2 center = gridToNDC(r, c);
+            glm::mat4 model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(center, 0.0f));
+            model = glm::scale(model, glm::vec3(scale, scale, 1.0f));
+
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+
+            // UV rect completo para texturas individuales
+            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+    }
+
+    glBindVertexArray(0);
+}
+
+bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
+    if (!player) return false;
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+
+    Block& b = grid[row][col];
+    if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected)
+        return false;
+
+    // Aplicar el power-up y marcarlo como recogido
+    player->applyPowerUp(b.powerUpType);
+    b.powerUpCollected = true;
+    b.powerUpRevealed = false;
+
+    // Log para debug
+    const char* names[] = { "1-UP", "Bomb Up", "Fire Up", "Speed Up", "Invincibility", "Remote Control" };
+    int idx = (int)b.powerUpType;
+    if (idx >= 0 && idx < 6) {
+        std::cout << "[PowerUp] Jugador " << player->playerId << " recogio " << names[idx] << std::endl;
+    }
+
+    return true;
+}
+
+// Destruye un power-up que esté suelto/visible en la celda alcanzada por una explosión.
+void GameMap::destroyExposedPowerUp(int row, int col) {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return;
+
+    Block& b = grid[row][col];
+    // Solo destruir si está suelto/visible (no si está escondido bajo un destructible)
+    if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected) return;
+
+    b.hasPowerUp = false;
+    b.powerUpRevealed = false;
+    b.powerUpCollected = true;
 }

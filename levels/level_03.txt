@@ -1,0 +1,31 @@
+# Jugadores con coordenadas x y (columna, fila)
+spawn white 8 5
+spawn red 12 7
+
+# Power-ups con coordenadas x y (columna, fila)
+powerup flame 10 3
+powerup flame 2 6
+powerup flame 18 6
+powerup flame 10 9
+powerup bomba 14 1
+powerup bomba 6 11
+powerup velocidad 6 1
+powerup velocidad 10 7
+powerup velocidad 14 11
+
+# Enemigos con coordenadas x y (columna, fila)
+enemy sol 10 5
+
+12 3 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 13
+12 0 6 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 0 13
+12 1 9 8 10 8 10 8 10 8 10 8 10 8 10 8 10 8 9 1 13
+12 0 9 7 10 7 10 10 10 10 10 10 10 10 10 7 10 7 10 0 13
+12 1 10 8 9 8 10 8 9 8 9 8 9 8 10 8 9 8 10 1 13
+12 0 9 10 10 10 10 7 10 7 10 7 10 7 10 10 10 10 10 0 13
+12 1 9 8 9 8 10 8 9 8 10 8 9 8 10 8 9 8 9 1 13
+12 0 9 10 10 10 10 7 10 7 10 7 10 7 10 10 10 10 10 0 13
+12 1 10 8 9 8 10 8 9 8 9 8 9 8 10 8 9 8 10 1 13
+12 0 9 7 10 7 10 10 10 10 10 10 10 10 10 7 10 7 10 0 13
+12 1 9 8 10 8 10 8 10 8 10 8 10 8 10 8 10 8 9 1 13
+12 0 9 7 10 7 10 7 10 7 10 7 10 7 10 7 10 7 10 0 13
+12 1 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 5 13

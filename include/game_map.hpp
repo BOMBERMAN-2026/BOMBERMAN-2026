@@ -5,6 +5,7 @@
 #include <glm/glm.hpp>
 #include "sprite_atlas.hpp"
 #include "tile_animator.hpp"
+#include "power_up.hpp"
 
 #include <string>
 #include <vector>
@@ -18,9 +19,14 @@
  * - Usa un atlas JSON (SpriteAtlasStage*.json) para asociar ID -> tipo (walkable, destructible...).
  * - Expone utilidades de conversión Grid <-> NDC para movimiento/colisión.
  * - Soporta spawns definidos por nivel con directivas `spawn ...` en el TXT.
+ * - Soporta power-ups y enemigos definidos por nivel con directivas `powerup ...` y `enemy ...`.
  *
  * Convención de coordenadas:
- * - Grid: (row, col) = (y, x), con (0,0) en la esquina superior-izquierda del TXT.
+ * - Grid interno (código): (row, col) = (y, x), con (0,0) en la esquina superior-izquierda del TXT.
+ * - Directivas en `levels/*.txt`: se escriben como (x, y) = (col, row).
+ *   - `spawn <player> <x> <y>`
+ *   - `powerup <type> <x> <y>`
+ *   - `enemy <type> <x> <y>`
  * - `gridToNDC(row,col)` devuelve el centro de la celda.
  */
 
@@ -39,6 +45,9 @@ struct Block {
     float breakTimer = 0.0f; // Acumulador de animación de rotura
     int breakFrame  = 0;     // Frame actual de rotura
     bool hasPowerUp = false; // Si al destruirse revela un power-up
+    PowerUpType powerUpType = PowerUpType::ExtraLife; // Tipo de power-up escondido
+    bool powerUpRevealed = false; // El power-up está visible pero no recogido
+    bool powerUpCollected = false; // El power-up ya fue recogido
 
     bool isWalkable() const {
         if (destroyed) return true; // destructible ya destruido → suelo
@@ -49,6 +58,28 @@ struct Block {
     bool isDestructible() const {
         return (type == BlockType::DESTRUCTIBLE && !destroyed && !breaking);
     }
+};
+
+// Tipo de enemigo declarado en `levels/*.txt` vía directiva `enemy`.
+enum class EnemySpawnType {
+    Leon,
+    Babosa,
+    BebeLloron,
+    FantasmaMortal,
+    SolPervertido,
+    KingBomber,
+    DronRosa,
+    DronVerde,
+    DronAmarillo,
+    DronAzul,
+    DragonJoven
+};
+
+// Spawn de enemigo definido por nivel.
+struct EnemySpawn {
+    EnemySpawnType type;
+    int row = 0;
+    int col = 0;
 };
 
 class GameMap {
@@ -106,6 +137,31 @@ public:
     // Calcula tamaño de tile y offsets para centrar el mapa en pantalla.
     void calculateTileMetrics(float aspectRatio);
 
+    // === Power-Ups ===
+    // Coloca power-ups aleatoriamente debajo de bloques destructibles.
+    // stackeables (BombUp, FireUp, SpeedUp): 2 de cada uno
+    // no stackeables (ExtraLife, Invincibility, RemoteControl): 1 de cada uno
+    void placePowerUps();
+
+    // Renderiza los power-ups revelados (bloques destruidos con power-up visible).
+    void renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
+                        GLuint uniformTintColor, GLuint uniformFlipX);
+
+    // Carga las texturas de los power-ups.
+    void loadPowerUpTextures();
+
+    // Comprueba si un jugador está sobre un power-up revelado y lo recoge.
+    // Devuelve true si recogió un power-up (y lo aplica al player).
+    bool tryCollectPowerUp(int row, int col, class Player* player);
+
+    // Si hay un power-up suelto/visible en esa celda, lo destruye (p.ej. por explosión).
+    // Regla: NO afecta a power-ups ocultos bajo bloques destructibles intactos.
+    void destroyExposedPowerUp(int row, int col);
+
+    // === Enemigos ===
+    // Devuelve los spawns de enemigos declarados en el TXT con `enemy <tipo> <x> <y>`.
+    const std::vector<EnemySpawn>& getEnemySpawns() const { return enemySpawns; }
+
 private:
     struct SpawnCell {
         int row = -1; // Fila en grid
@@ -119,6 +175,9 @@ private:
 
     // Spawns (opcional): si no existe/vale, se usa fallback automático.
     std::vector<SpawnCell> spawnCells;    // Spawns por índice de jugador
+
+    // Spawns de enemigos declarados por nivel.
+    std::vector<EnemySpawn> enemySpawns;
 
     // Layout
     float tileSize = 0.0f;                // Tamaño de tile en NDC
@@ -140,6 +199,11 @@ private:
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);
+
+    // === Power-Ups ===
+    static constexpr int POWER_UP_TYPE_COUNT = 6;
+    GLuint powerUpTextures[POWER_UP_TYPE_COUNT] = {0}; // Texturas indexadas por PowerUpType
+    bool powerUpTexturesLoaded = false;
 };
 
 #endif // GAME_MAP_HPP

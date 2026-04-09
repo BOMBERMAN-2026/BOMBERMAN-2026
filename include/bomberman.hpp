@@ -6,6 +6,9 @@
 #include <GLFW/glfw3.h>
 #include <map>
 #include <string>
+#include <vector>
+
+#include "menu_intro.hpp"
 
 /*
  * bomberman.hpp
@@ -22,6 +25,8 @@
  */
 
 enum GameState {
+    GAME_INTRO,      // Pantalla de intro
+    GAME_MENU,       // Pantalla selección de modo de juego
     GAME_PLAYING
 };
 
@@ -42,64 +47,104 @@ enum class Camera3DType {
     FirstPerson
 };
 
+// Include MenuIntroScreen after GameMode enum
+
+
 class Game
 {
-    private:
+private:
     void render2D();
     void render3D();
     void refreshWindowTitle() const;
 
-    public:
+    // Carga y reutilización de recursos.
+    void ensureRenderResources();
+    void ensureGameplayAssets();
+    void cleanupGameplayEntities();
 
-        // Input
-        std::map<GLint, GLint> keys;          // Estado: Release(0), Press(1), Repeat(2)
-        GLint lastDirKey = GLFW_KEY_UNKNOWN;  // Última flecha pulsada (P1)
-        GLint lastDirKeyP2 = GLFW_KEY_UNKNOWN; // Última WASD pulsada (P2)
+    // Helpers de progresión.
+    bool allPlayersOutOfLives() const;
+    bool allEnemiesCleared() const;
 
-        // Estado
-        GameState state;
-        GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
-        ViewMode viewMode = ViewMode::Mode2D;
-        Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
-        float cameraOrbitYaw = 0.0f;          // Yaw orbital para la camara isometrica fija
-        bool cameraOrbitDragging = false;     // Estado de arrastre con raton
-        double cameraOrbitLastMouseX = 0.0;   // Ultima X del cursor durante el arrastre
-        float firstPersonYaw = 0.0f;          // Yaw first-person (0 = mirando hacia arriba del mapa)
-        float firstPersonPitch = -0.18f;      // Pitch first-person en radianes
-        bool firstPersonMouseInitialized = false;
-        bool firstPersonCursorLocked = false;
-        double firstPersonLastMouseX = 0.0;
-        double firstPersonLastMouseY = 0.0;
+    // Cámara 3D avanzada (estado interno de control/cursor).
+    float cameraOrbitYaw = 0.0f;
+    bool cameraOrbitDragging = false;
+    double cameraOrbitLastMouseX = 0.0;
 
-        // Ventana
-        GLint WIDTH, HEIGHT;                 // Tamaño ventana
-        int windowedXPos, windowedYPos;      // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
-        GLFWwindow* window;                  // GLFW window
+    float firstPersonYaw = 0.0f;
+    float firstPersonPitch = -0.18f;
+    bool firstPersonMouseInitialized = false;
+    double firstPersonLastMouseX = 0.0;
+    double firstPersonLastMouseY = 0.0;
+    bool firstPersonCursorLocked = false;
 
-        // Timing
-        float deltaTime = 0.0f;               // Tiempo entre frames (segundos)
+    // Estado de recursos y progreso de partida.
+    bool renderResourcesInitialized = false;
+    bool gameplayAssetsLoaded = false;
 
-        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_PLAYING;}
-        ~Game();
+    int currentLevelIndex = 0;
+    bool currentLevelHadEnemies = false;
+    std::vector<int> playerScores;
+    std::vector<std::string> levelSequence = {
+        "levels/level_01.txt",
+        "levels/level_02.txt",
+        "levels/level_03.txt",
+        "levels/level_04.txt",
+        "levels/level_05.txt"
+    };
 
-        void setMode(GameMode m) { mode = m; } // Selecciona modo (se aplica al hacer init()).
-        void toggleViewMode();
-        void cycleCamera3DType();
-        bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
+    bool pendingLevelAdvance = false;
+    float levelAdvanceTimer = 0.0f;
+    float levelAdvanceDelaySeconds = 1.0f;
 
-        // Init
-        void init(); // Carga recursos y crea entidades iniciales.
+    // Progresión de niveles (uso interno).
+    void loadLevel(int levelIndex, bool preserveLivesAndScore);
+    void startNewRun(GameMode newMode);
+    void advanceToNextLevel();
+    void returnToMenuFromGame(bool resetRun);
 
-        // Loop
-        void processInput(); // Lee teclas y aplica acciones (movimiento/bombas).
-        void update();       // Tick de lógica (IA, bombas, colisiones).
-        void render();       // Renderiza el frame.
+public:
+    // Input
+    std::map<GLint, GLint> keys;           // Estado: Release(0), Press(1), Repeat(2)
+    GLint lastDirKey = GLFW_KEY_UNKNOWN;   // Última flecha pulsada (P1)
+    GLint lastDirKeyP2 = GLFW_KEY_UNKNOWN; // Última WASD pulsada (P2)
 
-        // Alternar entre pantalla completa y ventana
-        void toggleFullscreen(GLFWwindow* window);
+    // Estado
+    GameState state;
+    GameMode mode = GameMode::OnePlayer;
+    ViewMode viewMode = ViewMode::Mode2D;
+    Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
-        // Mantiene dimensiones internas y proyecciones al cambiar tamaño de ventana.
-        void onResize(int width, int height);
+    MenuIntroScreen menuIntroScreen;
+
+    // Ventana
+    GLint WIDTH, HEIGHT;
+    int windowedXPos = 0, windowedYPos = 0;
+    GLFWwindow* window;
+
+    // Timing
+    float deltaTime = 0.0f;
+
+    Game(GLFWwindow* window, GLuint width, GLuint height)
+        : state(GAME_INTRO), WIDTH(width), HEIGHT(height), window(window) {}
+    ~Game();
+
+    void setMode(GameMode m) { mode = m; }
+    void toggleViewMode();
+    void cycleCamera3DType();
+    bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
+    float getCameraOrbitYaw() const { return cameraOrbitYaw; }
+    float getFirstPersonYaw() const { return firstPersonYaw; }
+
+    // Init / loop
+    void init();
+    void processInput();
+    void update();
+    void render();
+
+    // Ventana
+    void toggleFullscreen(GLFWwindow* window);
+    void onResize(int width, int height);
 };
 
 

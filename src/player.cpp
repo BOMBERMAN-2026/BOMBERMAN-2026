@@ -16,6 +16,7 @@ extern GLuint uniformModel;
 extern GLuint uniformUvRect;
 extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
+extern GLuint uniformWhiteFlash;
 extern SpriteAtlas gPlayerAtlas;
 extern GLuint texture;
 extern GameMap* gameMap;
@@ -28,8 +29,30 @@ extern GameMap* gameMap;
  * Nota:
  * - El movimiento real se aplica en `UpdateSprite` (según una dirección) y se valida
  *   contra el `GameMap` usando una combinación de sondas + `canMoveTo`.
- * - `Update`/`Draw` están como placeholders (la renderización se realiza desde Game).
+ * - El render del jugador se hace desde `Game::render()` llamando a `Player::Draw()`.
  */
+
+static constexpr float kSpawnInvulnerabilitySeconds = 2.5f;
+static constexpr float kPowerUpInvulnerabilitySeconds = ArcadeCaps::INVINCIBILITY_TIME;
+
+static float invulnBlinkHz(const Player& p)
+{
+    if (!p.invincible) return 0.0f;
+
+    // Frecuencia de parpadeo (Hz) para el feedback visual.
+    // Ciclo "Armadura" (power-up, 16s):
+    // - Segundos 1..12: parpadeo moderado
+    // - Segundos 13..16 (fase crítica): parpadeo muy rápido
+    // Como `invincibilityTimer` es cuenta atrás:
+    // - remaining > 4s  => moderado (primeros 12s)
+    // - remaining <= 4s => frenético (últimos 4s)
+    if (p.invincibilityFromPowerUp) {
+        return (p.invincibilityTimer > 4.0f) ? 6.0f : 18.0f;
+    }
+
+    // Spawn/respawn: parpadeo moderado constante (ventana corta para reaparecer).
+    return 8.0f;
+}
 
 // ============================== Ctor / dtor ==============================
 
@@ -46,10 +69,17 @@ Player::Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId, co
 {
     this->playerId = playerId;
     spawnPosition = pos;
+    baseSpeed = velocity;
     lifeState = PlayerLifeState::Alive;
     deathTimer = 0.0f;
     deathFrame = 0;
     pendingRespawn = false;
+
+    // Invulnerabilidad breve al aparecer/reaparecer.
+    invincible = true;
+    invincibilityTimer = kSpawnInvulnerabilitySeconds;
+    invincibilityTotalSeconds = kSpawnInvulnerabilitySeconds;
+    invincibilityFromPowerUp = false;
 }
 
 // Colisión con bombas (tile-based): el dueño puede salir una vez; luego también bloquea para él.
@@ -117,8 +147,8 @@ void Player::updateAnimation() {
     }
 }
 
+// Avanza frames de muerte según causa; al terminar respawnea.
 void Player::updateDeathAnimation() {
-    // Avanza frames de muerte según causa; al terminar respawnea.
     static constexpr float deathFrameInterval = 0.10f;
 
     int lastFrame = 0;
@@ -159,9 +189,19 @@ void Player::updateDeathAnimation() {
 
 // ============================== API base ==============================
 
-// Tick de lógica: animación de caminar o de muerte.
+// Tick de lógica: animación de caminar o de muerte + invincibilidad.
 void Player::Update() {
     if (lifeState == PlayerLifeState::Alive) {
+        // Invulnerabilidad: decrementar temporizador (sin "frames extra" al acabar).
+        if (invincible) {
+            invincibilityTimer -= deltaTime;
+            if (invincibilityTimer <= 0.0f) {
+                invincible = false;
+                invincibilityTimer = 0.0f;
+                invincibilityTotalSeconds = 0.0f;
+                invincibilityFromPowerUp = false;
+            }
+        }
         updateAnimation();
     } else {
         updateDeathAnimation();
@@ -204,7 +244,19 @@ void Player::Draw() {
     glUniform1f(uniformFlipX, flipX);
 
     glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+    float whiteFlash = 0.0f;
+
+    // Parpadeo blanco retro durante la invulnerabilidad (spawn/respawn o Armadura).
+    // La fase crítica (últimos 4s de Armadura) incrementa la frecuencia.
+    if (invincible) {
+        const float hz = invulnBlinkHz(*this);
+        const float t = (float)glfwGetTime();
+        const int phase = (int)(t * hz);
+        whiteFlash = (phase % 2 == 0) ? 1.0f : 0.0f;
+    }
+
     glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+    glUniform1f(uniformWhiteFlash, whiteFlash);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 }
@@ -219,7 +271,6 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     const float step     = std::min(rawStep, halfTile * 0.45f);
 
     // --- Snap perpendicular al movimiento hacia el centro del tile actual ---
-    // Impide que el jugador se cuele por las esquinas en pasillos de 1 tile.
     {
         const float snapSpeed = 11.0f; // corrección por segundo, estable entre FPS
         const float snapAlpha = std::min(1.0f, std::max(0.0f, snapSpeed * deltaTime));
@@ -257,53 +308,45 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
         default: return;
     }
 
-    // --- Sondas de colisión: dos esquinas en el borde frontal de la dirección ---
-    // Cada dirección comprueba ambas esquinas del lado que avanza.
+    // --- Sondas de colisión ---
     {
         int r, c;
-        const float eFront = halfTile;          // siempre cae en el tile vecino
-        const float eSide  = halfTile * 0.60f; // semiancho del hitbox
+        const float eFront = halfTile;
+        const float eSide  = halfTile * 0.60f;
 
         if (mov == MOVE_UP) {
             map->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_DOWN) {
             map->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_LEFT) {
             map->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
         if (mov == MOVE_RIGHT) {
             map->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
             map->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
-            if (!map->isWalkable(r, c)) return;
-            if (bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
         }
     }
 
     this->position = newPos;
 }
-
 // Mata al jugador por contacto con enemigo (usa "jugador(color).muerto.N").
 void Player::killByEnemy() {
     if (lifeState != PlayerLifeState::Alive) return;
+    if (invincible) return; // Invencible: ignorar muerte
+    lives--;
     lifeState = PlayerLifeState::DyingByEnemy;
     isWalking = false;
     walkTimer = 0.0f;
@@ -318,6 +361,8 @@ void Player::killByEnemy() {
 // Mata al jugador por explosión (usa "jugador.muerto.quemado.N").
 void Player::killByExplosion() {
     if (lifeState != PlayerLifeState::Alive) return;
+    if (invincible) return; // Invencible: ignorar muerte
+    lives--;
     lifeState = PlayerLifeState::DyingByExplosion;
     isWalking = false;
     walkTimer = 0.0f;
@@ -329,8 +374,13 @@ void Player::killByExplosion() {
     currentSpriteName = "jugador.muerto.quemado.0";
 }
 
-// Vuelve al spawn y restaura estado de movimiento/animación.
+// Vuelve al spawn y restaura estado. Nota: el jugador NO pierde power-ups acumulados durante el nivel.
 void Player::respawn() {
+    if (lives <= 0) {
+        // Game Over: no respawnear
+        return;
+    }
+
     position = spawnPosition;
     lifeState = PlayerLifeState::Alive;
 
@@ -345,4 +395,50 @@ void Player::respawn() {
 
     flipX = 0.0f;
     currentSpriteName = spritePrefix + ".abajo.0";
+
+    // Regla General: mantener stats/power-ups acumulados (bombs/fire/speed), incluso si pierde vidas.
+    // Excepción: el Detonator (Remote Control) se pierde al morir.
+    hasRemoteControl = false;
+
+    // Solo se reaplica invulnerabilidad de respawn.
+    invincible = true;
+    invincibilityTimer = kSpawnInvulnerabilitySeconds;
+    invincibilityTotalSeconds = kSpawnInvulnerabilitySeconds;
+    invincibilityFromPowerUp = false;
+    // activeBombs no se resetea: las bombas en el mapa siguen existiendo
+    // y decrementarán activeBombs cuando exploten.
 }
+
+// Aplica un power-up al jugador (respeta ArcadeCaps).
+void Player::applyPowerUp(PowerUpType type) {
+    switch (type) {
+        case PowerUpType::ExtraLife:
+            lives += 1;
+            break;
+
+        case PowerUpType::BombUp:
+            maxBombs = std::min(maxBombs + 1, ArcadeCaps::MAX_BOMBS);
+            break;
+
+        case PowerUpType::FireUp:
+            explosionPower = std::min(explosionPower + 1, ArcadeCaps::MAX_FIRE_POWER);
+            break;
+
+        case PowerUpType::SpeedUp:
+            baseSpeed = std::min(baseSpeed + ArcadeCaps::SPEED_INCREMENT, ArcadeCaps::MAX_SPEED);
+            speed = baseSpeed;
+            break;
+
+        case PowerUpType::Invincibility:
+            invincible = true;
+            invincibilityTimer = kPowerUpInvulnerabilitySeconds;
+            invincibilityTotalSeconds = kPowerUpInvulnerabilitySeconds;
+            invincibilityFromPowerUp = true;
+            break;
+
+        case PowerUpType::RemoteControl:
+            hasRemoteControl = true;
+            break;
+    }
+}
+

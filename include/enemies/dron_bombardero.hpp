@@ -3,50 +3,48 @@
 
 #include "enemy.hpp"
 
-/*
- * Dron bombardero – 2000 pts, 3 HP
- * Persigue activamente a Bomberman pero mantiene las distancias.
- * Suelta bombas con explosión de 2 casillas cuando está al alcance.
- * Lanza bolas de fuego con rango infinito en una dirección.
- * Cada cierto tiempo se prende fuego durante 5 segundos (inmortal),
- * enviando una bola de fuego en cada dirección al prenderse.
- */
+enum class DronState {
+    Normal,
+    TransformingToFire,
+    FireMode,
+    TransformingToNormal
+};
+
 class DronBombardero : public Enemy {
 public:
-    DronBombardero(glm::vec2 pos, glm::vec2 size, float speed);
+    DronBombardero(glm::vec2 pos, glm::vec2 size, float speed,
+                   const std::string& skinBase = "dronrosa");
     ~DronBombardero() override;
 
     void Update() override;
     void Draw()   override;
+    bool takeDamage(const SpriteAtlas& atlas, int amount = 1) override;
 
-    bool isOnFire() const { return onFire; }
+    bool isOnFire() const { return state == DronState::FireMode || state == DronState::TransformingToFire || state == DronState::TransformingToNormal; }
+    const std::string& getSkinBase() const { return spriteSkinBase; }
 
 private:
-    // Distancias de combate
-    float preferredDistance;   // Distancia ideal al jugador
-    float bombDropRange;       // Rango para soltar bombas
-    int   bombExplosionRange;  // Alcance de explosión de sus bombas (2)
+    std::string spriteSkinBase;
+    
+    DronState state;
 
-    // Bolas de fuego
-    float fireballCooldown;      // Cooldown restante
-    float fireballCooldownMax;   // Intervalo entre disparos
+    float stateTimer;         
+    float fireCycleCooldown;  
+    float fireCycleTimer;     
 
-    // Estado de fuego (inmunidad temporal)
-    bool  onFire;
-    float fireTimer;           // Tiempo restante prendido
-    float fireDuration;        // Duración total del estado de fuego (5s)
-    float fireCycleCooldown;   // Tiempo entre ciclos de fuego
-    float fireCycleTimer;      // Timer para el próximo ciclo de fuego
+    int transformFrame;
+    float transformTimer;
+    bool fireBurstShotThisTransform;
 
-    // Cooldown para colocar bombas
-    float bombCooldown;          // Cooldown restante
-    float bombCooldownMax;       // Intervalo entre bombas
-
-    void enterFireMode();
-    void updateFireMode();
-    void dropBomb();
-    void shootFireball(EnemyDirection dir);
-    void shootFireballAllDirections();
+    void updateNormal(float dist, float step);
+    void updateTransformingToFire();
+    void updateFireMode(float dist, float step);
+    void updateTransformingToNormal();
+    
+    void shootSlowFireball(EnemyDirection dir);
+    void shootBurstFireballs();
+    void syncSkinFromCurrentSprite();
+    void updateWalkAnimation(bool isFireMode);
 };
 
 #endif // DRON_BOMBARDERO_HPP
