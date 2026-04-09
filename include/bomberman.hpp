@@ -8,7 +8,8 @@
 #include <string>
 #include <vector>
 
-#include "menu_intro.hpp"
+#include "menu.hpp"
+#include "cinematic_player.hpp"
 
 /*
  * bomberman.hpp
@@ -27,7 +28,14 @@
 enum GameState {
     GAME_INTRO,      // Pantalla de intro
     GAME_MENU,       // Pantalla selección de modo de juego
+    GAME_CINEMATIC,  // Cinematicas (video FFmpeg)
     GAME_PLAYING
+};
+
+enum class CinematicType {
+    Intro,              // Intro al abrir el juego -> GAME_MENU
+    HistoryStart,       // Introduccion modo historia -> GAME_PLAYING (Historia 1 o 2 jugadores)
+    HistoryEnd          // Final modo historia -> GAME_MENU (Historia 1 o 2 jugadores)
 };
 
 enum class GameMode {
@@ -46,9 +54,6 @@ enum class Camera3DType {
     PerspectiveMobile,
     FirstPerson
 };
-
-// Include MenuIntroScreen after GameMode enum
-
 
 class Game
 {
@@ -102,7 +107,10 @@ class Game
         Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
         // UI Screen
-        MenuIntroScreen menuIntroScreen;    // Gestiona intro y menú
+        MenuScreen menuScreen;              // Gestiona menú
+        CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
+        CinematicType currentCinematicType = CinematicType::Intro;
+        GameState nextStateAfterCinematic = GAME_INTRO;
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana

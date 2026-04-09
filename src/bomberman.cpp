@@ -3,7 +3,7 @@
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
 #include "bomb.hpp"
-#include "menu_intro.hpp"
+#include "menu.hpp"
 #include "enemies/leon.hpp"
 #include "enemies/bebe_lloron.hpp"
 #include "enemies/babosa.hpp"
@@ -657,7 +657,7 @@ void Game::startNewRun(GameMode newMode) {
     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
 
     // Por si el men├║ dej├│ la marca de transici├│n activa.
-    menuIntroScreen.resetTransition();
+    menuScreen.resetTransition();
 }
 
 // Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
@@ -1009,13 +1009,18 @@ void Game::init() {
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        menuIntroScreen.initIntro();
+        // Reproducir cinematica antes de empezar la partida
+        this->state = GAME_CINEMATIC;
+        this->currentCinematicType = CinematicType::Intro;
+        this->nextStateAfterCinematic = GAME_MENU;
+        std::string videoPath = resolveAssetPath("resources/video/Intro.mp4");
+        cinematicPlayer.open(videoPath);
         return;
     }
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        menuIntroScreen.initMenu();
+        menuScreen.initMenu();
         return;
     }
 
@@ -1039,9 +1044,18 @@ void Game::processInput() {
         return; // No procesamos input en intro (ver callback)
     }
 
+    // ========== CINEMATICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        if (this->keys[GLFW_KEY_SPACE] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;
+            cinematicPlayer.skip();
+        }
+        return;
+    }
+
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        menuIntroScreen.processInputMenu(this->keys);
+        menuScreen.processInputMenu(this->keys);
         return;
     }
 
@@ -1291,20 +1305,38 @@ void Game::processInput() {
 void Game::update() {
     float deltaTime = this->deltaTime;
 
-    // ========== INTRO ==========
-    if (this->state == GAME_INTRO) {
-        if (menuIntroScreen.updateIntro(deltaTime)) {
-            this->state = GAME_MENU;
-            this->init();
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
+        menuScreen.updateMenu(deltaTime);
+        if (menuScreen.shouldStartGame()) {
+            GameMode selectedMode = menuScreen.getSelectedMode();
+            if (selectedMode == GameMode::TwoPlayers) {
+                // Reproducir cinematica antes de empezar la partida
+                this->mode = selectedMode;
+                this->state = GAME_CINEMATIC;
+                this->currentCinematicType = CinematicType::HistoryStart;
+                this->nextStateAfterCinematic = GAME_PLAYING;
+                std::string videoPath = resolveAssetPath("resources/video/HistoryIntro.mp4");
+                cinematicPlayer.open(videoPath);
+                menuScreen.resetTransition();
+            } else {
+                startNewRun(selectedMode);
+            }
         }
         return;
     }
 
-    // ========== MENU ==========
-    if (this->state == GAME_MENU) {
-        menuIntroScreen.updateMenu(deltaTime);
-        if (menuIntroScreen.shouldStartGame()) {
-            startNewRun(menuIntroScreen.getSelectedMode());
+    // ========== CINEMATICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        cinematicPlayer.update(deltaTime);
+        if (cinematicPlayer.isFinished()) {
+            cinematicPlayer.close();
+            if (currentCinematicType == CinematicType::Intro) {
+                this->state = GAME_MENU;
+                this->init();
+            } else if (currentCinematicType == CinematicType::HistoryStart) {
+                startNewRun(mode); // Actualiza el state a GAME_PLAYING e inicia la partida con el modo seleccionado previamente.
+            }
         }
         return;
     }
@@ -1473,22 +1505,19 @@ void Game::update() {
 
 // Renderiza mapa, bombas, jugadores y enemigos.
 void Game::render() {
-
-    // ========== INTRO ==========
-    if (this->state == GAME_INTRO) {
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
         glUseProgram(shader);
-        menuIntroScreen.renderIntro(VAO, shader, uniformModel, uniformProjection, uniformTexture, 
-                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                     uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
         return;
     }
 
-    // ========== MENU ==========
-    if (this->state == GAME_MENU) {
-        glUseProgram(shader);
-        menuIntroScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
-                                     uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
-        glUseProgram(0);
+    // ========== CINEMATICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        cinematicPlayer.render(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                               uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         return;
     }
 

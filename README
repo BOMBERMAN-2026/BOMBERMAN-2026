@@ -25,6 +25,9 @@ Controles
     - `↑/↓` o `W/S`: mover selección.
     - `ENTER`: confirmar (1P/2P).
 
+- **Cinematica**
+    - `ESPACIO`: Saltar.
+
 - **Juego**
     - **Jugador 1**: `↑/↓/←/→` mover.
         - **Jugador 1**: `CTRL derecho` poner bomba.
