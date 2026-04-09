@@ -76,6 +76,7 @@ static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
 static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
 static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
+static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
 
 GLuint cubeVAO = 0;
@@ -121,6 +122,11 @@ GLuint flameGlbVBO = 0;
 GLuint flameGlbEBO = 0;
 GLsizei flameGlbIndexCount = 0;
 GLuint flameGlbTexture = 0;
+GLuint solGlbVAO = 0;
+GLuint solGlbVBO = 0;
+GLuint solGlbEBO = 0;
+GLsizei solGlbIndexCount = 0;
+GLuint solGlbTexture = 0;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -706,6 +712,17 @@ void CreateFlameGlbModel(const std::string& modelPath)
                                  flameGlbTexture);
 }
 
+void CreateSolGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("solGLB",
+                                 modelPath,
+                                 solGlbVAO,
+                                 solGlbVBO,
+                                 solGlbEBO,
+                                 solGlbIndexCount,
+                                 solGlbTexture);
+}
+
 void Compile3DShaders()
 {
     const std::string resolvedVertexPath = resolveAssetPath(kModel3DVertexShaderPath);
@@ -1123,6 +1140,7 @@ void Game::ensureRenderResources() {
     CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
     CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
+    CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -1830,6 +1848,10 @@ Game::~Game() {
         glDeleteTextures(1, &flameGlbTexture);
         flameGlbTexture = 0;
     }
+    if (solGlbTexture != 0) {
+        glDeleteTextures(1, &solGlbTexture);
+        solGlbTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -1867,6 +1889,9 @@ Game::~Game() {
     flameGlbVAO = flameGlbVBO = flameGlbEBO = 0;
     flameGlbIndexCount = 0;
     flameGlbTexture = 0;
+    solGlbVAO = solGlbVBO = solGlbEBO = 0;
+    solGlbIndexCount = 0;
+    solGlbTexture = 0;
 }
 
 void Game::init() {
@@ -2835,8 +2860,10 @@ void Game::render3D() {
         (bebeGlbVAO != 0 && bebeGlbIndexCount > 0 && bebeGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderBabosaGlb =
         (babosaGlbVAO != 0 && babosaGlbIndexCount > 0 && babosaGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderSolGlb =
+        (solGlbVAO != 0 && solGlbIndexCount > 0 && solGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderBombGlb || canRenderFlameGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderBombGlb || canRenderFlameGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -3075,6 +3102,47 @@ void Game::render3D() {
             }
         }
 
+        if (canRenderSolGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, solGlbTexture);
+
+            const float now = (float)glfwGetTime();
+
+            for (auto* enemy : gEnemies) {
+                if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool isSolEnemy =
+                    (enemy->spriteBaseId == "sol") ||
+                    (enemy->currentSpriteName.size() >= 4 && enemy->currentSpriteName.compare(0, 4, "sol.") == 0);
+                if (!isSolEnemy) continue;
+
+                float modelScale = 1.12f;
+                float hoverHeight = 1.62f;
+                if (enemy->currentSpriteName.size() >= 12 && enemy->currentSpriteName.compare(0, 12, "sol.mediano.") == 0) {
+                    modelScale = 0.90f;
+                    hoverHeight = 1.48f;
+                } else if (enemy->currentSpriteName.size() >= 9 && enemy->currentSpriteName.compare(0, 9, "sol.peque") == 0) {
+                    modelScale = 0.72f;
+                    hoverHeight = 1.34f;
+                }
+
+                modelScale *= 2.0f;
+
+                const float phase = now * 2.4f + (enemy->position.x * 3.7f) + (enemy->position.y * 4.1f);
+                const float bob = 0.08f * std::sin(phase);
+                const float spin = now * 0.95f + phase * 0.18f;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, ndcToWorld3D(gameMap, enemy->position, hoverHeight + bob));
+                model = glm::rotate(model, spin, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(solGlbVAO);
+                glDrawElements(GL_TRIANGLES, solGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
         if (wasBlendEnabled) {
             glEnable(GL_BLEND);
         }
@@ -3124,6 +3192,9 @@ void Game::render3D() {
         const bool isBabosaEnemy =
             (enemy->spriteBaseId == "babosa") ||
             (enemy->currentSpriteName.size() >= 7 && enemy->currentSpriteName.compare(0, 7, "babosa.") == 0);
+        const bool isSolEnemy =
+            (enemy->spriteBaseId == "sol") ||
+            (enemy->currentSpriteName.size() >= 4 && enemy->currentSpriteName.compare(0, 4, "sol.") == 0);
         if (canRenderLeonGlb && isLeonEnemy) {
             continue;
         }
@@ -3134,6 +3205,9 @@ void Game::render3D() {
             continue;
         }
         if (canRenderBabosaGlb && isBabosaEnemy) {
+            continue;
+        }
+        if (canRenderSolGlb && isSolEnemy) {
             continue;
         }
 
