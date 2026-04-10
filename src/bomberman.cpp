@@ -1142,28 +1142,13 @@ void Game::ensureGameplayAssets() {
         }
     }
 
-    // Textura del mapa + HUD (por ahora fijas)
+    // Textura del HUD (fija)
     {
-        const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
-        mapTexture = LoadTexture(mapTexPath.c_str());
-        if (mapTexture == 0) {
-            std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
-            std::exit(EXIT_FAILURE);
-        }
-
         const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
         hudTexture = LoadTexture(hudTexPath.c_str());
         if (hudTexture == 0) {
             std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
             std::exit(EXIT_FAILURE);
-        }
-    }
-
-    // Atlas de bombas (misma sprite sheet del stage)
-    {
-        const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
-        if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
-            std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
         }
     }
 
@@ -1228,13 +1213,34 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         return;
     }
 
+    int stageNum = levelToStage[levelIndex];
+    std::string stageNumStr = std::to_string(stageNum);
+
+    if (mapTexture != 0) {
+        glDeleteTextures(1, &mapTexture);
+        mapTexture = 0;
+    }
+
+    std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage" + stageNumStr + "/sprites-Stage" + stageNumStr + ".png");
+    mapTexture = LoadTexture(mapTexPath.c_str());
+    if (mapTexture == 0) {
+        std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json");
+    if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
+        std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+    }
+
     if (!gameMap->loadFromFile(levelSequence[levelIndex])) {
         std::cerr << "Error cargando mapa: " << levelSequence[levelIndex] << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
-    if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json")) {
-        std::cerr << "Error cargando atlas del mapa" << std::endl;
+    std::string mapAtlasPath = "resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json";
+    if (!gameMap->loadAtlas(mapAtlasPath)) {
+        std::cerr << "Error cargando atlas del mapa: " << mapAtlasPath << std::endl;
         std::exit(EXIT_FAILURE);
     }
 

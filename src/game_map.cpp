@@ -494,15 +494,39 @@ bool GameMap::getUvRectForTile(int row, int col, glm::vec4& uvRect) const {
         const bool indestLeft = (col > 0 && grid[row][col - 1].type == BlockType::INDESTRUCTIBLE);
         const bool indestUp = (row > 0 && grid[row - 1][col].type == BlockType::INDESTRUCTIBLE);
 
+        const bool indestUpLeft = (row > 0 && col > 0 && grid[row - 1][col - 1].type == BlockType::INDESTRUCTIBLE);
+
         int floorId = 10;
         if (wallLeft && wallUp) floorId = 6;
-        else if (wallLeft) floorId = 9;
-        else if (wallUp) floorId = 7;
+        else if (indestLeft && wallUp) floorId = 6;
+        else if (indestUp && wallLeft) floorId = 6;
+        else if (indestUp && indestUpLeft) floorId = 7;
+        else if (indestLeft && indestUpLeft) floorId = 9;
+        else if (wallLeft && !indestUp) floorId = 9;
+        else if (wallUp && !indestLeft) floorId = 7;
         else if (indestUp && indestLeft) floorId = 9;
         else if (indestUp) floorId = 11;
-        else if (indestLeft) floorId = 9;
+        else if (indestLeft) floorId = 21;
+        else if (indestUpLeft && !wallLeft && !indestUp) floorId = 10;
 
         displayId = floorId;
+    } else if (block.type == BlockType::FLOOR) {
+        bool wallLeft = (col > 0 && grid[row][col - 1].type == BlockType::BARRIER);
+        bool wallUp = (row > 0 && grid[row - 1][col].type == BlockType::BARRIER);
+        bool indestLeft = (col > 0 && grid[row][col - 1].type == BlockType::INDESTRUCTIBLE);
+        bool indestUp = (row > 0 && grid[row - 1][col].type == BlockType::INDESTRUCTIBLE);
+        bool indestUpLeft = (row > 0 && col > 0 && grid[row - 1][col - 1].type == BlockType::INDESTRUCTIBLE);
+
+        if (wallLeft && wallUp) displayId = 6;
+        else if (indestLeft && wallUp) displayId = 6;
+        else if (indestUp && wallLeft) displayId = 6;
+        else if (indestUp && indestUpLeft) displayId = 7;
+        else if (indestLeft && indestUpLeft) displayId = 9;
+        else if (wallLeft && !indestUp) displayId = 9;
+        else if (wallUp && !indestLeft) displayId = 7;
+        else if (indestUp && indestLeft) displayId = 9;
+        else if (indestUp) displayId = 11;
+        else if (indestLeft) displayId = 21;
     }
 
     const std::string idStr = std::to_string(displayId);
@@ -608,26 +632,40 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
                 bool indestLeft = (c > 0 && grid[r][c-1].type == BlockType::INDESTRUCTIBLE);
                 bool indestUp   = (r > 0 && grid[r-1][c].type == BlockType::INDESTRUCTIBLE);
 
-                // Por defecto, suelo sombra en medio del mapa
-                int floorId = 10; 
+                bool indestUpLeft = (r > 0 && c > 0 && grid[r-1][c-1].type == BlockType::INDESTRUCTIBLE);
 
-                if (wallLeft && wallUp) floorId = 6;   // Esquina arriba izquierda
-                else if (wallLeft)      floorId = 9;   // Sombra izquierda (por muro/barrera)
-                else if (wallUp)        floorId = 7;   // Sombra arriba (por muro/barrera)
-                else if (indestUp)      floorId = 11;  // Sombra arriba (por indestructible)
-                else if (indestLeft)    floorId = 21;  // Sombra izquierda (por indestructible)
+                int floorId = 10; 
+                if (wallLeft && wallUp) floorId = 6;
+                else if (indestLeft && wallUp) floorId = 6;
+                else if (indestUp && wallLeft) floorId = 6;
+                else if (indestUp && indestUpLeft) floorId = 7;
+                else if (indestLeft && indestUpLeft) floorId = 9;
+                else if (wallLeft && !indestUp) floorId = 9;
+                else if (wallUp && !indestLeft) floorId = 7;
+                else if (indestUp && indestLeft) floorId = 9;
+                else if (indestUp) floorId = 11;
+                else if (indestLeft) floorId = 21;
                 
                 displayId = floorId;
             } else if (block.type == BlockType::FLOOR) {
-                // Forzar visualmente el sprite si es un suelo base
+                // Aplicar las mismas reglas férreas a todo el suelo
+                bool wallLeft   = (c > 0 && grid[r][c-1].type == BlockType::BARRIER);
+                bool wallUp     = (r > 0 && grid[r-1][c].type == BlockType::BARRIER);
                 bool indestLeft = (c > 0 && grid[r][c-1].type == BlockType::INDESTRUCTIBLE);
                 bool indestUp   = (r > 0 && grid[r-1][c].type == BlockType::INDESTRUCTIBLE);
+                bool indestUpLeft = (r > 0 && c > 0 && grid[r-1][c-1].type == BlockType::INDESTRUCTIBLE);
                 
-                if (indestUp) {
-                    displayId = 11;
-                } else if (indestLeft) {
-                    displayId = 21;
-                }
+                if (wallLeft && wallUp) displayId = 6;
+                else if (indestLeft && wallUp) displayId = 6;
+                else if (indestUp && wallLeft) displayId = 6;
+                else if (indestUp && indestUpLeft) displayId = 7;
+                else if (indestLeft && indestUpLeft) displayId = 9;
+                else if (wallLeft && !indestUp) displayId = 9;
+                else if (wallUp && !indestLeft) displayId = 7;
+                else if (indestUp && indestLeft) displayId = 9;
+                else if (indestUp) displayId = 11;
+                else if (indestLeft) displayId = 21;
+                else if (indestUpLeft && !wallLeft && !indestUp) displayId = 10;
             }
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
             float scaleX = scale;

@@ -97,6 +97,9 @@ private:
         "levels/level_04.txt",
         "levels/level_05.txt"
     };
+    std::vector<int> levelToStage = {
+        1, 2, 2, 3, 4
+    };
 
     bool pendingLevelAdvance = false;
     float levelAdvanceTimer = 0.0f;

@@ -205,15 +205,6 @@
       "walkable": true,
       "type": "floor"
     },
-    "30": {
-      "x": 0,
-      "y": 0,
-      "w": 48,
-      "h": 48,
-      "nombre": "dummy",
-      "walkable": true,
-      "type": "floor"
-    },
     "bomb.0": {
       "x": 1090,
       "y": 169,
