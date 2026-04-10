@@ -51,9 +51,15 @@ include_directories(include lib/include)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(PkgConfig REQUIRED)
 
-# FFmpeg local (headers en lib/include/, import libs y DLLs en lib/)
-set(FFMPEG_LIB_DIR "${CMAKE_SOURCE_DIR}/lib")
+# FFmpeg via pkg-config (disponible en MSYS2 installado con pacman)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+    libavformat
+    libavcodec
+    libavutil
+    libswscale
+)
 
 # 4. Crear el ejecutable
 add_executable(Bomberman ${SOURCES})
@@ -69,12 +75,12 @@ if(WIN32)
         GLEW::GLEW 
         glfw 
         OpenGL::GL
-        ${FFMPEG_IMPORT_LIBS}
+        PkgConfig::FFMPEG
     )
 
     # Copiar DLLs de runtime junto al .exe para poder ejecutarlo desde build/
     # sin depender de PATH del sistema/terminal.
-    set(MSYS2_UCRT_BIN "C:/msys64/mingw64/bin")
+    set(MSYS2_UCRT_BIN "C:/msys64/ucrt64/bin")
     set(BOMBERMAN_RUNTIME_DLLS
         glfw3.dll
         glew32.dll
@@ -93,30 +99,9 @@ if(WIN32)
             )
         endif()
     endforeach()
-
-    # Copiar DLLs de FFmpeg locales al directorio del ejecutable
-    file(GLOB FFMPEG_DLLS "${FFMPEG_LIB_DIR}/*.dll")
-    foreach(_dll ${FFMPEG_DLLS})
-        get_filename_component(_dll_name "${_dll}" NAME)
-        add_custom_command(TARGET Bomberman POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${_dll}"
-                "$<TARGET_FILE_DIR:Bomberman>/${_dll_name}"
-            VERBATIM
-        )
-    endforeach()
 else()
     # En Linux, necesitamos las librerías de X11 que mencionaste antes
     find_package(Threads REQUIRED) # Reemplaza a -lpthread
-
-    # En Linux usar FFmpeg del sistema via pkg-config
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
-        libavformat
-        libavcodec
-        libavutil
-        libswscale
-    )
     
     target_link_libraries(Bomberman PRIVATE 
         GLEW::GLEW 

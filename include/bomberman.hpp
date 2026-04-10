@@ -114,7 +114,8 @@ class Game
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
-        int windowedXPos, windowedYPos;      // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
+        int windowedXPos = 100;
+        int windowedYPos = 100;             // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
         GLFWwindow* window;                  // GLFW window
 
         // Timing
