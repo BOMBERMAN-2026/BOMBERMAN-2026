@@ -4,6 +4,7 @@
 #include <GLFW/glfw3.h>
 
 #include <iostream>
+#include <algorithm>
 
 #include "bomberman.hpp"
 
@@ -94,7 +95,8 @@ int main() {
     while (!glfwWindowShouldClose(mainWindow))
     {
         double currentTime = glfwGetTime();
-        bomberman->deltaTime = static_cast<float>(currentTime - lastTime);
+        const float frameDelta = static_cast<float>(currentTime - lastTime);
+        bomberman->deltaTime = std::max(0.0f, std::min(frameDelta, 0.05f));
         lastTime = currentTime;
 
         // Check and call events
@@ -105,17 +107,16 @@ int main() {
         // Deberia estar dentro de un bucle de ticks?
         bomberman->update();
 
-        glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-        GLbitfield clearMask = GL_COLOR_BUFFER_BIT;
-        if (bomberman->is3DViewEnabled()) {
-            clearMask |= GL_DEPTH_BUFFER_BIT;
-        }
-        glClear(clearMask);
         bomberman->render();
         
         // Swap buffers
 		glfwSwapBuffers(mainWindow);
     }
+
+    delete bomberman;
+    bomberman = nullptr;
+    glfwDestroyWindow(mainWindow);
+    glfwTerminate();
 
     return 0;
 }
@@ -123,6 +124,10 @@ int main() {
 // Callback de teclado (GLFW). Guarda estado y recuerda “última dirección” por jugador.
 // Controles completos: ver README.
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode) {
+    if (bomberman == nullptr) {
+        return;
+    }
+
     if (key >= 0 && key < 1024) {
         bomberman->keys[key] = action;
 
@@ -135,6 +140,16 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             }
 
             // ========== JUEGO NORMAL ==========
+            if (bomberman->state == GAME_PLAYING) {
+                if (key == GLFW_KEY_F1) {
+                    bomberman->toggleViewMode();
+                }
+
+                if (key == GLFW_KEY_F2 && bomberman->is3DViewEnabled()) {
+                    bomberman->cycleCamera3DType();
+                }
+            }
+
             if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
                 bomberman->lastDirKey = key;
             }
@@ -149,4 +164,8 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 // Ajusta el viewport cuando cambia el tamaño de la ventana.
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
+
+    if (bomberman != nullptr) {
+        bomberman->onResize(width, height);
+    }
 }

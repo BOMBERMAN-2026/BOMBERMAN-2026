@@ -57,54 +57,68 @@ enum class Camera3DType {
 
 class Game
 {
-    private:
-        // ============================== Partida / Niveles ==============================
-        std::vector<std::string> levelSequence = {
-            "levels/level_01.txt",
-            "levels/level_02.txt",
-            "levels/level_03.txt",
-            "levels/level_04.txt",
-            "levels/level_05.txt",
-        }; // Orden de niveles a cargar.
+private:
+    void render2D();
+    void render3D();
+    void refreshWindowTitle() const;
 
-        int currentLevelIndex = 0; // Índice actual dentro de `levelSequence`.
+    // Carga y reutilización de recursos.
+    void ensureRenderResources();
+    void ensureGameplayAssets();
+    void cleanupGameplayEntities();
 
-        bool currentLevelHadEnemies = false; // Evita auto-skip en niveles sin enemigos.
+    // Helpers de progresión.
+    bool allPlayersOutOfLives() const;
+    bool allEnemiesCleared() const;
 
-        // ============================== Transición de nivel ==============================
-        bool pendingLevelAdvance = false;      // Se activó el "nivel completado".
-        float levelAdvanceTimer = 0.0f;        // Tiempo acumulado desde que se completó.
-        float levelAdvanceDelaySeconds = 1.0f; // Pausa antes de cargar el siguiente nivel.
+    // Cámara 3D avanzada (estado interno de control/cursor).
+    float cameraOrbitYaw = 0.0f;
+    bool cameraOrbitDragging = false;
+    double cameraOrbitLastMouseX = 0.0;
 
-        std::vector<int> playerScores; // Puntuación acumulada por jugadorId.
+    float firstPersonYaw = 0.0f;
+    float firstPersonPitch = -0.18f;
+    bool firstPersonMouseInitialized = false;
+    double firstPersonLastMouseX = 0.0;
+    double firstPersonLastMouseY = 0.0;
+    bool firstPersonCursorLocked = false;
 
-        // ============================== Guards de recursos ==============================
-        bool renderResourcesInitialized = false; // VAO/VBO/shaders/3D creados.
-        bool gameplayAssetsLoaded = false;       // Atlases/texturas compartidas cargadas.
+    // Estado de recursos y progreso de partida.
+    bool renderResourcesInitialized = false;
+    bool gameplayAssetsLoaded = false;
 
-        // ============================== Helpers (bomberman.cpp) ==============================
-        void ensureRenderResources();                         // Init VAO/VBO/shaders/cubo 3D (1 vez).
-        void ensureGameplayAssets();                          // Carga atlas/texturas compartidas (1 vez).
-        void cleanupGameplayEntities();                       // Borra bombas/enemigos/jugadores del nivel.
-        void loadLevel(int levelIndex, bool preserveLivesAndScore); // Carga mapa y spawns; recrea entidades.
-        void startNewRun(GameMode mode);                      // Arranca partida desde el primer nivel.
-        void advanceToNextLevel();                            // Avanza al siguiente nivel.
-        void returnToMenuFromGame(bool resetRun);             // Vuelve al menú (Game Over / fin).
-        bool allPlayersOutOfLives() const;                    // True si todos los jugadores tienen 0 vidas.
-        bool allEnemiesCleared() const;                       // True si el nivel se considera completado.
+    int currentLevelIndex = 0;
+    bool currentLevelHadEnemies = false;
+    std::vector<int> playerScores;
+    std::vector<std::string> levelSequence = {
+        "levels/level_01.txt",
+        "levels/level_02.txt",
+        "levels/level_03.txt",
+        "levels/level_04.txt",
+        "levels/level_05.txt"
+    };
 
-    public:
+    bool pendingLevelAdvance = false;
+    float levelAdvanceTimer = 0.0f;
+    float levelAdvanceDelaySeconds = 1.0f;
 
-        // Input
-        std::map<GLint, GLint> keys;          // Estado: Release(0), Press(1), Repeat(2)
-        GLint lastDirKey = GLFW_KEY_UNKNOWN;  // Última flecha pulsada (P1)
-        GLint lastDirKeyP2 = GLFW_KEY_UNKNOWN; // Última WASD pulsada (P2)
+    // Progresión de niveles (uso interno).
+    void loadLevel(int levelIndex, bool preserveLivesAndScore);
+    void startNewRun(GameMode newMode);
+    void advanceToNextLevel();
+    void returnToMenuFromGame(bool resetRun);
 
-        // Estado
-        GameState state;
-        GameMode mode = GameMode::OnePlayer;  // Se aplica al hacer init()
-        ViewMode viewMode = ViewMode::Mode2D;
-        Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
+public:
+    // Input
+    std::map<GLint, GLint> keys;           // Estado: Release(0), Press(1), Repeat(2)
+    GLint lastDirKey = GLFW_KEY_UNKNOWN;   // Última flecha pulsada (P1)
+    GLint lastDirKeyP2 = GLFW_KEY_UNKNOWN; // Última WASD pulsada (P2)
+
+    // Estado
+    GameState state;
+    GameMode mode = GameMode::OnePlayer;
+    ViewMode viewMode = ViewMode::Mode2D;
+    Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
         // UI Screen
         MenuScreen menuScreen;              // Gestiona menú
@@ -118,27 +132,29 @@ class Game
         int windowedYPos = 100;             // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
         GLFWwindow* window;                  // GLFW window
 
-        // Timing
-        float deltaTime = 0.0f;               // Tiempo entre frames (segundos)
+    // Timing
+    float deltaTime = 0.0f;
 
-        Game(GLFWwindow* window, GLuint width, GLuint height) : window(window), WIDTH(width), HEIGHT(height) {state = GAME_INTRO;}
-        ~Game();
+    Game(GLFWwindow* window, GLuint width, GLuint height)
+        : state(GAME_INTRO), WIDTH(width), HEIGHT(height), window(window) {}
+    ~Game();
 
-        void setMode(GameMode m) { mode = m; } // Selecciona modo (se aplica al hacer init()).
-        void toggleViewMode();
-        void cycleCamera3DType();
-        bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
+    void setMode(GameMode m) { mode = m; }
+    void toggleViewMode();
+    void cycleCamera3DType();
+    bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
+    float getCameraOrbitYaw() const { return cameraOrbitYaw; }
+    float getFirstPersonYaw() const { return firstPersonYaw; }
 
-        // Init
-        void init(); // Carga recursos y crea entidades iniciales.
+    // Init / loop
+    void init();
+    void processInput();
+    void update();
+    void render();
 
-        // Loop
-        void processInput(); // Lee teclas y aplica acciones (movimiento/bombas).
-        void update();       // Tick de lógica (IA, bombas, colisiones).
-        void render();       // Renderiza el frame.
-
-        // Alternar entre pantalla completa y ventana
-        void toggleFullscreen(GLFWwindow* window);
+    // Ventana
+    void toggleFullscreen(GLFWwindow* window);
+    void onResize(int width, int height);
 };
 
 
