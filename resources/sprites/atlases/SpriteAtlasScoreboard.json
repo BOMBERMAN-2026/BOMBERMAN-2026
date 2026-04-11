@@ -89,12 +89,19 @@
         "h": 17,
         "nombre": ":"
     },
-    "Scoreboard": {
+    "scoreboard": {
       "x": 3,
       "y": 248,
       "w": 815,
       "h": 81,
-      "nombre": "Scoreboard"
+      "nombre": "scoreboard"
+    },
+    "scoreboardVersusMode": {
+      "x": 4,
+      "y": 161,
+      "w": 815,
+      "h": 81,
+      "nombre": "scoreboardVersusMode"
     }
   }
 }

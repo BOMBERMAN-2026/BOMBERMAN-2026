@@ -81,7 +81,9 @@ enum class typeOfHud {
     Lives,
     EnemiesLeft,
     CurrentLevel,
-    Timer
+    Timer,
+    NumWins,
+    CurrentLevelVS
 };
 
 // Spawn de enemigo definido por nivel.
@@ -109,7 +111,7 @@ public:
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
     void renderHud(GLuint vao, GLuint hudTexture,GLuint uniformModel, 
-                   GLuint uniformUvRect, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture);
+                   GLuint uniformUvRect, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, uint8_t gamemode);
     
     void renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, 
                         typeOfHud hudType, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
@@ -213,6 +215,7 @@ private:
     // Timer del nivel
     float levelTimeRemaining = 120.0f;    // Tiempo restante del nivel en segundos (2 minutos)
     std::string currentLevel = "5-5";
+    std::string currentLevelVS = "2";
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);

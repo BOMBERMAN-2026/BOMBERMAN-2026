@@ -3048,7 +3048,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, scoreboardTexture, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture);
+    gameMap->renderHud(VAO, scoreboardTexture, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, (mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1 );
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
