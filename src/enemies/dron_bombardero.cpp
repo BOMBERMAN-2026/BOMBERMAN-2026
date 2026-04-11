@@ -69,12 +69,13 @@ public:
 
         position = nextPos;
 
-        // Check player collision
+        // Colisión por casilla: evita matar en tiles adyacentes por tamaño visual del sprite.
         if (playersList) {
             for (auto* p : *playersList) {
                 if (p && p->isAlive()) {
-                    float dist = glm::distance(p->position, position);
-                    if (dist < 0.25f) {
+                    int pr = 0, pc = 0;
+                    gameMap->ndcToGrid(p->position, pr, pc);
+                    if (pr == nr && pc == nc) {
                         p->killByExplosion();
                         lifeState = EnemyLifeState::Dead;
                         return;
