@@ -8,10 +8,29 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <iomanip>
 #include <algorithm>
 #include <cctype>
 #include <random>
 #include <chrono>
+
+// Constantes del HUD
+    // HUD del modo historia
+    static constexpr glm::vec2 scorePos(-1.117f, 0.935f);
+    static constexpr glm::vec2 scorePos2(0.861f, 0.935f);
+    static constexpr glm::vec2 scorePos5(0.015f, 0.935f);
+
+    static constexpr glm::vec2 livesPos(-0.83f, 0.825f);
+    static constexpr glm::vec2 livesPos2(1.175f, 0.825f);
+    static constexpr glm::vec2 enemiesLeftPos(-0.1675f, 0.813f);
+    static constexpr glm::vec2 levelPos(-0.410f, 0.935f);
+    static constexpr glm::vec2 timePos(0.2350f, 0.813f);
+
+    // HUD del modo VS
+
+static constexpr float scaleUsualHud = 0.0028f;
+static constexpr float scaleLives = 0.0040f;
+static constexpr float interSeparation = 0.015f;
 
 // Convierte un string de nivel (p.ej. "flame", "bomba", "velocidad") a PowerUpType.
 // Se usa para la directiva: `powerup <type> <x> <y>` dentro de `levels/*.txt`.
@@ -389,6 +408,10 @@ void GameMap::update(float deltaTime) {
             }
         }
     }
+
+    // Decrementar el timer del nivel
+    levelTimeRemaining -= deltaTime;
+    if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 }
 
 // Recalcula tileSize/offsets para el aspect ratio actual y centra el mapa en pantalla.
@@ -726,13 +749,91 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
     glBindVertexArray(0);
 }
 
+void GameMap::renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, typeOfHud hudType, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, GLuint vao, GLuint uniformModel, GLuint uniformUvRect) {
+
+    std::string displayInfo;
+    std::ostringstream oss;
+
+    uint32_t totalSeconds;
+    uint32_t minutes;
+    uint32_t seconds;
+
+    switch (hudType){
+        case typeOfHud::Score:
+            displayInfo = data > 9999999 ? "9999999" : std::to_string(data);
+            oss << std::setw(7) << std::setfill('0') << displayInfo;
+            displayInfo = oss.str();  // Fixeamos el valor de score a 7 digitos añadiendo 0 a la izquierda
+            break;
+        case typeOfHud::Lives:
+            displayInfo = std::to_string(data > 9 ? 9 : data);
+            break;
+        case typeOfHud::Timer:
+            totalSeconds = std::ceil(data);
+            minutes = totalSeconds / 60;
+            seconds = totalSeconds % 60;
+            displayInfo = std::to_string(minutes) + ":" + (seconds < 10 ? "0" : "") + std::to_string(seconds);
+            break;
+        case typeOfHud::CurrentLevel:
+            displayInfo = currentLevel;
+            break;
+        case typeOfHud::EnemiesLeft:
+            displayInfo = std::to_string(data);
+            break;
+        default:
+            std::cerr << "Error: tipo de dato del HUD a mostrar no reconocido\n";
+            break;
+    }
+
+    glBindVertexArray(vao);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, scoreboardTexture);
+
+    float currentX = startPos.x;
+    float y = startPos.y;
+
+    for (char c : displayInfo) {
+
+        std::string spriteName = std::string(1, c);
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+        if (!getUvRectForSprite(gScoreboardAtlas, spriteName, uvRect)) {
+            std::cerr << "Advertencia: Sprite '" << spriteName << "' no encontrado en atlas del scoreboard\n";
+            continue;
+        }
+
+        auto it = gScoreboardAtlas.sprites.find(spriteName);
+        float spriteWidth = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.w * scale : 20.0f * scale; 
+        float spriteHeight = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.h * scale : 23.0f * scale;
+
+        glm::mat4 model = glm::mat4(1.0f);
+        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));
+        model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        currentX += spriteWidth + interSeparation;
+    }
+
+    glBindVertexArray(0);
+
+}
+
+
 void GameMap::renderHud(GLuint vao, GLuint hudTexture,
-                        GLuint uniformModel, GLuint uniformUvRect) {
+                        GLuint uniformModel, GLuint uniformUvRect, 
+                        SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture) {
     float hudWidth = cols * tileSize;
 
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, hudTexture);
-
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    if (!getUvRectForSprite(gScoreboardAtlas, "Scoreboard", uvRect)) {
+        std::cerr << "Advertencia: Sprite '" << "Scoreboard" << "' no encontrado en atlas del scoreboard\n";
+        exit(1);
+    }
+    glBindTexture(GL_TEXTURE_2D, scoreboardTexture);
     glBindVertexArray(vao);
 
     glm::mat4 model = glm::mat4(1.0f);
@@ -740,13 +841,44 @@ void GameMap::renderHud(GLuint vao, GLuint hudTexture,
     model = glm::scale(model, glm::vec3(hudWidth * 0.5f, hudTopSpace * 0.5f, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-
-    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-}
 
+    // SCORES
+        // esquina superior izquierda del HUD (1er player)
+    //renderScore(100, scorePos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(100, scorePos, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // esquina superior derecha del HUD (2do player)
+    //renderScore(2000, scorePos2, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(2000, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // centro (highest score)
+    //renderScore(100 + 2000 + 300 + 4000, scorePos5, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(100 + 2000 + 300 + 4000, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // VIDAS
+        // esquina superior izquierda del HUD (1er player)
+    //renderLives(1, livesPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(1, livesPos, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // esquina inferior izquierda del HUD (2do player)
+    //renderLives(2, livesPos2, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(2, livesPos2, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // ENEMIGOS RESTANTES
+    //renderLives(6, enemiesLeftPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(6, enemiesLeftPos, scaleUsualHud, typeOfHud::EnemiesLeft, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // NIVEL ACTUAL
+    //renderCurrentLevel(levelPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(0, levelPos, scaleUsualHud, typeOfHud::CurrentLevel, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+    // TIMER
+    //renderTimer(levelTimeRemaining, timePos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+}
 // ============================== Power-Ups ==============================
 
 // LoadTexture definido en bomberman.cpp

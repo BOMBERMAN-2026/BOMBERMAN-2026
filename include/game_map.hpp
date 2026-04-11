@@ -75,6 +75,15 @@ enum class EnemySpawnType {
     DragonJoven
 };
 
+// Tipo de dato para mostrar en el HUD
+enum class typeOfHud {
+    Score,
+    Lives,
+    EnemiesLeft,
+    CurrentLevel,
+    Timer
+};
+
 // Spawn de enemigo definido por nivel.
 struct EnemySpawn {
     EnemySpawnType type;
@@ -99,8 +108,12 @@ public:
                 GLuint uniformModel, GLuint uniformUvRect,
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
-    void renderHud(GLuint vao, GLuint hudTexture,
-                   GLuint uniformModel, GLuint uniformUvRect);
+    void renderHud(GLuint vao, GLuint hudTexture,GLuint uniformModel, 
+                   GLuint uniformUvRect, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture);
+    
+    void renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, 
+                        typeOfHud hudType, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
+                        GLuint vao, GLuint uniformModel, GLuint uniformUvRect);
 
     int getRows() const { return rows; }
     int getCols() const { return cols; }
@@ -196,6 +209,10 @@ private:
     TileAnimator animator;                // Swap de IDs animados
 
     int destroyedFloorId = 10;            // Sprite al destruir (por defecto; se recalcula dinámico en render)
+
+    // Timer del nivel
+    float levelTimeRemaining = 120.0f;    // Tiempo restante del nivel en segundos (2 minutos)
+    std::string currentLevel = "5-5";
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);
