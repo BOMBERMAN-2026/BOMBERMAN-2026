@@ -108,17 +108,17 @@ bool KingBomber::hasAliveDrones() const {
 void KingBomber::updatePhaseAggression() {
     spriteBaseId = phaseBase();
     if (phaseIndex == 1) {
-        speed = 0.4f;
+        speed = 0.2f;
         bombCooldownMax = 2.4f;
         maxOwnedBombs = 2;
         specialCooldown = 7.0f;
     } else if (phaseIndex == 2) {
-        speed = 0.4f;
+        speed = 0.2f;
         bombCooldownMax = 1.75f;
         maxOwnedBombs = 3;
         specialCooldown = 5.6f;
     } else {
-        speed = 0.4f;
+        speed = 0.2f;
         bombCooldownMax = 1.15f;
         maxOwnedBombs = 4;
         specialCooldown = 4.4f;

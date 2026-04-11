@@ -92,6 +92,9 @@ public:
     // Método virtual para reaccionar a una bomba cercana
     virtual void notifyBombNearby(glm::vec2 bombPos) {}
 
+    // Excepción de diseño: algunos enemigos especiales pueden ignorar bombas.
+    virtual bool canTraverseBombs() const { return false; }
+
 protected:
     // ── Utilidades de IA que pueden usar las subclases ──
     glm::vec2 getClosestPlayerPos(float& out_dist) const;

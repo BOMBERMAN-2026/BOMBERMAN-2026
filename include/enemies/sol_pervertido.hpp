@@ -31,6 +31,7 @@ public:
 
     bool takeDamage(const SpriteAtlas& atlas, int amount = 1) override;
     void updateDeath(float dt) override;
+    bool canTraverseBombs() const override { return true; }
 
     // Al recibir daño, genera las subdivisiones.
     // Devuelve una lista de nuevos enemigos hijos (vacía si muere definitivamente).
