@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -744,12 +744,12 @@ void Game::init() {
     }
 
     // Cargar textura del HUD
-    const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
-    hudTexture = LoadTexture(hudTexPath.c_str());
-    if (hudTexture == 0)    {
-        std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+    // const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
+    // hudTexture = LoadTexture(hudTexPath.c_str());
+    // if (hudTexture == 0)    {
+    //     std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+    //     std::exit(EXIT_FAILURE);
+    // }
 
     // Crear jugador(es) en la posición de spawn del mapa
     gPlayers.clear();
@@ -1425,7 +1425,7 @@ void Game::render() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture);
+    gameMap->renderHud(VAO, scoreboardTexture, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture);
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
