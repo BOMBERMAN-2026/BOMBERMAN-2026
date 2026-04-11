@@ -113,6 +113,7 @@ glm::vec2 Enemy::getClosestPlayerPos(float& out_dist) const {
 
     for (Player* p : *playersList) {
         if (!p) continue;
+        if (!p->isAlive()) continue;
         glm::vec2 diff = p->position - position;
         float d = std::abs(diff.x) + std::abs(diff.y);
         if (d < out_dist) {
