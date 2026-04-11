@@ -1310,7 +1310,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                     break;
                 }
                 case EnemySpawnType::KingBomber: {
-                    auto* e = new KingBomber(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    auto* e = new KingBomber(pos, kDefaultPlayerSize, /*speed=*/kDefaultPlayerSpeed);
                     e->currentSpriteName = "kingbomber1.abajo.0";
                     enemy = e;
                     break;

@@ -29,7 +29,7 @@ public:
     void startDying(const SpriteAtlas& atlas) override;
     void updateDeath(float dt) override;
 
-    bool isShieldActive() const { return false; }
+    bool isShieldActive() const { return shieldActive; }
     bool isRetreating()   const { return false; }
 
 private:
@@ -65,6 +65,9 @@ private:
     float shieldStateTimer;
     float shieldOnDuration;
     float shieldOffDuration;
+    float shieldAnimTimer;
+    int shieldAnimFrame;
+    float shieldAnimFrameInterval;
     bool dronesCleared;
 
     // Estado y navegación
@@ -76,6 +79,8 @@ private:
     float bombCooldownMax;
     int maxOwnedBombs;
     int bombPower;
+    float ownBombEvadeTimer;
+    float ownBombEvadeDuration;
 
     // Ataque especial
     float specialCooldownTimer;
@@ -98,10 +103,14 @@ private:
     // Fase visual por vida (1..3)
     int phaseIndex;
 
-    // Muerte final (usa kingbomberX.fuego.N)
+    // Muerte final (usa kingbomber3.muerto.N)
     float phaseDeathTimer;
     int phaseDeathFrame;
     float phaseDeathFrameInterval;
+    float phaseDeathHoldTimer;
+    float phaseDeathHoldDuration;
+    float phaseDeathHoldBlinkTimer;
+    float phaseDeathHoldBlinkInterval;
 
     bool hasAliveDrones() const;
     void updatePhaseAggression();

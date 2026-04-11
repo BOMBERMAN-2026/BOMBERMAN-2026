@@ -47,6 +47,9 @@ KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
       shieldStateTimer(0.0f),
       shieldOnDuration(4.0f),
       shieldOffDuration(3.2f),
+    shieldAnimTimer(0.0f),
+    shieldAnimFrame(0),
+    shieldAnimFrameInterval(0.10f),
       dronesCleared(false),
       plannedDir(EnemyDirection::NONE),
       stepsUntilReevaluate(0),
@@ -68,7 +71,13 @@ KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
       phaseIndex(1),
       phaseDeathTimer(0.0f),
       phaseDeathFrame(0),
-      phaseDeathFrameInterval(0.10f)
+            ownBombEvadeTimer(0.0f),
+            ownBombEvadeDuration(1.30f),
+            phaseDeathFrameInterval(0.14f),
+            phaseDeathHoldTimer(0.0f),
+            phaseDeathHoldDuration(2.4f),
+            phaseDeathHoldBlinkTimer(0.0f),
+            phaseDeathHoldBlinkInterval(0.16f)
 {
     spriteBaseId = phaseBase();
     currentSpriteName = spriteBaseId + ".fuego.0";
@@ -99,17 +108,17 @@ bool KingBomber::hasAliveDrones() const {
 void KingBomber::updatePhaseAggression() {
     spriteBaseId = phaseBase();
     if (phaseIndex == 1) {
-        speed = 0.072f;
+        speed = 0.2f;
         bombCooldownMax = 2.4f;
         maxOwnedBombs = 2;
         specialCooldown = 7.0f;
     } else if (phaseIndex == 2) {
-        speed = 0.088f;
+        speed = 0.2f;
         bombCooldownMax = 1.75f;
         maxOwnedBombs = 3;
         specialCooldown = 5.6f;
     } else {
-        speed = 0.108f;
+        speed = 0.2f;
         bombCooldownMax = 1.15f;
         maxOwnedBombs = 4;
         specialCooldown = 4.4f;
@@ -193,7 +202,17 @@ bool KingBomber::isTileDangerous(int row, int col) const {
 
         const bool explodingNow = (b->state == BombState::EXPLODING);
         const float remaining = b->fuseTime - b->fuseTimer;
-        const bool imminent = (b->state == BombState::FUSE && remaining <= 1.25f);
+
+        bool isOwnedBomb = false;
+        for (const auto& tile : ownedBombTiles) {
+            if (tile.x == b->gridRow && tile.y == b->gridCol) {
+                isOwnedBomb = true;
+                break;
+            }
+        }
+
+        const float imminentThreshold = isOwnedBomb ? 2.05f : 1.25f;
+        const bool imminent = (b->state == BombState::FUSE && remaining <= imminentThreshold);
         if (!explodingNow && !imminent) continue;
 
         if (hasLineOfFireToBomb(row, col, b->gridRow, b->gridCol, b->power)) {
@@ -253,11 +272,12 @@ void KingBomber::updateMovement(float dt, float towardWeight, bool avoidDanger) 
 
     const float step = speed * dt;
     EnemyDirection moveDir = EnemyDirection::NONE;
+    const bool mustEvadeOwnBomb = avoidDanger && ownBombEvadeTimer > 0.0f;
 
     int row = 0, col = 0;
     gameMap->ndcToGrid(position, row, col);
 
-    if (avoidDanger && isTileDangerous(row, col)) {
+    if ((avoidDanger && isTileDangerous(row, col)) || mustEvadeOwnBomb) {
         moveDir = chooseSafeDirection();
         if (moveDir != EnemyDirection::NONE) {
             plannedDir = moveDir;
@@ -269,6 +289,14 @@ void KingBomber::updateMovement(float dt, float towardWeight, bool avoidDanger) 
         if (stepsUntilReevaluate <= 0 || plannedDir == EnemyDirection::NONE ||
             !canMoveInDirection(plannedDir, gameMap->getTileSize() * 0.95f)) {
             plannedDir = chooseBiasedDirectionTowardPlayer(towardWeight);
+            if (mustEvadeOwnBomb) {
+                plannedDir = chooseSafeDirection();
+                if (plannedDir == EnemyDirection::NONE) {
+                    plannedDir = chooseExplorationDirection();
+                }
+            } else {
+                plannedDir = chooseBiasedDirectionTowardPlayer(towardWeight);
+            }
             stepsUntilReevaluate = 3 + (std::rand() % 6);
         }
         moveDir = plannedDir;
@@ -280,7 +308,10 @@ void KingBomber::updateMovement(float dt, float towardWeight, bool avoidDanger) 
     }
 
     if (!moved) {
-        plannedDir = chooseExplorationDirection();
+        plannedDir = mustEvadeOwnBomb ? chooseSafeDirection() : chooseExplorationDirection();
+        if (plannedDir == EnemyDirection::NONE) {
+            plannedDir = chooseExplorationDirection();
+        }
         if (plannedDir != EnemyDirection::NONE) {
             tryMove(plannedDir, step);
         }
@@ -310,6 +341,13 @@ void KingBomber::placeBombOnCurrentTile() {
     gBombs.push_back(bomb);
     ownedBombTiles.push_back(glm::ivec2(r, c));
     bombCooldown = bombCooldownMax;
+    ownBombEvadeTimer = ownBombEvadeDuration;
+
+    plannedDir = chooseSafeDirection();
+    if (plannedDir == EnemyDirection::NONE) {
+        plannedDir = chooseExplorationDirection();
+    }
+    stepsUntilReevaluate = 1;
 }
 
 void KingBomber::maybePlaceBomb() {
@@ -344,7 +382,6 @@ bool KingBomber::tryFindTeleportNearPlayer(glm::vec2& outPos) const {
         outPos = pos;
         return true;
     }
-
     return false;
 }
 
@@ -472,6 +509,10 @@ void KingBomber::Update() {
         damageGraceTimer -= deltaTime;
         if (damageGraceTimer < 0.0f) damageGraceTimer = 0.0f;
     }
+    if (ownBombEvadeTimer > 0.0f) {
+        ownBombEvadeTimer -= deltaTime;
+        if (ownBombEvadeTimer < 0.0f) ownBombEvadeTimer = 0.0f;
+    }
 
     updatePhaseAggression();
     updateBombOwnershipState();
@@ -543,6 +584,14 @@ void KingBomber::Update() {
             return;
     }
 
+    if (shieldActive && battleState != BattleState::IntroBlink && battleState != BattleState::IntroGo) {
+        shieldAnimTimer += deltaTime;
+        if (shieldAnimTimer >= shieldAnimFrameInterval) {
+            shieldAnimTimer -= shieldAnimFrameInterval;
+            shieldAnimFrame = (shieldAnimFrame + 1) % 4;
+        }
+    }
+
     if (specialState == SpecialAttackState::Idle) {
         animTimer += deltaTime;
         if (animTimer >= 0.2f) {
@@ -585,7 +634,6 @@ bool KingBomber::takeDamage(const SpriteAtlas& atlas, int amount) {
 }
 
 void KingBomber::startDying(const SpriteAtlas& atlas) {
-    (void)atlas;
     if (lifeState != EnemyLifeState::Alive) return;
 
     battleState = BattleState::Dying;
@@ -598,29 +646,59 @@ void KingBomber::startDying(const SpriteAtlas& atlas) {
 
     phaseDeathTimer = 0.0f;
     phaseDeathFrame = 0;
+    phaseDeathHoldTimer = 0.0f;
+    phaseDeathHoldBlinkTimer = 0.0f;
     blinkVisible = true;
     flipX = 0.0f;
-    currentSpriteName = phaseBase() + ".fuego.0";
+
+    deathSpritePrefix = "kingbomber3.muerto.";
+    deathFrameCount = 0;
+    while (atlas.sprites.find(deathSpritePrefix + std::to_string(deathFrameCount)) != atlas.sprites.end()) {
+        ++deathFrameCount;
+        if (deathFrameCount > 64) break;
+    }
+    if (deathFrameCount <= 0) deathFrameCount = 9;
+
+    currentSpriteName = deathSpritePrefix + "0";
 }
 
 void KingBomber::updateDeath(float dt) {
     if (lifeState != EnemyLifeState::Dying) return;
 
-    phaseDeathTimer += dt;
-    while (phaseDeathTimer >= phaseDeathFrameInterval) {
-        phaseDeathTimer -= phaseDeathFrameInterval;
-        ++phaseDeathFrame;
+    const int holdStartFrame = std::max(0, deathFrameCount - 2);
+    const int lastFrame = std::max(0, deathFrameCount - 1);
 
-        if (phaseDeathFrame > 4) {
-            lifeState = EnemyLifeState::Dead;
-            alive = false;
-            gKingPreBattleLockActive = false;
-            gKingPreBattleBlinkVisible = true;
-            return;
+    if (phaseDeathFrame < holdStartFrame) {
+        phaseDeathTimer += dt;
+        while (phaseDeathTimer >= phaseDeathFrameInterval) {
+            phaseDeathTimer -= phaseDeathFrameInterval;
+            ++phaseDeathFrame;
+            if (phaseDeathFrame >= holdStartFrame) {
+                phaseDeathFrame = holdStartFrame;
+                break;
+            }
         }
+        currentSpriteName = deathSpritePrefix + std::to_string(std::max(0, std::min(lastFrame, phaseDeathFrame)));
+        return;
     }
 
-    currentSpriteName = phaseBase() + ".fuego." + std::to_string(std::max(0, std::min(4, phaseDeathFrame)));
+    phaseDeathHoldTimer += dt;
+    phaseDeathHoldBlinkTimer += dt;
+
+    while (phaseDeathHoldBlinkTimer >= phaseDeathHoldBlinkInterval) {
+        phaseDeathHoldBlinkTimer -= phaseDeathHoldBlinkInterval;
+        phaseDeathFrame = (phaseDeathFrame == holdStartFrame) ? lastFrame : holdStartFrame;
+    }
+
+    if (phaseDeathHoldTimer >= phaseDeathHoldDuration) {
+        lifeState = EnemyLifeState::Dead;
+        alive = false;
+        gKingPreBattleLockActive = false;
+        gKingPreBattleBlinkVisible = true;
+        return;
+    }
+
+    currentSpriteName = deathSpritePrefix + std::to_string(std::max(0, std::min(lastFrame, phaseDeathFrame)));
 }
 
 void KingBomber::Draw() {
@@ -651,4 +729,23 @@ void KingBomber::Draw() {
     glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    if (shieldActive && battleState != BattleState::IntroBlink && battleState != BattleState::IntroGo &&
+        lifeState == EnemyLifeState::Alive) {
+        glm::vec4 shieldUv(0.0f, 0.0f, 1.0f, 1.0f);
+        const std::string shieldSprite = std::string("escudo.") + std::to_string(shieldAnimFrame);
+        getUvRectForSprite(gEnemyAtlas, shieldSprite, shieldUv);
+
+        glm::mat4 shieldModel = glm::mat4(1.0f);
+        shieldModel = glm::translate(shieldModel, glm::vec3(position.x, position.y + halfTile * 0.95f, 0.0f));
+        shieldModel = glm::scale(shieldModel, glm::vec3(halfTile * 2.45f, halfTile * 2.45f, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(shieldModel));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(shieldUv));
+        glUniform1f(uniformFlipX, 0.0f);
+
+        const glm::vec4 shieldTint(1.0f);
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(shieldTint));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
 }
