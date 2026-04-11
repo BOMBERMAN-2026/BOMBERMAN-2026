@@ -1360,17 +1360,24 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     gameMap->placePowerUps();
 }
 
-// Arranca una partida nueva desde nivel_01 (├¡ndice 0).
+// Arranca una partida nueva desde nivel_01 (índice 0).
 void Game::startNewRun(GameMode newMode) {
     mode = newMode;
     currentLevelIndex = 0;
     currentLevelHadEnemies = false;
     playerScores.clear();
 
-    state = GAME_PLAYING;
-    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+    // Transicionar a CINEMATIC para reproducir cinemática del primer nivel antes de cargar
+    this->state = GAME_CINEMATIC;
+    this->currentCinematicType = CinematicType::LevelStart;
+    this->nextStateAfterCinematic = GAME_PLAYING;
+    this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
 
-    // Por si el men├║ dej├│ la marca de transici├│n activa.
+    // Abrir el video de la cinemática del primer nivel
+    std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
+    cinematicPlayer.open(videoPath);
+
+    // Por si el menú dejó la marca de transición activa.
     menuScreen.resetTransition();
 }
 
@@ -1378,13 +1385,30 @@ void Game::startNewRun(GameMode newMode) {
 void Game::advanceToNextLevel() {
     const int nextIndex = currentLevelIndex + 1;
     if (nextIndex >= (int)levelSequence.size()) {
-        // No hay ranking ni pantalla de victoria: volver al men├║.
-        returnToMenuFromGame(/*resetRun=*/true);
+        // No hay ranking ni pantalla de victoria: volver al menú.
+        if (mode == GameMode::TwoPlayers) {
+            // Reproducir cinematica fin de historia antes de volver a menu.
+            this->state = GAME_CINEMATIC;
+            this->currentCinematicType = CinematicType::HistoryEnd;
+            this->nextStateAfterCinematic = GAME_MENU;
+            std::string videoPath = resolveAssetPath("resources/video/HistoryEnd.mp4");
+            cinematicPlayer.open(videoPath);
+        } else {
+            returnToMenuFromGame(/*resetRun=*/true);
+        }
         return;
     }
 
     currentLevelIndex = nextIndex;
-    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/true);
+    // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar
+    this->state = GAME_CINEMATIC;
+    this->currentCinematicType = CinematicType::LevelStart;
+    this->nextStateAfterCinematic = GAME_PLAYING;
+    this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+
+    // Abrir el video de la cinemática del nivel
+    std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
+    cinematicPlayer.open(videoPath);
 }
 
 // Sale a men├║ desde gameplay (Game Over / fin de campa├▒a).
@@ -2271,6 +2295,17 @@ void Game::update() {
                 this->init();
             } else if (currentCinematicType == CinematicType::HistoryStart) {
                 startNewRun(mode); // Actualiza el state a GAME_PLAYING e inicia la partida con el modo seleccionado previamente.
+            } else if (currentCinematicType == CinematicType::HistoryEnd) {
+                // No hay rankings ni nada, así que simplemente volvemos al menú.
+                returnToMenuFromGame(/*resetRun=*/true);
+            } else if (currentCinematicType == CinematicType::LevelStart) {
+                // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
+                if (loadLevelPending) {
+                    bool preserve = (currentLevelIndex > 0); // Solo preservar vidas/puntuación a partir del nivel 2
+                    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
+                    loadLevelPending = false;
+                    this->state = GAME_PLAYING;
+                }
             }
         }
         return;
@@ -2431,6 +2466,7 @@ void Game::update() {
                 levelAdvanceTimer = 0.0f;
 
                 // Pasar de nivel: se conservan vidas y puntuaci├│n; se reinician stats.
+                // Cinematica final de historia si el modo de juego corresponde
                 advanceToNextLevel();
                 return;
             }

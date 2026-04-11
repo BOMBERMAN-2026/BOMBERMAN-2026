@@ -35,7 +35,8 @@ enum GameState {
 enum class CinematicType {
     Intro,              // Intro al abrir el juego -> GAME_MENU
     HistoryStart,       // Introduccion modo historia -> GAME_PLAYING (Historia 1 o 2 jugadores)
-    HistoryEnd          // Final modo historia -> GAME_MENU (Historia 1 o 2 jugadores)
+    HistoryEnd,         // Final modo historia -> GAME_MENU (Historia 1 o 2 jugadores)
+    LevelStart          // Pantalla de inicio de cada nivel -> GAME_PLAYING (nivel siguiente)
 };
 
 enum class GameMode {
@@ -100,10 +101,20 @@ private:
     std::vector<int> levelToStage = {
         1, 2, 2, 3, 4
     };
+    std::vector<std::string> levelCinematicSequence = {
+        "resources/video/levels/level_01.mp4",
+        "resources/video/levels/level_02.mp4",
+        "resources/video/levels/level_03.mp4",
+        "resources/video/levels/level_04.mp4",
+        "resources/video/levels/level_05.mp4"
+    };
 
     bool pendingLevelAdvance = false;
     float levelAdvanceTimer = 0.0f;
     float levelAdvanceDelaySeconds = 1.0f;
+
+    // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
+    bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel
 
     // Progresión de niveles (uso interno).
     void loadLevel(int levelIndex, bool preserveLivesAndScore);
