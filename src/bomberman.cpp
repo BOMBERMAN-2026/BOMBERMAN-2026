@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -136,6 +136,9 @@ SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
 
 SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
 GLuint enemyTexture = 0;
+
+SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
+GLuint scoreboardTexture = 0; // Textura del scoreboard/HUD 
 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 
@@ -1144,10 +1147,16 @@ void Game::ensureGameplayAssets() {
 
     // Textura del HUD (fija)
     {
-        const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
-        hudTexture = LoadTexture(hudTexPath.c_str());
-        if (hudTexture == 0) {
-            std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+        const std::string scoreboardAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasScoreboard.json");
+        if (!loadSpriteAtlasMinimal(scoreboardAtlasPath, gScoreboardAtlas)) {
+            std::cerr << "Error cargando atlas del scoreboard: " << scoreboardAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string scoreboardTexPath = resolveAssetPath(gScoreboardAtlas.imagePath);  // Usa la ruta del JSON
+        scoreboardTexture = LoadTexture(scoreboardTexPath.c_str());
+        if (scoreboardTexture == 0) {
+            std::cerr << "Error cargando textura del scoreboard: " << scoreboardTexPath << std::endl;
             std::exit(EXIT_FAILURE);
         }
     }
@@ -3039,7 +3048,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
+    gameMap->renderHud(VAO, scoreboardTexture, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture);
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
