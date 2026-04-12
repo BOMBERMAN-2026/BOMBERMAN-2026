@@ -48,6 +48,8 @@ struct Block {
     PowerUpType powerUpType = PowerUpType::ExtraLife; // Tipo de power-up escondido
     bool powerUpRevealed = false; // El power-up está visible pero no recogido
     bool powerUpCollected = false; // El power-up ya fue recogido
+    bool powerUpPickupFxActive = false; // Efecto visual de brillo al recoger
+    float powerUpPickupFxTimer = 0.0f;  // Tiempo acumulado del efecto de recogida
 
     bool isWalkable() const {
         if (destroyed) return true; // destructible ya destruido → suelo
@@ -146,6 +148,9 @@ public:
     // Renderiza los power-ups revelados (bloques destruidos con power-up visible).
     void renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
                         GLuint uniformTintColor, GLuint uniformFlipX);
+
+    // Consulta el power-up visible (revelado y no recogido) en una celda.
+    bool getVisiblePowerUpType(int row, int col, PowerUpType& outType) const;
 
     // Carga las texturas de los power-ups.
     void loadPowerUpTextures();

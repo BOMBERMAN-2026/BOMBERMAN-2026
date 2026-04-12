@@ -2959,6 +2959,29 @@ void Game::render3D() {
                 glBindVertexArray(bombGlbVAO);
                 glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
             }
+
+            // Power-up Bomb Up en 3D: usa el mismo modelo GLB de bomba y rota sobre su propio eje.
+            const float now = (float)glfwGetTime();
+            const float kBombUpSpinSpeed = 1.85f;
+            const float kBombUpScale = 0.74f;
+
+            for (int r = 0; r < gameMap->getRows(); ++r) {
+                for (int c = 0; c < gameMap->getCols(); ++c) {
+                    PowerUpType puType;
+                    if (!gameMap->getVisiblePowerUpType(r, c, puType) || puType != PowerUpType::BombUp) {
+                        continue;
+                    }
+
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.11f));
+                    model = glm::rotate(model, now * kBombUpSpinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
+                    model = glm::scale(model, glm::vec3(kBombUpScale, kBombUpScale, kBombUpScale));
+
+                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glBindVertexArray(bombGlbVAO);
+                    glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
+                }
+            }
         }
 
         if (canRenderFlameGlb) {

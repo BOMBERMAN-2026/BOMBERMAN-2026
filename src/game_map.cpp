@@ -12,6 +12,14 @@
 #include <cctype>
 #include <random>
 #include <chrono>
+#include <cmath>
+
+namespace {
+    constexpr float kPowerUpPickupFxDuration = 0.26f;
+    constexpr float kPowerUpPickupFxStartScale = 0.32f;
+    constexpr float kPowerUpPickupFxEndScale = 1.08f;
+    constexpr float kPowerUpPickupFxMaxAlpha = 0.95f;
+}
 
 // Convierte un string de nivel (p.ej. "flame", "bomba", "velocidad") a PowerUpType.
 // Se usa para la directiva: `powerup <type> <x> <y>` dentro de `levels/*.txt`.
@@ -387,6 +395,17 @@ void GameMap::update(float deltaTime) {
                     }
                 }
             }
+
+            if (b.powerUpPickupFxActive) {
+                b.powerUpPickupFxTimer += deltaTime;
+                if (b.powerUpPickupFxTimer >= kPowerUpPickupFxDuration) {
+                    b.powerUpPickupFxActive = false;
+                    b.powerUpPickupFxTimer = 0.0f;
+                    if (b.powerUpCollected) {
+                        b.hasPowerUp = false;
+                    }
+                }
+            }
         }
     }
 }
@@ -713,6 +732,7 @@ void GameMap::renderHud(GLuint vao, GLuint hudTexture,
 
 // LoadTexture definido en bomberman.cpp
 extern GLuint LoadTexture(const char* filePath);
+extern GLuint uniformWhiteFlash;
 
 void GameMap::loadPowerUpTextures() {
     if (powerUpTexturesLoaded) return;
@@ -833,46 +853,83 @@ void GameMap::placePowerUps() {
               << destructibles.size() << " bloques destructibles" << std::endl;
 }
 
+bool GameMap::getVisiblePowerUpType(int row, int col, PowerUpType& outType) const {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+
+    const Block& b = grid[row][col];
+    if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected) return false;
+
+    outType = b.powerUpType;
+    return true;
+}
+
 void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
                              GLuint uniformTintColor, GLuint uniformFlipX) {
     if (!powerUpTexturesLoaded) return;
 
     glBindVertexArray(vao);
     glUniform1f(uniformFlipX, 0.0f);
-    glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
-    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+    glUniform1f(uniformWhiteFlash, 0.0f);
 
     float scale = tileSize / 2.0f;
+    glm::vec4 uvRectFull(0.0f, 0.0f, 1.0f, 1.0f);
+    glm::vec4 baseTint(1.0f, 1.0f, 1.0f, 1.0f);
 
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             const Block& block = grid[r][c];
-            if (!block.hasPowerUp || !block.powerUpRevealed || block.powerUpCollected)
-                continue;
 
-            int texIdx = (int)block.powerUpType;
-            if (texIdx < 0 || texIdx >= POWER_UP_TYPE_COUNT || powerUpTextures[texIdx] == 0)
-                continue;
+            if (block.hasPowerUp && block.powerUpRevealed && !block.powerUpCollected) {
+                int texIdx = (int)block.powerUpType;
+                if (texIdx >= 0 && texIdx < POWER_UP_TYPE_COUNT && powerUpTextures[texIdx] != 0) {
+                    glm::vec2 center = gridToNDC(r, c);
 
-            // Bind la textura del power-up
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
 
-            glm::vec2 center = gridToNDC(r, c);
-            glm::mat4 model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(center, 0.0f));
-            model = glm::scale(model, glm::vec3(scale, scale, 1.0f));
+                    glm::mat4 model = glm::mat4(1.0f);
+                    model = glm::translate(model, glm::vec3(center, 0.0f));
+                    model = glm::scale(model, glm::vec3(scale, scale, 1.0f));
 
-            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRectFull));
+                    glUniform4fv(uniformTintColor, 1, glm::value_ptr(baseTint));
+                    glUniform1f(uniformWhiteFlash, 0.0f);
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                }
+            }
 
-            // UV rect completo para texturas individuales
-            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+            if (block.powerUpPickupFxActive) {
+                const float tRaw = block.powerUpPickupFxTimer / kPowerUpPickupFxDuration;
+                const float t = std::max(0.0f, std::min(1.0f, tRaw));
+                const float easeOut = 1.0f - (1.0f - t) * (1.0f - t);
+                const float fxScale = scale * (kPowerUpPickupFxStartScale + (kPowerUpPickupFxEndScale - kPowerUpPickupFxStartScale) * easeOut);
+                const float fxAlpha = (1.0f - t) * kPowerUpPickupFxMaxAlpha;
 
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                int texIdx = (int)block.powerUpType;
+                if (texIdx >= 0 && texIdx < POWER_UP_TYPE_COUNT && powerUpTextures[texIdx] != 0) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
+
+                    glm::vec2 center = gridToNDC(r, c);
+                    glm::mat4 fxModel = glm::mat4(1.0f);
+                    fxModel = glm::translate(fxModel, glm::vec3(center, 0.0f));
+                    fxModel = glm::scale(fxModel, glm::vec3(fxScale, fxScale, 1.0f));
+
+                    glm::vec4 fxTint(1.0f, 1.0f, 1.0f, fxAlpha);
+                    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(fxModel));
+                    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRectFull));
+                    glUniform4fv(uniformTintColor, 1, glm::value_ptr(fxTint));
+                    glUniform1f(uniformWhiteFlash, 1.0f);
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                    glUniform1f(uniformWhiteFlash, 0.0f);
+                }
+            }
         }
     }
 
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(baseTint));
+    glUniform1f(uniformWhiteFlash, 0.0f);
     glBindVertexArray(0);
 }
 
@@ -888,6 +945,8 @@ bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
     player->applyPowerUp(b.powerUpType);
     b.powerUpCollected = true;
     b.powerUpRevealed = false;
+    b.powerUpPickupFxActive = true;
+    b.powerUpPickupFxTimer = 0.0f;
 
     // Log para debug
     const char* names[] = { "1-UP", "Bomb Up", "Fire Up", "Speed Up", "Invincibility", "Remote Control" };
