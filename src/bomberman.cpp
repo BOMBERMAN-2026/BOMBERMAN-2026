@@ -78,6 +78,11 @@ static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
 static const char* kFlamePowerUpGlbPath = "models/3D/fireball 3d model.glb";
 static const char* kSpeedPowerUpGlbPath = "models/3D/roller skate 3d model.glb";
+static const char* kKingBomberGlbPath = "models/3D/king bomber 3d model.glb";
+static const char* kDronAzulGlbPath = "models/3D/blue robot 3d model.glb";
+static const char* kDronRosaGlbPath = "models/3D/pink robot 3d model.glb";
+static const char* kDronVerdeGlbPath = "models/3D/green robot 3d model.glb";
+static const char* kDronAmarilloGlbPath = "models/3D/yellow robot 3d model.glb";
 static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
 static const char* kDragonGlbPath = "models/3D/teal creature 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
@@ -135,6 +140,31 @@ GLuint speedPowerUpGlbVBO = 0;
 GLuint speedPowerUpGlbEBO = 0;
 GLsizei speedPowerUpGlbIndexCount = 0;
 GLuint speedPowerUpGlbTexture = 0;
+GLuint kingBomberGlbVAO = 0;
+GLuint kingBomberGlbVBO = 0;
+GLuint kingBomberGlbEBO = 0;
+GLsizei kingBomberGlbIndexCount = 0;
+GLuint kingBomberGlbTexture = 0;
+GLuint dronAzulGlbVAO = 0;
+GLuint dronAzulGlbVBO = 0;
+GLuint dronAzulGlbEBO = 0;
+GLsizei dronAzulGlbIndexCount = 0;
+GLuint dronAzulGlbTexture = 0;
+GLuint dronRosaGlbVAO = 0;
+GLuint dronRosaGlbVBO = 0;
+GLuint dronRosaGlbEBO = 0;
+GLsizei dronRosaGlbIndexCount = 0;
+GLuint dronRosaGlbTexture = 0;
+GLuint dronVerdeGlbVAO = 0;
+GLuint dronVerdeGlbVBO = 0;
+GLuint dronVerdeGlbEBO = 0;
+GLsizei dronVerdeGlbIndexCount = 0;
+GLuint dronVerdeGlbTexture = 0;
+GLuint dronAmarilloGlbVAO = 0;
+GLuint dronAmarilloGlbVBO = 0;
+GLuint dronAmarilloGlbEBO = 0;
+GLsizei dronAmarilloGlbIndexCount = 0;
+GLuint dronAmarilloGlbTexture = 0;
 GLuint solGlbVAO = 0;
 GLuint solGlbVBO = 0;
 GLuint solGlbEBO = 0;
@@ -752,6 +782,61 @@ void CreateSpeedPowerUpGlbModel(const std::string& modelPath)
                                  speedPowerUpGlbTexture);
 }
 
+void CreateKingBomberGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("kingBomberGLB",
+                                 modelPath,
+                                 kingBomberGlbVAO,
+                                 kingBomberGlbVBO,
+                                 kingBomberGlbEBO,
+                                 kingBomberGlbIndexCount,
+                                 kingBomberGlbTexture);
+}
+
+void CreateDronAzulGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("dronAzulGLB",
+                                 modelPath,
+                                 dronAzulGlbVAO,
+                                 dronAzulGlbVBO,
+                                 dronAzulGlbEBO,
+                                 dronAzulGlbIndexCount,
+                                 dronAzulGlbTexture);
+}
+
+void CreateDronRosaGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("dronRosaGLB",
+                                 modelPath,
+                                 dronRosaGlbVAO,
+                                 dronRosaGlbVBO,
+                                 dronRosaGlbEBO,
+                                 dronRosaGlbIndexCount,
+                                 dronRosaGlbTexture);
+}
+
+void CreateDronVerdeGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("dronVerdeGLB",
+                                 modelPath,
+                                 dronVerdeGlbVAO,
+                                 dronVerdeGlbVBO,
+                                 dronVerdeGlbEBO,
+                                 dronVerdeGlbIndexCount,
+                                 dronVerdeGlbTexture);
+}
+
+void CreateDronAmarilloGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("dronAmarilloGLB",
+                                 modelPath,
+                                 dronAmarilloGlbVAO,
+                                 dronAmarilloGlbVBO,
+                                 dronAmarilloGlbEBO,
+                                 dronAmarilloGlbIndexCount,
+                                 dronAmarilloGlbTexture);
+}
+
 void CreateSolGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("solGLB",
@@ -1193,6 +1278,11 @@ void Game::ensureRenderResources() {
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
     CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
     CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
+    CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
+    CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
+    CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
+    CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
+    CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
     CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
     CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
@@ -1910,6 +2000,26 @@ Game::~Game() {
         glDeleteTextures(1, &speedPowerUpGlbTexture);
         speedPowerUpGlbTexture = 0;
     }
+    if (kingBomberGlbTexture != 0) {
+        glDeleteTextures(1, &kingBomberGlbTexture);
+        kingBomberGlbTexture = 0;
+    }
+    if (dronAzulGlbTexture != 0) {
+        glDeleteTextures(1, &dronAzulGlbTexture);
+        dronAzulGlbTexture = 0;
+    }
+    if (dronRosaGlbTexture != 0) {
+        glDeleteTextures(1, &dronRosaGlbTexture);
+        dronRosaGlbTexture = 0;
+    }
+    if (dronVerdeGlbTexture != 0) {
+        glDeleteTextures(1, &dronVerdeGlbTexture);
+        dronVerdeGlbTexture = 0;
+    }
+    if (dronAmarilloGlbTexture != 0) {
+        glDeleteTextures(1, &dronAmarilloGlbTexture);
+        dronAmarilloGlbTexture = 0;
+    }
     if (solGlbTexture != 0) {
         glDeleteTextures(1, &solGlbTexture);
         solGlbTexture = 0;
@@ -1961,6 +2071,21 @@ Game::~Game() {
     speedPowerUpGlbVAO = speedPowerUpGlbVBO = speedPowerUpGlbEBO = 0;
     speedPowerUpGlbIndexCount = 0;
     speedPowerUpGlbTexture = 0;
+    kingBomberGlbVAO = kingBomberGlbVBO = kingBomberGlbEBO = 0;
+    kingBomberGlbIndexCount = 0;
+    kingBomberGlbTexture = 0;
+    dronAzulGlbVAO = dronAzulGlbVBO = dronAzulGlbEBO = 0;
+    dronAzulGlbIndexCount = 0;
+    dronAzulGlbTexture = 0;
+    dronRosaGlbVAO = dronRosaGlbVBO = dronRosaGlbEBO = 0;
+    dronRosaGlbIndexCount = 0;
+    dronRosaGlbTexture = 0;
+    dronVerdeGlbVAO = dronVerdeGlbVBO = dronVerdeGlbEBO = 0;
+    dronVerdeGlbIndexCount = 0;
+    dronVerdeGlbTexture = 0;
+    dronAmarilloGlbVAO = dronAmarilloGlbVBO = dronAmarilloGlbEBO = 0;
+    dronAmarilloGlbIndexCount = 0;
+    dronAmarilloGlbTexture = 0;
     solGlbVAO = solGlbVBO = solGlbEBO = 0;
     solGlbIndexCount = 0;
     solGlbTexture = 0;
@@ -2867,8 +2992,19 @@ void Game::render3D() {
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
 
+        float shadowRadius = 0.44f;
+        if (dynamic_cast<KingBomber*>(enemy) != nullptr) {
+            shadowRadius = 0.56f;
+        } else if (dynamic_cast<DronBombardero*>(enemy) != nullptr) {
+            shadowRadius = 0.28f;
+        }
+
         const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.02f);
-        drawMesh3D(sphereOrCubeVAO, sphereOrCubeIndexCount, glm::vec3(feet.x, 0.03f, feet.z), glm::vec3(0.44f, 0.02f, 0.44f), glm::vec3(0.05f, 0.05f, 0.05f));
+        drawMesh3D(sphereOrCubeVAO,
+                   sphereOrCubeIndexCount,
+                   glm::vec3(feet.x, 0.03f, feet.z),
+                   glm::vec3(shadowRadius, 0.02f, shadowRadius),
+                   glm::vec3(0.05f, 0.05f, 0.05f));
     }
 
     const GLuint fuseMesh = sphereOrCubeVAO;
@@ -2881,6 +3017,79 @@ void Game::render3D() {
         (flamePowerUpGlbVAO != 0 && flamePowerUpGlbIndexCount > 0 && flamePowerUpGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderSpeedPowerUpGlb =
         (speedPowerUpGlbVAO != 0 && speedPowerUpGlbIndexCount > 0 && speedPowerUpGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderKingBomberGlb =
+        (kingBomberGlbVAO != 0 && kingBomberGlbIndexCount > 0 && kingBomberGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDronAzulGlb =
+        (dronAzulGlbVAO != 0 && dronAzulGlbIndexCount > 0 && dronAzulGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDronRosaGlb =
+        (dronRosaGlbVAO != 0 && dronRosaGlbIndexCount > 0 && dronRosaGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDronVerdeGlb =
+        (dronVerdeGlbVAO != 0 && dronVerdeGlbIndexCount > 0 && dronVerdeGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDronAmarilloGlb =
+        (dronAmarilloGlbVAO != 0 && dronAmarilloGlbIndexCount > 0 && dronAmarilloGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderAnyDronGlb =
+        (canRenderDronAzulGlb || canRenderDronRosaGlb || canRenderDronVerdeGlb || canRenderDronAmarilloGlb);
+
+    auto usesFireSprite = [](const Enemy* enemy) -> bool {
+        return enemy && enemy->currentSpriteName.find(".fuego.") != std::string::npos;
+    };
+
+    auto hiddenByKingBlink = [](const Enemy* enemy) -> bool {
+        if (!enemy) return false;
+        if (!IsKingPreBattleLockActive() || IsKingPreBattleBlinkVisible()) return false;
+        return (dynamic_cast<const KingBomber*>(enemy) != nullptr) ||
+               (dynamic_cast<const DronBombardero*>(enemy) != nullptr);
+    };
+
+    auto resolveDroneRenderResource = [&](const Enemy* enemy,
+                                          GLuint& outVao,
+                                          GLsizei& outIndexCount,
+                                          GLuint& outTexture) -> bool {
+        outVao = 0;
+        outIndexCount = 0;
+        outTexture = 0;
+
+        if (!enemy) return false;
+
+        std::string skin;
+        if (const auto* drone = dynamic_cast<const DronBombardero*>(enemy)) {
+            skin = drone->getSkinBase();
+        }
+        if (skin.empty()) {
+            skin = enemy->spriteBaseId;
+        }
+        if (skin.empty()) {
+            const std::size_t dot = enemy->currentSpriteName.find('.');
+            skin = (dot == std::string::npos) ? enemy->currentSpriteName : enemy->currentSpriteName.substr(0, dot);
+        }
+
+        if (skin == "dronazul" && canRenderDronAzulGlb) {
+            outVao = dronAzulGlbVAO;
+            outIndexCount = dronAzulGlbIndexCount;
+            outTexture = dronAzulGlbTexture;
+            return true;
+        }
+        if (skin == "dronrosa" && canRenderDronRosaGlb) {
+            outVao = dronRosaGlbVAO;
+            outIndexCount = dronRosaGlbIndexCount;
+            outTexture = dronRosaGlbTexture;
+            return true;
+        }
+        if (skin == "dronverde" && canRenderDronVerdeGlb) {
+            outVao = dronVerdeGlbVAO;
+            outIndexCount = dronVerdeGlbIndexCount;
+            outTexture = dronVerdeGlbTexture;
+            return true;
+        }
+        if (skin == "dronamarillo" && canRenderDronAmarilloGlb) {
+            outVao = dronAmarilloGlbVAO;
+            outIndexCount = dronAmarilloGlbIndexCount;
+            outTexture = dronAmarilloGlbTexture;
+            return true;
+        }
+
+        return false;
+    };
 
     // Bombas y explosiones en 3D.
     for (auto* b : gBombs) {
@@ -3034,6 +3243,8 @@ void Game::render3D() {
 
     const bool canRenderFlameUpGlb = canRenderFlamePowerUpGlb || canRenderFlameGlb;
     const bool canRenderSpeedUpGlb = canRenderSpeedPowerUpGlb;
+    const bool canRenderKingBomber3D = canRenderKingBomberGlb;
+    const bool canRenderDrones3D = canRenderAnyDronGlb;
 
     const bool canRenderPlayerGlb =
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
@@ -3050,7 +3261,7 @@ void Game::render3D() {
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderBombGlb || canRenderFlameGlb || canRenderFlameUpGlb || canRenderSpeedUpGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderFlameGlb || canRenderFlameUpGlb || canRenderSpeedUpGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -3479,6 +3690,63 @@ void Game::render3D() {
             }
         }
 
+        if (canRenderKingBomber3D) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, kingBomberGlbTexture);
+
+            const float kKingModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                auto* king = dynamic_cast<KingBomber*>(enemy);
+                if (!king || king->lifeState != EnemyLifeState::Alive) continue;
+                if (hiddenByKingBlink(king)) continue;
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, king->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(king->facing) + kKingModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.03f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(1.54f, 1.54f, 1.54f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(kingBomberGlbVAO);
+                glDrawElements(GL_TRIANGLES, kingBomberGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
+        if (canRenderDrones3D) {
+            const float kDronModelYawOffset = 1.57079632679f;
+
+            for (auto* enemy : gEnemies) {
+                auto* dron = dynamic_cast<DronBombardero*>(enemy);
+                if (!dron || dron->lifeState != EnemyLifeState::Alive) continue;
+                if (hiddenByKingBlink(dron)) continue;
+
+                GLuint dronVao = 0;
+                GLsizei dronIndexCount = 0;
+                GLuint dronTexture = 0;
+                if (!resolveDroneRenderResource(dron, dronVao, dronIndexCount, dronTexture)) {
+                    continue;
+                }
+
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, dronTexture);
+
+                const glm::vec3 feet = ndcToWorld3D(gameMap, dron->position, 0.08f);
+                const float yaw = enemyDirectionToYawRadians(dron->facing) + kDronModelYawOffset;
+
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.015f, 0.0f));
+                model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.66f, 0.66f, 0.66f));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(dronVao);
+                glDrawElements(GL_TRIANGLES, dronIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
         if (wasBlendEnabled) {
             glEnable(GL_BLEND);
         }
@@ -3516,6 +3784,10 @@ void Game::render3D() {
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
 
+        if (hiddenByKingBlink(enemy)) {
+            continue;
+        }
+
         const bool isLeonEnemy =
             (enemy->spriteBaseId == "leon") ||
             (enemy->currentSpriteName.size() >= 5 && enemy->currentSpriteName.compare(0, 5, "leon.") == 0);
@@ -3534,6 +3806,35 @@ void Game::render3D() {
         const bool isDragonEnemy =
             (enemy->spriteBaseId == "dragon") ||
             (enemy->currentSpriteName.size() >= 7 && enemy->currentSpriteName.compare(0, 7, "dragon.") == 0);
+        const bool isKingBomberEnemy = (dynamic_cast<KingBomber*>(enemy) != nullptr);
+        const bool isDronBombarderoEnemy = (dynamic_cast<DronBombardero*>(enemy) != nullptr);
+        const bool enemyUsesFireSprite = usesFireSprite(enemy);
+        bool hasResolvedDronModel = false;
+        if (canRenderDrones3D && isDronBombarderoEnemy) {
+            GLuint dronVao = 0;
+            GLsizei dronIndexCount = 0;
+            GLuint dronTexture = 0;
+            hasResolvedDronModel = resolveDroneRenderResource(enemy, dronVao, dronIndexCount, dronTexture);
+        }
+
+        if ((canRenderKingBomber3D && isKingBomberEnemy && enemyUsesFireSprite) ||
+            (hasResolvedDronModel && enemyUsesFireSprite)) {
+            glm::vec4 fireUvRect(0.0f, 0.0f, 1.0f, 1.0f);
+            if (getUvRectForSprite(gEnemyAtlas, enemy->currentSpriteName, fireUvRect)) {
+                glm::vec3 fireFeet = ndcToWorld3D(gameMap, enemy->position, 0.02f);
+                float fireWidth = 0.56f;
+                float fireHeight = 0.74f;
+                if (isKingBomberEnemy) {
+                    fireFeet += glm::vec3(0.0f, 0.60f, 0.0f);
+                    fireWidth = 0.92f;
+                    fireHeight = 1.08f;
+                } else {
+                    fireFeet += glm::vec3(0.0f, 0.36f, 0.0f);
+                }
+                drawSpriteBillboard3D(enemyTexture, fireUvRect, fireFeet, fireWidth, fireHeight, enemy->flipX, glm::vec4(1.0f));
+            }
+        }
+
         if (canRenderLeonGlb && isLeonEnemy) {
             continue;
         }
@@ -3550,6 +3851,12 @@ void Game::render3D() {
             continue;
         }
         if (canRenderDragonGlb && isDragonEnemy) {
+            continue;
+        }
+        if (canRenderKingBomber3D && isKingBomberEnemy) {
+            continue;
+        }
+        if (hasResolvedDronModel) {
             continue;
         }
 
