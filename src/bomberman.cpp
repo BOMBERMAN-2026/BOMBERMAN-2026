@@ -76,6 +76,8 @@ static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
 static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
 static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
+static const char* kFlamePowerUpGlbPath = "models/3D/fireball 3d model.glb";
+static const char* kSpeedPowerUpGlbPath = "models/3D/roller skate 3d model.glb";
 static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
 static const char* kDragonGlbPath = "models/3D/teal creature 3d model.glb";
 static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
@@ -123,6 +125,16 @@ GLuint flameGlbVBO = 0;
 GLuint flameGlbEBO = 0;
 GLsizei flameGlbIndexCount = 0;
 GLuint flameGlbTexture = 0;
+GLuint flamePowerUpGlbVAO = 0;
+GLuint flamePowerUpGlbVBO = 0;
+GLuint flamePowerUpGlbEBO = 0;
+GLsizei flamePowerUpGlbIndexCount = 0;
+GLuint flamePowerUpGlbTexture = 0;
+GLuint speedPowerUpGlbVAO = 0;
+GLuint speedPowerUpGlbVBO = 0;
+GLuint speedPowerUpGlbEBO = 0;
+GLsizei speedPowerUpGlbIndexCount = 0;
+GLuint speedPowerUpGlbTexture = 0;
 GLuint solGlbVAO = 0;
 GLuint solGlbVBO = 0;
 GLuint solGlbEBO = 0;
@@ -718,6 +730,28 @@ void CreateFlameGlbModel(const std::string& modelPath)
                                  flameGlbTexture);
 }
 
+void CreateFlamePowerUpGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("flamePowerUpGLB",
+                                 modelPath,
+                                 flamePowerUpGlbVAO,
+                                 flamePowerUpGlbVBO,
+                                 flamePowerUpGlbEBO,
+                                 flamePowerUpGlbIndexCount,
+                                 flamePowerUpGlbTexture);
+}
+
+void CreateSpeedPowerUpGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("speedPowerUpGLB",
+                                 modelPath,
+                                 speedPowerUpGlbVAO,
+                                 speedPowerUpGlbVBO,
+                                 speedPowerUpGlbEBO,
+                                 speedPowerUpGlbIndexCount,
+                                 speedPowerUpGlbTexture);
+}
+
 void CreateSolGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("solGLB",
@@ -1157,6 +1191,8 @@ void Game::ensureRenderResources() {
     CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
     CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
+    CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
+    CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
     CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
     CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
@@ -1866,6 +1902,14 @@ Game::~Game() {
         glDeleteTextures(1, &flameGlbTexture);
         flameGlbTexture = 0;
     }
+    if (flamePowerUpGlbTexture != 0) {
+        glDeleteTextures(1, &flamePowerUpGlbTexture);
+        flamePowerUpGlbTexture = 0;
+    }
+    if (speedPowerUpGlbTexture != 0) {
+        glDeleteTextures(1, &speedPowerUpGlbTexture);
+        speedPowerUpGlbTexture = 0;
+    }
     if (solGlbTexture != 0) {
         glDeleteTextures(1, &solGlbTexture);
         solGlbTexture = 0;
@@ -1911,6 +1955,12 @@ Game::~Game() {
     flameGlbVAO = flameGlbVBO = flameGlbEBO = 0;
     flameGlbIndexCount = 0;
     flameGlbTexture = 0;
+    flamePowerUpGlbVAO = flamePowerUpGlbVBO = flamePowerUpGlbEBO = 0;
+    flamePowerUpGlbIndexCount = 0;
+    flamePowerUpGlbTexture = 0;
+    speedPowerUpGlbVAO = speedPowerUpGlbVBO = speedPowerUpGlbEBO = 0;
+    speedPowerUpGlbIndexCount = 0;
+    speedPowerUpGlbTexture = 0;
     solGlbVAO = solGlbVBO = solGlbEBO = 0;
     solGlbIndexCount = 0;
     solGlbTexture = 0;
@@ -2827,6 +2877,10 @@ void Game::render3D() {
         (bombGlbVAO != 0 && bombGlbIndexCount > 0 && bombGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFlameGlb =
         (flameGlbVAO != 0 && flameGlbIndexCount > 0 && flameGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderFlamePowerUpGlb =
+        (flamePowerUpGlbVAO != 0 && flamePowerUpGlbIndexCount > 0 && flamePowerUpGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderSpeedPowerUpGlb =
+        (speedPowerUpGlbVAO != 0 && speedPowerUpGlbIndexCount > 0 && speedPowerUpGlbTexture != 0 && shader3DTextured != 0);
 
     // Bombas y explosiones en 3D.
     for (auto* b : gBombs) {
@@ -2903,6 +2957,84 @@ void Game::render3D() {
         }
     }
 
+    // Explosion de glitter al recoger power-up en modo 3D.
+    for (int r = 0; r < gameMap->getRows(); ++r) {
+        for (int c = 0; c < gameMap->getCols(); ++c) {
+            PowerUpType pickupType;
+            float pickupFxT = 0.0f;
+            if (!gameMap->getPowerUpPickupFx(r, c, pickupType, pickupFxT)) {
+                continue;
+            }
+            if (pickupType != PowerUpType::BombUp && pickupType != PowerUpType::FireUp && pickupType != PowerUpType::SpeedUp) {
+                continue;
+            }
+
+            const float easeOut = 1.0f - (1.0f - pickupFxT) * (1.0f - pickupFxT);
+            const float intensity = 1.0f - pickupFxT;
+            const float sparkleTwist = pickupFxT * 7.2f;
+            const float corePulse = 1.0f + 0.22f * std::sin(pickupFxT * 26.0f);
+            const float coreRadius = (0.16f + 0.44f * easeOut) * corePulse;
+            const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.14f + 0.24f * easeOut);
+
+            const glm::vec3 coreColor(0.75f + 0.95f * intensity,
+                                      0.75f + 0.95f * intensity,
+                                      0.75f + 0.95f * intensity);
+
+            drawMesh3D(sphereOrCubeVAO,
+                       sphereOrCubeIndexCount,
+                       center,
+                       glm::vec3(coreRadius, coreRadius, coreRadius),
+                       coreColor);
+
+            // Aro de onda expansiva que pierde intensidad segun avanza el efecto.
+            const float ringRadius = 0.24f + 1.20f * easeOut;
+            const float ringThickness = std::max(0.006f, 0.05f * intensity);
+            const glm::vec3 ringColor(0.55f + 1.05f * intensity,
+                                      0.55f + 1.05f * intensity,
+                                      0.55f + 1.05f * intensity);
+            drawMesh3D(sphereOrCubeVAO,
+                       sphereOrCubeIndexCount,
+                       center + glm::vec3(0.0f, 0.015f, 0.0f),
+                       glm::vec3(ringRadius, ringThickness, ringRadius),
+                       ringColor);
+
+            // Particulas glitter: chispas dorado/blanco con dispersión radial y desvanecido.
+            const int sparkleCount = 12;
+            const float kTwoPi = 6.28318530718f;
+            for (int i = 0; i < sparkleCount; ++i) {
+                const float seed = ((float)(r + 1) * 12.9898f)
+                                 + ((float)(c + 1) * 78.233f)
+                                 + ((float)(i + 1) * 37.719f)
+                                 + ((float)((int)pickupType + 1) * 19.171f);
+                const float hashBase = std::sin(seed) * 43758.5453f;
+                const float hash01 = hashBase - std::floor(hashBase);
+                const float angle = hash01 * kTwoPi + sparkleTwist + ((float)i * 0.18f);
+
+                const float radial = (0.14f + 0.30f * hash01) * (0.22f + 1.35f * easeOut);
+                const float lift = 0.05f + 0.30f * easeOut + 0.05f * std::sin((pickupFxT * 13.0f) + ((float)i * 0.7f));
+                const float twinkle = 0.62f + 0.38f * std::sin((pickupFxT * 38.0f) + ((float)i * 2.9f));
+                const float sparkleIntensity = std::max(0.0f, twinkle * intensity);
+                const float sparkleSize = (0.024f + 0.028f * hash01) * (0.24f + 0.90f * intensity);
+
+                const glm::vec3 sparklePos = center + glm::vec3(std::cos(angle) * radial,
+                                                                lift,
+                                                                std::sin(angle) * radial);
+                const glm::vec3 sparkleColor(0.70f + 1.00f * sparkleIntensity,
+                                             0.62f + 0.95f * sparkleIntensity,
+                                             0.48f + 0.82f * sparkleIntensity);
+
+                drawMesh3D(sphereOrCubeVAO,
+                           sphereOrCubeIndexCount,
+                           sparklePos,
+                           glm::vec3(sparkleSize, sparkleSize, sparkleSize),
+                           sparkleColor);
+            }
+        }
+    }
+
+    const bool canRenderFlameUpGlb = canRenderFlamePowerUpGlb || canRenderFlameGlb;
+    const bool canRenderSpeedUpGlb = canRenderSpeedPowerUpGlb;
+
     const bool canRenderPlayerGlb =
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderLeonGlb =
@@ -2918,7 +3050,7 @@ void Game::render3D() {
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderBombGlb || canRenderFlameGlb) {
+    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderBombGlb || canRenderFlameGlb || canRenderFlameUpGlb || canRenderSpeedUpGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -2980,6 +3112,69 @@ void Game::render3D() {
                     glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                     glBindVertexArray(bombGlbVAO);
                     glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
+                }
+            }
+        }
+
+        if (canRenderFlameUpGlb) {
+            const bool useDedicatedFlamePowerUpMesh = canRenderFlamePowerUpGlb;
+            const GLuint flameUpVao = useDedicatedFlamePowerUpMesh ? flamePowerUpGlbVAO : flameGlbVAO;
+            const GLsizei flameUpIndexCount = useDedicatedFlamePowerUpMesh ? flamePowerUpGlbIndexCount : flameGlbIndexCount;
+            const GLuint flameUpTexture = useDedicatedFlamePowerUpMesh ? flamePowerUpGlbTexture : flameGlbTexture;
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, flameUpTexture);
+
+            const float now = (float)glfwGetTime();
+            const float kFlameUpSpinSpeed = 2.05f;
+            const float kFlameUpScale = useDedicatedFlamePowerUpMesh ? 0.66f : 0.74f;
+
+            for (int r = 0; r < gameMap->getRows(); ++r) {
+                for (int c = 0; c < gameMap->getCols(); ++c) {
+                    PowerUpType puType;
+                    if (!gameMap->getVisiblePowerUpType(r, c, puType) || puType != PowerUpType::FireUp) {
+                        continue;
+                    }
+
+                    const float bob = 0.02f * std::sin((now * 3.2f) + ((float)r * 0.45f) + ((float)c * 0.40f));
+
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.12f) + glm::vec3(0.0f, bob, 0.0f));
+                    model = glm::rotate(model, now * kFlameUpSpinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
+                    model = glm::scale(model, glm::vec3(kFlameUpScale, kFlameUpScale, kFlameUpScale));
+
+                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glBindVertexArray(flameUpVao);
+                    glDrawElements(GL_TRIANGLES, flameUpIndexCount, GL_UNSIGNED_INT, 0);
+                }
+            }
+        }
+
+        if (canRenderSpeedUpGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, speedPowerUpGlbTexture);
+
+            const float now = (float)glfwGetTime();
+            const float kSpeedUpSpinSpeed = 2.35f;
+            const float kSpeedUpScale = 0.76f;
+
+            for (int r = 0; r < gameMap->getRows(); ++r) {
+                for (int c = 0; c < gameMap->getCols(); ++c) {
+                    PowerUpType puType;
+                    if (!gameMap->getVisiblePowerUpType(r, c, puType) || puType != PowerUpType::SpeedUp) {
+                        continue;
+                    }
+
+                    const float bob = 0.022f * std::sin((now * 3.6f) + ((float)r * 0.42f) + ((float)c * 0.33f));
+
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.11f) + glm::vec3(0.0f, bob, 0.0f));
+                    model = glm::rotate(model, now * kSpeedUpSpinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
+                    model = glm::scale(model, glm::vec3(kSpeedUpScale, kSpeedUpScale, kSpeedUpScale));
+
+                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glBindVertexArray(speedPowerUpGlbVAO);
+                    glDrawElements(GL_TRIANGLES, speedPowerUpGlbIndexCount, GL_UNSIGNED_INT, 0);
                 }
             }
         }

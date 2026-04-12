@@ -863,6 +863,18 @@ bool GameMap::getVisiblePowerUpType(int row, int col, PowerUpType& outType) cons
     return true;
 }
 
+bool GameMap::getPowerUpPickupFx(int row, int col, PowerUpType& outType, float& outNormalizedTime) const {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+
+    const Block& b = grid[row][col];
+    if (!b.powerUpPickupFxActive) return false;
+
+    outType = b.powerUpType;
+    outNormalizedTime = b.powerUpPickupFxTimer / kPowerUpPickupFxDuration;
+    outNormalizedTime = std::max(0.0f, std::min(1.0f, outNormalizedTime));
+    return true;
+}
+
 void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
                              GLuint uniformTintColor, GLuint uniformFlipX) {
     if (!powerUpTexturesLoaded) return;

@@ -152,6 +152,10 @@ public:
     // Consulta el power-up visible (revelado y no recogido) en una celda.
     bool getVisiblePowerUpType(int row, int col, PowerUpType& outType) const;
 
+    // Consulta si en una celda hay efecto de recogida activo.
+    // Devuelve el tipo de power-up y progreso normalizado [0..1].
+    bool getPowerUpPickupFx(int row, int col, PowerUpType& outType, float& outNormalizedTime) const;
+
     // Carga las texturas de los power-ups.
     void loadPowerUpTextures();
 
