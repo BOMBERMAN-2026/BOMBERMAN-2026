@@ -102,6 +102,9 @@ int main() {
         // Check and call events
         glfwPollEvents();
 
+        // Pollear gamepads y traducir a teclas equivalentes.
+        pollGamepads(bomberman->keys, bomberman->lastDirKey, bomberman->lastDirKeyP2);
+
         // Deberia estar dentro de un bucle de ticks?
         bomberman->processInput();
         // Deberia estar dentro de un bucle de ticks?

@@ -19,7 +19,6 @@
     static constexpr glm::vec2 scorePos(-1.117f, 0.935f);
     static constexpr glm::vec2 scorePos2(0.861f, 0.935f);
     static constexpr glm::vec2 scorePos5(0.015f, 0.935f);
-
     static constexpr glm::vec2 livesPos(-0.83f, 0.825f);
     static constexpr glm::vec2 livesPos2(1.175f, 0.825f);
     static constexpr glm::vec2 enemiesLeftPos(-0.1675f, 0.813f);
@@ -27,6 +26,11 @@
     static constexpr glm::vec2 timePos(0.2350f, 0.813f);
 
     // HUD del modo VS
+    static constexpr glm::vec2 livesPosVS1(-1.05f, 0.813f);
+    static constexpr glm::vec2 livesPosVS2(0.93f, 0.813f);
+    static constexpr glm::vec2 numWinsPos(-0.78f, 0.813f);
+    static constexpr glm::vec2 numWinsPos2(1.20f, 0.813f);
+    static constexpr glm::vec2 levelPosVS(-0.1285f, 0.813f);
 
 static constexpr float scaleUsualHud = 0.0028f;
 static constexpr float scaleLives = 0.0040f;
@@ -393,10 +397,10 @@ void GameMap::update(float deltaTime) {
             Block& b = grid[r][c];
             if (b.breaking) {
                 b.breakTimer += deltaTime;
-                if (b.breakTimer >= 0.08f) { // misma velocidad rápida que la explosión
-                    b.breakTimer -= 0.08f;
+                if (b.breakTimer >= 0.12f) { // velocidad de destrucción (un poco más lenta para apreciarla)
+                    b.breakTimer -= 0.12f;
                     b.breakFrame++;
-                    if (b.breakFrame >= 4) {
+                    if (b.breakFrame >= 5) {
                         b.breaking = false;
                         b.destroyed = true; // finalmente se destruye y pasa a ser suelo 100% transitable
                         // Revelar power-up si tenía uno escondido
@@ -408,10 +412,6 @@ void GameMap::update(float deltaTime) {
             }
         }
     }
-
-    // Decrementar el timer del nivel
-    levelTimeRemaining -= deltaTime;
-    if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 }
 
 // Recalcula tileSize/offsets para el aspect ratio actual y centra el mapa en pantalla.
@@ -779,6 +779,14 @@ void GameMap::renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, typ
         case typeOfHud::EnemiesLeft:
             displayInfo = std::to_string(data);
             break;
+        case typeOfHud::NumWins:
+            displayInfo = data > 99 ? "99" : std::to_string(data);
+            oss << std::setw(2) << std::setfill('0') << displayInfo;
+            displayInfo = oss.str();
+            break;
+        case typeOfHud::CurrentLevelVS:
+            displayInfo = currentLevelVS;
+            break;
         default:
             std::cerr << "Error: tipo de dato del HUD a mostrar no reconocido\n";
             break;
@@ -822,17 +830,30 @@ void GameMap::renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, typ
 }
 
 
-void GameMap::renderHud(GLuint vao, GLuint hudTexture,
-                        GLuint uniformModel, GLuint uniformUvRect, 
-                        SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture) {
+void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, 
+                        SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture,
+                        std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode) {
     float hudWidth = cols * tileSize;
 
     glActiveTexture(GL_TEXTURE0);
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-    if (!getUvRectForSprite(gScoreboardAtlas, "Scoreboard", uvRect)) {
-        std::cerr << "Advertencia: Sprite '" << "Scoreboard" << "' no encontrado en atlas del scoreboard\n";
-        exit(1);
+
+    // La variable gamemode es para decidir si estamos en modo historia (0) o versus (1) 
+    // (mirar dnd se llama renderHud para ver como se da el valor)
+
+    if (gamemode == 0) {
+        if (!getUvRectForSprite(gScoreboardAtlas, "scoreboard", uvRect)) {
+            std::cerr << "Advertencia: Sprite '" << "Scoreboard" << "' no encontrado en atlas del scoreboard\n";
+            exit(1);
+        }
     }
+    else if (gamemode == 1) {
+        if (!getUvRectForSprite(gScoreboardAtlas, "scoreboardVersusMode", uvRect)) {
+            std::cerr << "Advertencia: Sprite '" << "scoreboardVersusMode" << "' no encontrado en atlas del scoreboard\n";
+            exit(1);
+        }
+    }
+
     glBindTexture(GL_TEXTURE_2D, scoreboardTexture);
     glBindVertexArray(vao);
 
@@ -845,39 +866,54 @@ void GameMap::renderHud(GLuint vao, GLuint hudTexture,
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    // SCORES
+    if (gamemode == 0) { // Modo historia
+        // SCORES
         // esquina superior izquierda del HUD (1er player)
-    //renderScore(100, scorePos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(100, scorePos, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils((*playerScores)[0], scorePos, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-        // esquina superior derecha del HUD (2do player)
-    //renderScore(2000, scorePos2, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(2000, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+            // esquina superior derecha del HUD (2do player)
+        renderHudUtils( playerScores->size() > 1 ? (*playerScores)[1] : 0, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-        // centro (highest score)
-    //renderScore(100 + 2000 + 300 + 4000, scorePos5, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(100 + 2000 + 300 + 4000, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+            // centro (highest score)
+        renderHudUtils(5050, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-    // VIDAS
-        // esquina superior izquierda del HUD (1er player)
-    //renderLives(1, livesPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(1, livesPos, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        // VIDAS
+            // esquina superior izquierda del HUD (1er player)
+        renderHudUtils(gPlayers->at(0)->lives, livesPos, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-        // esquina inferior izquierda del HUD (2do player)
-    //renderLives(2, livesPos2, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(2, livesPos2, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+            // esquina inferior izquierda del HUD (2do player)
+            // comprobamos que tengamos dos players, sino ponemos 0
+        renderHudUtils( (gPlayers->size() > 1) ? gPlayers->at(1)->lives : 0, livesPos2, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-    // ENEMIGOS RESTANTES
-    //renderLives(6, enemiesLeftPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(6, enemiesLeftPos, scaleUsualHud, typeOfHud::EnemiesLeft, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        // ENEMIGOS RESTANTES
+        renderHudUtils(gEnemies->size(), enemiesLeftPos, scaleUsualHud, typeOfHud::EnemiesLeft, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-    // NIVEL ACTUAL
-    //renderCurrentLevel(levelPos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(0, levelPos, scaleUsualHud, typeOfHud::CurrentLevel, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        // NIVEL ACTUAL
+        currentLevel = currentGameLevel;
+        renderHudUtils(0, levelPos, scaleUsualHud, typeOfHud::CurrentLevel, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
-    // TIMER
-    //renderTimer(levelTimeRemaining, timePos, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-    renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        // TIMER
+        renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    }
+    else if (gamemode == 1) { // Modo Versus
+        // VIDAS
+            // esquina superior izquierda del HUD (1er player)
+        renderHudUtils(1, livesPosVS1, scaleUsualHud, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+            // esquina inferior izquierda del HUD (2do player)
+        renderHudUtils(2, livesPosVS2, scaleUsualHud, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        
+        // NUM WINS
+        renderHudUtils(10, numWinsPos, scaleUsualHud, typeOfHud::NumWins, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        renderHudUtils(10, numWinsPos2, scaleUsualHud, typeOfHud::NumWins, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // NIVEL ACTUAL
+        renderHudUtils(0, levelPosVS, scaleUsualHud, typeOfHud::CurrentLevelVS, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // TIMER
+        renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+    }
 }
 // ============================== Power-Ups ==============================
 

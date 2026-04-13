@@ -6,56 +6,74 @@
   },
   "sprites": {
     "0": {
-      "x": 469,
+      "x": 468,
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_amarillo_izquierda",
+      "nombre": "planta_verde_esquinasuperiorizquierda",
       "walkable": false,
       "type": "barrier"
     },
     "1": {
-      "x": 554,
+      "x": 523,
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_izquierda",
+      "nombre": "planta_verde_arriba",
       "walkable": false,
       "type": "barrier"
     },
     "2": {
-      "x": 631,
+      "x": 578,
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_arriba",
+      "nombre": "flor_arriba",
       "walkable": false,
       "type": "barrier"
     },
     "3": {
-      "x": 469,
-      "y": 290,
+      "x": 632,
+      "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_esquina_izquierda_arriba",
+      "nombre": "flor",
       "walkable": false,
       "type": "barrier"
     },
     "4": {
-      "x": 554,
-      "y": 288,
+      "x": 685,
+      "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_amarillo_arriba",
+      "nombre": "flor_central",
       "walkable": false,
       "type": "barrier"
     },
     "5": {
-      "x": 710,
+      "x": 738,
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_esquina_derecha_abajo",
+      "nombre": "caiman",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "51": {
+      "x": 791,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "caiman2",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "44": {
+      "x": 844,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "mono",
       "walkable": false,
       "type": "barrier"
     },
@@ -114,9 +132,9 @@
       "type": "floor"
     },
     "12": {
-      "x": 439,
-      "y": 222,
-      "w": 21,
+      "x": 440,
+      "y": 223,
+      "w": 24,
       "h": 48,
       "nombre": "muroexteriorIzq",
       "walkable": false,
@@ -124,66 +142,129 @@
       "align": "right"
     },
     "13": {
-      "x": 409,
+      "x": 439,
       "y": 222,
-      "w": 21,
+      "w": 24,
       "h": 48,
       "nombre": "muroexteriorDer",
       "walkable": false,
       "type": "barrier",
       "align": "left"
     },
-    "14": {
-      "x": 554,
-      "y": 168,
+    "34": {
+      "x": 377,
+      "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_arriba_izquierda",
+      "nombre": "planta_verde_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "35": {
+      "x": 377,
+      "y": 275,
+      "w": 48,
+      "h": 48,
+      "nombre": "arbol_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "36": {
+      "x": 377,
+      "y": 328,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_roja_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "37": {
+      "x": 377,
+      "y": 382,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_roja_entera_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "38": {
+      "x": 377,
+      "y": 435,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_con_tierra_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "39": {
+      "x": 428,
+      "y": 292,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_derecha_molona",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "40": {
+      "x": 321,
+      "y": 486,
+      "w": 48,
+      "h": 48,
+      "nombre": "esquina_inferior",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "14": {
+      "x": 321,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_verde_izquierda",
       "walkable": false,
       "type": "barrier"
     },
     "15": {
-      "x": 631,
-      "y": 169,
+      "x": 321,
+      "y": 275,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_arriba",
+      "nombre": "arbol_izquierda",
       "walkable": false,
       "type": "barrier"
     },
     "16": {
-      "x": 766,
-      "y": 169,
+      "x": 321,
+      "y": 328,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_izquierda",
+      "nombre": "planta_roja_izquierda",
       "walkable": false,
       "type": "barrier"
     },
     "17": {
-      "x": 818,
-      "y": 169,
+      "x": 321,
+      "y": 382,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_abajo_esquina_derecha",
+      "nombre": "planta_roja_entera_izquierda",
       "walkable": false,
       "type": "barrier"
     },
     "18": {
-      "x": 710,
-      "y": 169,
+      "x": 321,
+      "y": 435,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_amarilla_cambia_arriba",
+      "nombre": "planta_con_tierra_izquierda",
       "walkable": false,
       "type": "barrier"
     },
     "19": {
-      "x": 766,
-      "y": 223,
+      "x": 265,
+      "y": 382,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_amarilla_cambia_izquierda",
+      "nombre": "planta_izqueirda_molona",
       "walkable": false,
       "type": "barrier"
     },
@@ -204,6 +285,69 @@
       "nombre": "suelo_sombra_arriba_indestructible",
       "walkable": true,
       "type": "floor"
+    },
+    "22": {
+      "x": 155,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "verde_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "23": {
+      "x": 208,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "verde_flor_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "24": {
+      "x": 261,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor_completa_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "25": {
+      "x": 314,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "26": {
+      "x": 367,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor_completa_abajo_tallo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "27": {
+      "x": 420,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "matorral_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "28": {
+      "x": 473,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "matorral_v2_abajo",
+      "walkable": false,
+      "type": "barrier"
     },
     "bomb.0": {
       "x": 1090,
@@ -337,17 +481,6 @@
       "w": 48,
       "h": 48,
       "nombre": "break_3"
-    }
-  },
-  "animations": {
-    "interval": 0.15,
-    "swaps": {
-      "3": 14,
-      "4": 18,
-      "2": 15,
-      "0": 19,
-      "1": 16,
-      "5": 17
     }
   }
 }
