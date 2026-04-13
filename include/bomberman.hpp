@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "menu_intro.hpp"
+#include "gamepad_input.hpp"
 
 /*
  * bomberman.hpp

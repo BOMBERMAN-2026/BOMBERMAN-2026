@@ -114,9 +114,9 @@
       "type": "floor"
     },
     "12": {
-      "x": 439,
-      "y": 222,
-      "w": 21,
+      "x": 440,
+      "y": 223,
+      "w": 24,
       "h": 48,
       "nombre": "muroexteriorIzq",
       "walkable": false,
@@ -124,9 +124,9 @@
       "align": "right"
     },
     "13": {
-      "x": 409,
+      "x": 439,
       "y": 222,
-      "w": 21,
+      "w": 24,
       "h": 48,
       "nombre": "muroexteriorDer",
       "walkable": false,
@@ -337,17 +337,6 @@
       "w": 48,
       "h": 48,
       "nombre": "break_3"
-    }
-  },
-  "animations": {
-    "interval": 0.15,
-    "swaps": {
-      "3": 14,
-      "4": 18,
-      "2": 15,
-      "0": 19,
-      "1": 16,
-      "5": 17
     }
   }
 }

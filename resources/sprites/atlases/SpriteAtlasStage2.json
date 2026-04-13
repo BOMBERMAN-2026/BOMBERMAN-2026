@@ -10,7 +10,7 @@
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_amarillo_izquierda",
+      "nombre": "escudo_arriba",
       "walkable": false,
       "type": "barrier"
     },
@@ -19,7 +19,7 @@
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_izquierda",
+      "nombre": "borde_arriba_izquierda_esquina",
       "walkable": false,
       "type": "barrier"
     },
@@ -28,7 +28,7 @@
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_arriba",
+      "nombre": "borde_arriba_derecha_esquina",
       "walkable": false,
       "type": "barrier"
     },
@@ -37,7 +37,7 @@
       "y": 290,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_esquina_izquierda_arriba",
+      "nombre": "borde_mitad_negro_arriba",
       "walkable": false,
       "type": "barrier"
     },
@@ -55,7 +55,7 @@
       "y": 222,
       "w": 48,
       "h": 48,
-      "nombre": "borde_azul_esquina_derecha_abajo",
+      "nombre": "barrera_medio_oscura_derecha",
       "walkable": false,
       "type": "barrier"
     },
@@ -138,7 +138,7 @@
       "y": 168,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_arriba_izquierda",
+      "nombre": "muro_circulo_blanco",
       "walkable": false,
       "type": "barrier"
     },
@@ -147,7 +147,7 @@
       "y": 169,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_arriba",
+      "nombre": "barrera_entero_izquierda",
       "walkable": false,
       "type": "barrier"
     },
@@ -156,7 +156,7 @@
       "y": 169,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_izquierda",
+      "nombre": "esquina_debajo_izquierda_barrera",
       "walkable": false,
       "type": "barrier"
     },
@@ -165,7 +165,7 @@
       "y": 169,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_azul_cambia_abajo_esquina_derecha",
+      "nombre": "esquina_debajo_derecha_barrera",
       "walkable": false,
       "type": "barrier"
     },
@@ -174,7 +174,7 @@
       "y": 169,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_amarilla_cambia_arriba",
+      "nombre": "muro_luz_blanca_izquierda",
       "walkable": false,
       "type": "barrier"
     },
@@ -183,7 +183,7 @@
       "y": 223,
       "w": 48,
       "h": 48,
-      "nombre": "bombilla_amarilla_cambia_izquierda",
+      "nombre": "barrera_entera_abajo",
       "walkable": false,
       "type": "barrier"
     },
@@ -205,6 +205,78 @@
       "walkable": true,
       "type": "floor"
     },
+    "22": {
+      "x": 554,
+      "y": 111,
+      "w": 48,
+      "h": 48,
+      "nombre": "barrera_mitad_negro_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "23": {
+      "x": 488,
+      "y": 168,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "24": {
+      "x": 488,
+      "y": 113,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_izquierda_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "25": {
+      "x": 488,
+      "y": 221,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_izquierda_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "26": {
+      "x": 684,
+      "y": 111,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "27": {
+      "x": 632,
+      "y": 111,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_arriba_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "28": {
+      "x": 737,
+      "y": 111,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_arriba_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "29": {
+      "x": 792,
+      "y": 111,
+      "w": 48,
+      "h": 48,
+      "nombre": "barrera_medio_oscura_debajo",
+      "walkable": false,
+      "type": "barrier"
+    },
     "30": {
       "x": 0,
       "y": 0,
@@ -213,6 +285,85 @@
       "nombre": "dummy",
       "walkable": true,
       "type": "floor"
+    },
+    "31": {
+      "x": 821,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_luz_blanca_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "32": {
+      "x": 338,
+      "y": 112,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "33": {
+      "x": 286,
+      "y": 112,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_abajo_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "34": {
+      "x": 389,
+      "y": 112,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_abajo_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "35": {
+      "x": 819,
+      "y": 223,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_luz_blanca_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "36": {
+      "x": 285,
+      "y": 178,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_entero_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "37": {
+      "x": 338,
+      "y": 228,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },"38": {
+      "x": 338,
+      "y": 178,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_derecha_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },"39": {
+      "x": 338,
+      "y": 278,
+      "w": 48,
+      "h": 48,
+      "nombre": "escudo_derecha_abajo",
+      "walkable": false,
+      "type": "barrier"
     },
     "bomb.0": {
       "x": 1090,
@@ -346,17 +497,6 @@
       "w": 48,
       "h": 48,
       "nombre": "break_3"
-    }
-  },
-  "animations": {
-    "interval": 0.15,
-    "swaps": {
-      "3": 14,
-      "4": 18,
-      "2": 15,
-      "0": 19,
-      "1": 16,
-      "5": 17
     }
   }
 }

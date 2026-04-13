@@ -400,7 +400,7 @@ void GameMap::update(float deltaTime) {
                 if (b.breakTimer >= 0.08f) { // misma velocidad rápida que la explosión
                     b.breakTimer -= 0.08f;
                     b.breakFrame++;
-                    if (b.breakFrame >= 4) {
+                    if (b.breakFrame >= 5) {
                         b.breaking = false;
                         b.destroyed = true; // finalmente se destruye y pasa a ser suelo 100% transitable
                         // Revelar power-up si tenía uno escondido
