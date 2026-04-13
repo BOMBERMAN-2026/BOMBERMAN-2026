@@ -3,6 +3,8 @@
 
 #include <GL/glew.h>
 #include <glm/glm.hpp>
+#include "player.hpp"
+#include "enemy.hpp"
 #include "sprite_atlas.hpp"
 #include "tile_animator.hpp"
 #include "power_up.hpp"
@@ -81,7 +83,9 @@ enum class typeOfHud {
     Lives,
     EnemiesLeft,
     CurrentLevel,
-    Timer
+    Timer,
+    NumWins,
+    CurrentLevelVS
 };
 
 // Spawn de enemigo definido por nivel.
@@ -108,8 +112,8 @@ public:
                 GLuint uniformModel, GLuint uniformUvRect,
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
-    void renderHud(GLuint vao, GLuint hudTexture,GLuint uniformModel, 
-                   GLuint uniformUvRect, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture);
+    void renderHud(GLuint vao,GLuint uniformModel, GLuint uniformUvRect, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
+                   std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode);
     
     void renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, 
                         typeOfHud hudType, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
@@ -210,9 +214,8 @@ private:
 
     int destroyedFloorId = 10;            // Sprite al destruir (por defecto; se recalcula dinámico en render)
 
-    // Timer del nivel
-    float levelTimeRemaining = 120.0f;    // Tiempo restante del nivel en segundos (2 minutos)
     std::string currentLevel = "5-5";
+    std::string currentLevelVS = "2";
 
     // Convierte el string "type" del atlas JSON a BlockType
     static BlockType blockTypeFromString(const std::string& typeStr);
