@@ -348,7 +348,8 @@
       "nombre": "escudo_derecha",
       "walkable": false,
       "type": "barrier"
-    },"38": {
+    },
+    "38": {
       "x": 338,
       "y": 178,
       "w": 48,
@@ -356,7 +357,8 @@
       "nombre": "escudo_derecha_arriba",
       "walkable": false,
       "type": "barrier"
-    },"39": {
+    },
+    "39": {
       "x": 338,
       "y": 278,
       "w": 48,
@@ -497,6 +499,13 @@
       "w": 48,
       "h": 48,
       "nombre": "break_3"
+    },
+    "destructible_break.4": {
+      "x": 633,
+      "y": 484,
+      "w": 48,
+      "h": 48,
+      "nombre": "break_4"
     }
   }
 }

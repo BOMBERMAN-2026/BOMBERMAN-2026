@@ -397,8 +397,8 @@ void GameMap::update(float deltaTime) {
             Block& b = grid[r][c];
             if (b.breaking) {
                 b.breakTimer += deltaTime;
-                if (b.breakTimer >= 0.08f) { // misma velocidad rápida que la explosión
-                    b.breakTimer -= 0.08f;
+                if (b.breakTimer >= 0.12f) { // velocidad de destrucción (un poco más lenta para apreciarla)
+                    b.breakTimer -= 0.12f;
                     b.breakFrame++;
                     if (b.breakFrame >= 5) {
                         b.breaking = false;
