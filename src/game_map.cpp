@@ -412,10 +412,6 @@ void GameMap::update(float deltaTime) {
             }
         }
     }
-
-    // Decrementar el timer del nivel
-    levelTimeRemaining -= deltaTime;
-    if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 }
 
 // Recalcula tileSize/offsets para el aspect ratio actual y centra el mapa en pantalla.
@@ -834,10 +830,9 @@ void GameMap::renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, typ
 }
 
 
-void GameMap::renderHud(GLuint vao, GLuint hudTexture,
-                        GLuint uniformModel, GLuint uniformUvRect, 
+void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, 
                         SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture,
-                        uint8_t gamemode) {
+                        std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode) {
     float hudWidth = cols * tileSize;
 
     glActiveTexture(GL_TEXTURE0);
@@ -874,25 +869,27 @@ void GameMap::renderHud(GLuint vao, GLuint hudTexture,
     if (gamemode == 0) { // Modo historia
         // SCORES
         // esquina superior izquierda del HUD (1er player)
-        renderHudUtils(100, scorePos, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils((*playerScores)[0], scorePos, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
             // esquina superior derecha del HUD (2do player)
-        renderHudUtils(2000, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils( playerScores->size() > 1 ? (*playerScores)[1] : 0, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
             // centro (highest score)
-        renderHudUtils(100 + 2000 + 300 + 4000, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils(5050, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // VIDAS
             // esquina superior izquierda del HUD (1er player)
-        renderHudUtils(1, livesPos, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils(gPlayers->at(0)->lives, livesPos, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
             // esquina inferior izquierda del HUD (2do player)
-        renderHudUtils(2, livesPos2, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+            // comprobamos que tengamos dos players, sino ponemos 0
+        renderHudUtils( (gPlayers->size() > 1) ? gPlayers->at(1)->lives : 0, livesPos2, scaleLives, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // ENEMIGOS RESTANTES
-        renderHudUtils(6, enemiesLeftPos, scaleUsualHud, typeOfHud::EnemiesLeft, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils(gEnemies->size(), enemiesLeftPos, scaleUsualHud, typeOfHud::EnemiesLeft, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // NIVEL ACTUAL
+        currentLevel = currentGameLevel;
         renderHudUtils(0, levelPos, scaleUsualHud, typeOfHud::CurrentLevel, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // TIMER

@@ -11,6 +11,7 @@
 #include "menu_intro.hpp"
 #include "gamepad_input.hpp"
 
+
 /*
  * bomberman.hpp
  * ------------
@@ -46,6 +47,10 @@ enum class Camera3DType {
     PerspectiveFixed,
     PerspectiveMobile,
     FirstPerson
+};
+
+static std::vector<std::string> mapNumeration = {
+    "1-2", "3-2", "3-6", "4-2", "6-6"
 };
 
 // Include MenuIntroScreen after GameMode enum
@@ -108,6 +113,11 @@ private:
     void returnToMenuFromGame(bool resetRun);
 
 public:
+
+    // // Global variables for OpenGL
+    // GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX, uniformWhiteFlash;
+
+    // GLuint texture;
     // Input
     std::map<GLint, GLint> keys;           // Estado: Release(0), Press(1), Repeat(2)
     GLint lastDirKey = GLFW_KEY_UNKNOWN;   // Última flecha pulsada (P1)
@@ -128,6 +138,10 @@ public:
 
     // Timing
     float deltaTime = 0.0f;
+    float levelTimeRemaining = 121.0f;
+    std::string currentGameLevel = "5-5";
+    std::string currentLevelVS = "2";
+    
 
     Game(GLFWwindow* window, GLuint width, GLuint height)
         : state(GAME_INTRO), WIDTH(width), HEIGHT(height), window(window) {}
