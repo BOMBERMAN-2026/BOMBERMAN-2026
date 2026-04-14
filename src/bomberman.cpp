@@ -85,7 +85,12 @@ static const char* kDronVerdeGlbPath = "models/3D/green robot 3d model.glb";
 static const char* kDronAmarilloGlbPath = "models/3D/yellow robot 3d model.glb";
 static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
 static const char* kDragonGlbPath = "models/3D/teal creature 3d model.glb";
-static const char* kHorizonBackgroundPath = "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg";
+static const char* kHorizonBackgroundCandidates[] = {
+    "models/3D/Fondo3D.jpeg",
+    "models/Fondo3D.jpeg",
+    "build/Fondo3D.jpeg",
+    "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg"
+};
 
 GLuint cubeVAO = 0;
 GLuint cubeVBO = 0;
@@ -1253,6 +1258,26 @@ void CompileShaders()
 
 GLuint LoadTexture(const char* filePath);
 
+static GLuint loadHorizonTextureWithFallback() {
+    GLuint textureId = 0;
+    for (const char* candidatePath : kHorizonBackgroundCandidates) {
+        const std::string resolvedPath = resolveAssetPath(candidatePath);
+        textureId = ResourceManager::loadTexture("horizon3D", resolvedPath, LoadTexture);
+        if (textureId != 0) {
+            glBindTexture(GL_TEXTURE_2D, textureId);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            return textureId;
+        }
+    }
+
+    std::cerr << "[Render] Aviso: no se pudo cargar fondo 3D. Rutas probadas:\n";
+    for (const char* candidatePath : kHorizonBackgroundCandidates) {
+        std::cerr << "  - " << resolveAssetPath(candidatePath) << "\n";
+    }
+    return 0;
+}
+
 // ============================== Game: run/level helpers ==============================
 
 /*
@@ -1287,16 +1312,6 @@ void Game::ensureRenderResources() {
     CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
-
-    const std::string horizonTexPath = resolveAssetPath(kHorizonBackgroundPath);
-    horizonTexture = ResourceManager::loadTexture("horizon3D", horizonTexPath, LoadTexture);
-    if (horizonTexture != 0) {
-        glBindTexture(GL_TEXTURE_2D, horizonTexture);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    } else {
-        std::cerr << "[Render] Aviso: no se pudo cargar fondo 3D desde: " << horizonTexPath << "\n";
-    }
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1879,6 +1894,9 @@ static std::string getKeyName(GLint key){
 
 void Game::toggleViewMode() {
     viewMode = (viewMode == ViewMode::Mode2D) ? ViewMode::Mode3D : ViewMode::Mode2D;
+    surpriseHorizonVisible3D = false;
+    surpriseKey3TapCount = 0;
+    surpriseKey3LastTapTime = -10.0;
 
     const bool shouldCaptureFirstPersonMouse =
         (viewMode == ViewMode::Mode3D && camera3DType == Camera3DType::FirstPerson && window != nullptr);
@@ -2184,6 +2202,39 @@ void Game::processInput() {
     }
 
     if (this->state != GAME_PLAYING) return;
+
+    if (this->viewMode != ViewMode::Mode3D) {
+        this->surpriseKey3TapCount = 0;
+        this->surpriseKey3LastTapTime = -10.0;
+    } else if (this->keys[GLFW_KEY_3] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_3] = GLFW_REPEAT;
+
+        const double now = glfwGetTime();
+        const double kDoubleTapWindowSeconds = 0.45;
+
+        if ((now - this->surpriseKey3LastTapTime) <= kDoubleTapWindowSeconds) {
+            this->surpriseKey3TapCount += 1;
+        } else {
+            this->surpriseKey3TapCount = 1;
+        }
+        this->surpriseKey3LastTapTime = now;
+
+        if (this->surpriseKey3TapCount >= 2) {
+            if (horizonTexture == 0) {
+                horizonTexture = loadHorizonTextureWithFallback();
+            }
+
+            if (horizonTexture != 0) {
+                this->surpriseHorizonVisible3D = true;
+                std::cout << "[Render] Fondo 3D sorpresa revelado con tecla 3\n";
+            } else {
+                std::cout << "[Render] No se pudo revelar el fondo 3D (textura no disponible)\n";
+            }
+
+            this->surpriseKey3TapCount = 0;
+            this->surpriseKey3LastTapTime = -10.0;
+        }
+    }
 
     if (shouldCaptureFirstPersonMouse) {
         double mouseX = 0.0;
@@ -2679,7 +2730,7 @@ void Game::render3D() {
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (horizonTexture != 0 && shader != 0 && VAO != 0) {
+    if (surpriseHorizonVisible3D && horizonTexture != 0 && shader != 0 && VAO != 0) {
         glDepthMask(GL_FALSE);
         glDisable(GL_DEPTH_TEST);
 
