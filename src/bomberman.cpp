@@ -1,9 +1,9 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
 #include "bomb.hpp"
-#include "menu_intro.hpp"
+#include "menu.hpp"
 #include "enemies/leon.hpp"
 #include "enemies/bebe_lloron.hpp"
 #include "enemies/babosa.hpp"
@@ -49,11 +49,24 @@
 #include <fstream>
 #include <sstream>
 
-static std::vector<Player*> gPlayers;
 GameMap* gameMap;
+
+// Atlases y texturas
+
+SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
+SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
+SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
+SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
+
 GLuint mapTexture;
-GLuint hudTexture;
 GLuint horizonTexture;
+GLuint enemyTexture = 0;
+GLuint scoreboardTexture = 0; // Textura del scoreboard/HUD 
+
+// Vectores de entidades
+std::vector<Player*> gPlayers;
+std::vector<Enemy*> gEnemies;
+std::vector<Bomb*> gBombs;
 
 // ============================== OpenGL: estado global ==============================
 
@@ -202,16 +215,6 @@ GLuint uniform3DTexturedLightColor = 0;
 GLuint uniform3DTexturedAmbientStrength = 0;
 GLuint uniform3DTexturedSpecularStrength = 0;
 GLuint uniform3DTexturedShininess = 0;
-
-SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
-
-SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
-GLuint enemyTexture = 0;
-
-SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
-
-std::vector<Enemy*> gEnemies;
-std::vector<Bomb*> gBombs;
 
 static constexpr float kDefaultPlayerSpeed = 0.4f;
 static constexpr glm::vec2 kDefaultPlayerSize(0.2f, 0.2f);
@@ -1355,28 +1358,19 @@ void Game::ensureGameplayAssets() {
         }
     }
 
-    // Textura del mapa + HUD (por ahora fijas)
+    // Textura del HUD (fija)
     {
-        const std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage1/sprites-Stage1.png");
-        mapTexture = LoadTexture(mapTexPath.c_str());
-        if (mapTexture == 0) {
-            std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
+        const std::string scoreboardAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasScoreboard.json");
+        if (!loadSpriteAtlasMinimal(scoreboardAtlasPath, gScoreboardAtlas)) {
+            std::cerr << "Error cargando atlas del scoreboard: " << scoreboardAtlasPath << std::endl;
             std::exit(EXIT_FAILURE);
         }
 
-        const std::string hudTexPath = resolveAssetPath("resources/sprites/marcadores_bomban.png");
-        hudTexture = LoadTexture(hudTexPath.c_str());
-        if (hudTexture == 0) {
-            std::cerr << "Error cargando textura del HUD: " << hudTexPath << std::endl;
+        const std::string scoreboardTexPath = resolveAssetPath(gScoreboardAtlas.imagePath);  // Usa la ruta del JSON
+        scoreboardTexture = LoadTexture(scoreboardTexPath.c_str());
+        if (scoreboardTexture == 0) {
+            std::cerr << "Error cargando textura del scoreboard: " << scoreboardTexPath << std::endl;
             std::exit(EXIT_FAILURE);
-        }
-    }
-
-    // Atlas de bombas (misma sprite sheet del stage)
-    {
-        const std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage1.json");
-        if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
-            std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
         }
     }
 
@@ -1441,13 +1435,37 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         return;
     }
 
+    int stageNum = levelToStage[levelIndex];
+    std::string stageNumStr = std::to_string(stageNum);
+
+    currentGameLevel = mapNumeration[levelIndex];
+    levelTimeRemaining = 121.0f;
+
+    if (mapTexture != 0) {
+        glDeleteTextures(1, &mapTexture);
+        mapTexture = 0;
+    }
+
+    std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage" + stageNumStr + "/sprites-Stage" + stageNumStr + ".png");
+    mapTexture = LoadTexture(mapTexPath.c_str());
+    if (mapTexture == 0) {
+        std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json");
+    if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
+        std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+    }
+
     if (!gameMap->loadFromFile(levelSequence[levelIndex])) {
         std::cerr << "Error cargando mapa: " << levelSequence[levelIndex] << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
-    if (!gameMap->loadAtlas("resources/sprites/atlases/SpriteAtlasStage1.json")) {
-        std::cerr << "Error cargando atlas del mapa" << std::endl;
+    std::string mapAtlasPath = "resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json";
+    if (!gameMap->loadAtlas(mapAtlasPath)) {
+        std::cerr << "Error cargando atlas del mapa: " << mapAtlasPath << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -1517,7 +1535,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                     break;
                 }
                 case EnemySpawnType::KingBomber: {
-                    auto* e = new KingBomber(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    auto* e = new KingBomber(pos, kDefaultPlayerSize, /*speed=*/kDefaultPlayerSpeed);
                     e->currentSpriteName = "kingbomber1.abajo.0";
                     enemy = e;
                     break;
@@ -1567,31 +1585,55 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     gameMap->placePowerUps();
 }
 
-// Arranca una partida nueva desde nivel_01 (├¡ndice 0).
+// Arranca una partida nueva desde nivel_01 (índice 0).
 void Game::startNewRun(GameMode newMode) {
     mode = newMode;
     currentLevelIndex = 0;
     currentLevelHadEnemies = false;
     playerScores.clear();
 
-    state = GAME_PLAYING;
-    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+    // Transicionar a CINEMATIC para reproducir cinemática del primer nivel antes de cargar
+    this->state = GAME_CINEMATIC;
+    this->currentCinematicType = CinematicType::LevelStart;
+    this->nextStateAfterCinematic = GAME_PLAYING;
+    this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
 
-    // Por si el men├║ dej├│ la marca de transici├│n activa.
-    menuIntroScreen.resetTransition();
+    // Abrir el video de la cinemática del primer nivel
+    std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
+    cinematicPlayer.open(videoPath);
+
+    // Por si el menú dejó la marca de transición activa.
+    menuScreen.resetTransition();
 }
 
 // Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
 void Game::advanceToNextLevel() {
     const int nextIndex = currentLevelIndex + 1;
     if (nextIndex >= (int)levelSequence.size()) {
-        // No hay ranking ni pantalla de victoria: volver al men├║.
-        returnToMenuFromGame(/*resetRun=*/true);
+        // No hay ranking ni pantalla de victoria: volver al menú.
+        if (mode == GameMode::TwoPlayers) {
+            // Reproducir cinematica fin de historia antes de volver a menu.
+            this->state = GAME_CINEMATIC;
+            this->currentCinematicType = CinematicType::HistoryEnd;
+            this->nextStateAfterCinematic = GAME_MENU;
+            std::string videoPath = resolveAssetPath("resources/video/HistoryEnd.mp4");
+            cinematicPlayer.open(videoPath);
+        } else {
+            returnToMenuFromGame(/*resetRun=*/true);
+        }
         return;
     }
 
     currentLevelIndex = nextIndex;
-    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/true);
+    // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar
+    this->state = GAME_CINEMATIC;
+    this->currentCinematicType = CinematicType::LevelStart;
+    this->nextStateAfterCinematic = GAME_PLAYING;
+    this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+
+    // Abrir el video de la cinemática del nivel
+    std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
+    cinematicPlayer.open(videoPath);
 }
 
 // Sale a men├║ desde gameplay (Game Over / fin de campa├▒a).
@@ -1635,259 +1677,6 @@ GLuint LoadTexture(const char* filePath)
 
     stbi_image_free(data);
     return textureID;
-}
-
-// ============================== Utilidades (debug/keys) ==============================
-
-
-// Convierte un c├│digo de tecla GLFW en una etiqueta corta (utilidad de depuraci├│n).
-static std::string getKeyName(GLint key){
-    std::string str;
-    switch(key) {
-        case GLFW_KEY_UNKNOWN: str = "UNK";
-        break;
-        case GLFW_KEY_SPACE: str = "SPACE";
-        break;
-        case GLFW_KEY_APOSTROPHE: str = "APOS";
-        break;
-        case GLFW_KEY_COMMA: str = ",";
-        break;
-        case GLFW_KEY_MINUS: str = "-";
-        break;
-        case GLFW_KEY_PERIOD: str = "PER";
-        break;
-        case GLFW_KEY_SLASH: str = "/";
-        break;
-        case GLFW_KEY_0: str = "0";
-        break;
-        case GLFW_KEY_1: str = "1";
-        break;
-        case GLFW_KEY_2: str = "2";
-        break;
-        case GLFW_KEY_3: str = "3";
-        break;
-        case GLFW_KEY_4: str = "4";
-        break;
-        case GLFW_KEY_5: str = "5";
-        break;
-        case GLFW_KEY_6: str = "6";
-        break;
-        case GLFW_KEY_7: str = "7";
-        break;
-        case GLFW_KEY_8: str = "8";
-        break;
-        case GLFW_KEY_9: str = "9";
-        break;
-        case GLFW_KEY_SEMICOLON: str = "'";
-        break;
-        case GLFW_KEY_EQUAL: str = "=";
-        break;
-        case GLFW_KEY_A: str = "A";
-        break;
-        case GLFW_KEY_B: str = "B";
-        break;
-        case GLFW_KEY_C: str = "C";
-        break;
-        case GLFW_KEY_D: str = "D";
-        break;
-        case GLFW_KEY_E: str = "E";
-        break;
-        case GLFW_KEY_F: str = "F";
-        break;
-        case GLFW_KEY_G: str = "G";
-        break;
-        case GLFW_KEY_H: str = "H";
-        break;
-        case GLFW_KEY_I: str = "I";
-        break;
-        case GLFW_KEY_J: str = "J";
-        break;
-        case GLFW_KEY_K: str = "K";
-        break;
-        case GLFW_KEY_L: str = "L";
-        break;
-        case GLFW_KEY_M: str = "M";
-        break;
-        case GLFW_KEY_N: str = "N";
-        break;
-        case GLFW_KEY_O: str = "O";
-        break;
-        case GLFW_KEY_P: str = "P";
-        break;
-        case GLFW_KEY_Q: str = "Q";
-        break;
-        case GLFW_KEY_R: str = "R";
-        break;
-        case GLFW_KEY_S: str = "S";
-        break;
-        case GLFW_KEY_T: str = "T";
-        break;
-        case GLFW_KEY_U: str = "U";
-        break;
-        case GLFW_KEY_V: str = "V";
-        break;
-        case GLFW_KEY_W: str = "W";
-        break;
-        case GLFW_KEY_X: str = "X";
-        break;
-        case GLFW_KEY_Y: str = "Y";
-        break;
-        case GLFW_KEY_Z: str = "Z";
-        break;
-        case GLFW_KEY_LEFT_BRACKET: str = "{";
-        break;
-        case GLFW_KEY_BACKSLASH: str = "\\";
-        break;
-        case GLFW_KEY_RIGHT_BRACKET: str = "}";
-        break;
-        case GLFW_KEY_GRAVE_ACCENT: str = "`";
-        break;
-        case GLFW_KEY_WORLD_1: str = "W1";
-        break;
-        case GLFW_KEY_WORLD_2: str = "W2";
-        break;
-        case GLFW_KEY_ESCAPE: str = "ESC";
-        break;
-        case GLFW_KEY_ENTER: str = "ENTER";
-        break;
-        case GLFW_KEY_TAB: str = "TAB";
-        break;
-        case GLFW_KEY_BACKSPACE: str = "BS";
-        break;
-        case GLFW_KEY_INSERT: str = "INS";
-        break;
-        case GLFW_KEY_DELETE: str = "DEL";
-        break;
-        case GLFW_KEY_RIGHT: str = "RIGHT";
-        break;
-        case GLFW_KEY_LEFT: str = "LEFT";
-        break;
-        case GLFW_KEY_DOWN: str = "DOWN";
-        break;
-        case GLFW_KEY_UP: str = "UP";
-        break;
-        case GLFW_KEY_PAGE_UP: str = "PAG.UP";
-        break;
-        case GLFW_KEY_PAGE_DOWN: str = "PAG.DOWN";
-        break;
-        case GLFW_KEY_HOME: str = "HOME";
-        break;
-        case GLFW_KEY_END: str = "END";
-        break;
-        case GLFW_KEY_CAPS_LOCK: str = "C.LOCK";
-        break;
-        case GLFW_KEY_SCROLL_LOCK: str = "S.LOCK";
-        break;
-        case GLFW_KEY_NUM_LOCK: str = "N.LOCK";
-        break;
-        case GLFW_KEY_PRINT_SCREEN: str = "IMPR";
-        break;
-        case GLFW_KEY_PAUSE: str = "PAUSE";
-        break;
-        case GLFW_KEY_F1: str = "F1";
-        break;
-        case GLFW_KEY_F2: str = "F2";
-        break;
-        case GLFW_KEY_F3: str = "F3";
-        break;
-        case GLFW_KEY_F4: str = "F4";
-        break;
-        case GLFW_KEY_F5: str = "F5";
-        break;
-        case GLFW_KEY_F6: str = "F6";
-        break;
-        case GLFW_KEY_F7: str = "F7";
-        break;
-        case GLFW_KEY_F8: str = "F8";
-        break;
-        case GLFW_KEY_F9: str = "F9";
-        break;
-        case GLFW_KEY_F10: str = "F10";
-        break;
-        case GLFW_KEY_F11: str = "F11";
-        break;
-        case GLFW_KEY_F12: str = "F12";
-        break;
-        case GLFW_KEY_F13: str = "F13";
-        break;
-        case GLFW_KEY_F14: str = "F14";
-        break;
-        case GLFW_KEY_F15: str = "F15";
-        break;
-        case GLFW_KEY_F16: str = "F16";
-        break;
-        case GLFW_KEY_F17: str = "F17";
-        break;
-        case GLFW_KEY_F18: str = "F18";
-        break;
-        case GLFW_KEY_F19: str = "F19";
-        break;
-        case GLFW_KEY_F20: str = "F20";
-        break;
-        case GLFW_KEY_F21: str = "F21";
-        break;
-        case GLFW_KEY_F22: str = "F22";
-        break;
-        case GLFW_KEY_F23: str = "F23";
-        break;
-        case GLFW_KEY_F24: str = "F24";
-        break;
-        case GLFW_KEY_F25: str = "F25";
-        break;
-        case GLFW_KEY_KP_0: str = "KP0";
-        break;
-        case GLFW_KEY_KP_1: str = "KP1";
-        break;
-        case GLFW_KEY_KP_2: str = "KP2";
-        break;
-        case GLFW_KEY_KP_3: str = "KP3";
-        break;
-        case GLFW_KEY_KP_4: str = "KP4";
-        break;
-        case GLFW_KEY_KP_5: str = "KP5";
-        break;
-        case GLFW_KEY_KP_6: str = "KP6";
-        break;
-        case GLFW_KEY_KP_7: str = "KP7";
-        break;
-        case GLFW_KEY_KP_8: str = "KP8";
-        break;
-        case GLFW_KEY_KP_9: str = "KP9";
-        break;
-        case GLFW_KEY_KP_DECIMAL: str = "KPDEC";
-        break;
-        case GLFW_KEY_KP_DIVIDE: str = "KPDIV";
-        break;
-        case GLFW_KEY_KP_MULTIPLY: str = "KPMUL";
-        break;
-        case GLFW_KEY_KP_SUBTRACT: str = "KPSUB";
-        break;
-        case GLFW_KEY_KP_ADD: str = "KPADD";
-        break;
-        case GLFW_KEY_KP_ENTER: str = "KPENTER";
-        break;
-        case GLFW_KEY_KP_EQUAL: str = "KPEQ";
-        break;
-        case GLFW_KEY_LEFT_SHIFT: str = "SHIFT";
-        break;
-        case GLFW_KEY_LEFT_CONTROL: str = "CTRL";
-        break;
-        case GLFW_KEY_LEFT_ALT: str = "ALT";
-        break;
-        case GLFW_KEY_LEFT_SUPER: str = "SUPER";
-        break;
-        case GLFW_KEY_RIGHT_SHIFT: str = "RSHIFT";
-        break;
-        case GLFW_KEY_RIGHT_CONTROL: str = "RCTRL";
-        break;
-        case GLFW_KEY_RIGHT_ALT: str = "RALT";
-        break;
-        case GLFW_KEY_RIGHT_SUPER: str = "RSUPER";
-        break;
-        case GLFW_KEY_MENU: str = "MENU";
-        break;
-    }
-    return str;
 }
 
 // ============================== Game lifecycle ==============================
@@ -2051,7 +1840,6 @@ Game::~Game() {
 
     texture = 0;
     mapTexture = 0;
-    hudTexture = 0;
     horizonTexture = 0;
     enemyTexture = 0;
 
@@ -2118,13 +1906,18 @@ void Game::init() {
 
     // ========== INTRO ==========
     if (this->state == GAME_INTRO) {
-        menuIntroScreen.initIntro();
+        // Reproducir cinematica antes de empezar la partida
+        this->state = GAME_CINEMATIC;
+        this->currentCinematicType = CinematicType::Intro;
+        this->nextStateAfterCinematic = GAME_MENU;
+        std::string videoPath = resolveAssetPath("resources/video/Intro.mp4");
+        cinematicPlayer.open(videoPath);
         return;
     }
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        menuIntroScreen.initMenu();
+        menuScreen.initMenu();
         return;
     }
 
@@ -2169,13 +1962,23 @@ void Game::processInput() {
         return;
     }
 
+    // ========== CINEMATICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        if (this->keys[GLFW_KEY_SPACE] == GLFW_PRESS) {
+            this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;
+            cinematicPlayer.skip();
+        }
+        return;
+    }
+
+    // ========== MENU ==========
     if (this->state == GAME_MENU) {
         if (this->window != nullptr && this->firstPersonCursorLocked) {
             glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
             this->firstPersonCursorLocked = false;
             this->firstPersonMouseInitialized = false;
         }
-        menuIntroScreen.processInputMenu(this->keys);
+        menuScreen.processInputMenu(this->keys);
         return;
     }
 
@@ -2545,20 +2348,49 @@ void Game::processInput() {
 void Game::update() {
     float deltaTime = this->deltaTime;
 
-    // ========== INTRO ==========
-    if (this->state == GAME_INTRO) {
-        if (menuIntroScreen.updateIntro(deltaTime)) {
-            this->state = GAME_MENU;
-            this->init();
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
+        menuScreen.updateMenu(deltaTime);
+        if (menuScreen.shouldStartGame()) {
+            GameMode selectedMode = menuScreen.getSelectedMode();
+            if (selectedMode == GameMode::TwoPlayers) {
+                // Reproducir cinematica antes de empezar la partida
+                this->mode = selectedMode;
+                this->state = GAME_CINEMATIC;
+                this->currentCinematicType = CinematicType::HistoryStart;
+                this->nextStateAfterCinematic = GAME_PLAYING;
+                std::string videoPath = resolveAssetPath("resources/video/HistoryIntro.mp4");
+                cinematicPlayer.open(videoPath);
+                menuScreen.resetTransition();
+            } else {
+                startNewRun(selectedMode);
+            }
         }
         return;
     }
 
-    // ========== MENU ==========
-    if (this->state == GAME_MENU) {
-        menuIntroScreen.updateMenu(deltaTime);
-        if (menuIntroScreen.shouldStartGame()) {
-            startNewRun(menuIntroScreen.getSelectedMode());
+    // ========== CINEMATICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        cinematicPlayer.update(deltaTime);
+        if (cinematicPlayer.isFinished()) {
+            cinematicPlayer.close();
+            if (currentCinematicType == CinematicType::Intro) {
+                this->state = GAME_MENU;
+                this->init();
+            } else if (currentCinematicType == CinematicType::HistoryStart) {
+                startNewRun(mode); // Actualiza el state a GAME_PLAYING e inicia la partida con el modo seleccionado previamente.
+            } else if (currentCinematicType == CinematicType::HistoryEnd) {
+                // No hay rankings ni nada, así que simplemente volvemos al menú.
+                returnToMenuFromGame(/*resetRun=*/true);
+            } else if (currentCinematicType == CinematicType::LevelStart) {
+                // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
+                if (loadLevelPending) {
+                    bool preserve = (currentLevelIndex > 0); // Solo preservar vidas/puntuación a partir del nivel 2
+                    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
+                    loadLevelPending = false;
+                    this->state = GAME_PLAYING;
+                }
+            }
         }
         return;
     }
@@ -2718,11 +2550,16 @@ void Game::update() {
                 levelAdvanceTimer = 0.0f;
 
                 // Pasar de nivel: se conservan vidas y puntuaci├│n; se reinician stats.
+                // Cinematica final de historia si el modo de juego corresponde
                 advanceToNextLevel();
                 return;
             }
         }
     }
+
+    // Decrementar el timer del nivel
+    levelTimeRemaining -= deltaTime;
+    if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 }
 
 // Renderiza mapa, bombas, jugadores y enemigos en 3D.
@@ -3958,7 +3795,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, hudTexture, uniformModel, uniformUvRect);
+    gameMap->renderHud(VAO, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1 );
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
@@ -4011,19 +3848,19 @@ void Game::render2D() {
 void Game::render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-    if (this->state == GAME_INTRO || this->state == GAME_MENU) {
-        glDisable(GL_DEPTH_TEST);
-        glClear(GL_COLOR_BUFFER_BIT);
-
+    // ========== MENU ==========
+    if (this->state == GAME_MENU) {
         glUseProgram(shader);
-        if (this->state == GAME_INTRO) {
-            menuIntroScreen.renderIntro(VAO, shader, uniformModel, uniformProjection, uniformTexture,
-                                        uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
-        } else {
-            menuIntroScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
-                                       uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
-        }
+        menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                     uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
+        return;
+    }
+
+    // ========== CINEMATICA ==========
+    if (this->state == GAME_CINEMATIC) {
+        cinematicPlayer.render(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                               uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         return;
     }
 

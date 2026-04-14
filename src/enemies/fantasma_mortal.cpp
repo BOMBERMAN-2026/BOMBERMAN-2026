@@ -17,11 +17,10 @@ extern SpriteAtlas gEnemyAtlas;
 
 FantasmaMortal::FantasmaMortal(glm::vec2 pos, glm::vec2 size, float speed)
     : Enemy(pos, size, speed, /*hp=*/1, /*score=*/1000, /*passSoftBlocks=*/true),
-      retreating(false),
-      retreatTimer(0.0f),
-      retreatSpeed(speed * 3.0f), // Velocidad de retroceso.
-      normalSpeed(speed),
-      retreatDir(0.0f)
+      bombTurnCooldown(0.0f),
+      bombEscapeDir(EnemyDirection::NONE),
+      bombAvoidTimer(0.0f),
+      lastBombPos(pos)
 {
     facing = EnemyDirection::LEFT;
 }
@@ -99,25 +98,70 @@ EnemyDirection FantasmaMortal::findPathToPlayer() const {
     return directionTowardPlayer();
 }
 
-// Respuesta ante una bomba cercana: calcula la dirección de huida e inicia el retroceso.
+// Respuesta ante una bomba cercana: fija una dirección de escape temporal, sin buff de velocidad.
 void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
-    if (lifeState != EnemyLifeState::Alive || retreating) return;
-    // Retroceder en dirección opuesta a la bomba.
+    if (lifeState != EnemyLifeState::Alive) return;
+    if (bombTurnCooldown > 0.0f) return;
+
+    lastBombPos = bombPos;
+    bombAvoidTimer = 1.35f;
+
+    // Elegir una dirección cardinal estable alejándose de la bomba.
     glm::vec2 away = position - bombPos;
-    float len = std::sqrt(away.x * away.x + away.y * away.y);
-    if (len > 0.001f) {
-        retreatDir = away / len;
+    EnemyDirection awayDir = EnemyDirection::NONE;
+    if (std::abs(away.x) > std::abs(away.y)) {
+        awayDir = (away.x >= 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
     } else {
-        retreatDir = dirToVec(randomDirection());
+        awayDir = (away.y >= 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
     }
-    retreating = true;
-    retreatTimer = 1.2f; // Duración del retroceso.
-    speed = retreatSpeed;
+
+    // Si no puede ir en la dirección ideal, probar alternativas estables (sin flip-flop).
+    EnemyDirection selected = EnemyDirection::NONE;
+    const float lookAhead = gameMap ? (gameMap->getTileSize() * 0.95f) : 0.1f;
+    if (awayDir != EnemyDirection::NONE && canMoveInDirection(awayDir, lookAhead)) {
+        selected = awayDir;
+    } else {
+        const EnemyDirection opposite = oppositeDirection(awayDir);
+        EnemyDirection perp1 = EnemyDirection::LEFT;
+        EnemyDirection perp2 = EnemyDirection::RIGHT;
+        if (awayDir == EnemyDirection::LEFT || awayDir == EnemyDirection::RIGHT) {
+            perp1 = EnemyDirection::UP;
+            perp2 = EnemyDirection::DOWN;
+        }
+
+        if (opposite != EnemyDirection::NONE && canMoveInDirection(opposite, lookAhead)) {
+            selected = opposite;
+        } else if (canMoveInDirection(perp1, lookAhead)) {
+            selected = perp1;
+        } else if (canMoveInDirection(perp2, lookAhead)) {
+            selected = perp2;
+        }
+    }
+
+    if (selected == EnemyDirection::NONE) {
+        selected = (facing != EnemyDirection::NONE) ? oppositeDirection(facing) : randomDirection();
+    }
+
+    bombEscapeDir = selected;
+    facing = bombEscapeDir;
+
+    // Cancelar movimiento al target actual para que el giro tenga efecto inmediato.
+    movingToTarget = false;
+    bombTurnCooldown = 0.50f;
 }
 
-// Lógica de IA: retrocede temporalmente ante bombas cercanas y, en caso contrario, persigue al jugador.
+// Lógica de IA: persigue al jugador; ante bomba solo gira.
 void FantasmaMortal::Update() {
     if (lifeState != EnemyLifeState::Alive) return;
+
+    if (bombTurnCooldown > 0.0f) {
+        bombTurnCooldown -= deltaTime;
+        if (bombTurnCooldown < 0.0f) bombTurnCooldown = 0.0f;
+    }
+    if (bombAvoidTimer > 0.0f) {
+        bombAvoidTimer -= deltaTime;
+        if (bombAvoidTimer < 0.0f) bombAvoidTimer = 0.0f;
+    }
 
     // Animación de movimiento: alterna entre frames 0 y 1.
     animTimer += deltaTime;
@@ -126,24 +170,15 @@ void FantasmaMortal::Update() {
         animFrame ^= 1;
     }
 
-    if (retreating) {
-        // Retroceso rápido (usa tryMove para respetar bombas y soft blocks).
-        retreatTimer -= deltaTime;
-        float step = speed * deltaTime;
+    float step = speed * deltaTime;
 
-        EnemyDirection retreatDirCardinal = EnemyDirection::NONE;
-        if (std::abs(retreatDir.x) > std::abs(retreatDir.y)) {
-            retreatDirCardinal = (retreatDir.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
-        } else if (std::abs(retreatDir.y) > 0.0001f) {
-            retreatDirCardinal = (retreatDir.y > 0.0f) ? EnemyDirection::UP : EnemyDirection::DOWN;
-        }
+    // Durante una ventana corta tras ver bomba, mantener la dirección elegida
+    // para evitar oscilación izquierda-derecha.
+    if (bombTurnCooldown > 0.0f && bombEscapeDir != EnemyDirection::NONE) {
+        facing = bombEscapeDir;
+        // Durante la ventana de reacción no se recalcula ruta, solo intenta avanzar en esa dirección.
+        tryMove(facing, step);
 
-        if (retreatDirCardinal != EnemyDirection::NONE) {
-            tryMove(retreatDirCardinal, step);
-        }
-
-        // Actualizar sprite (en el atlas solo hay "fantasma.derecha.N").
-        // Política de orientación: al subir mira a la izquierda; al bajar mira a la derecha.
         switch (facing) {
             case EnemyDirection::LEFT:
             case EnemyDirection::UP:
@@ -157,15 +192,54 @@ void FantasmaMortal::Update() {
                 break;
         }
         currentSpriteName = std::string("fantasma.derecha.") + std::to_string(animFrame);
-
-        if (retreatTimer <= 0.0f) {
-            retreating = false;
-            speed = normalSpeed;
-        }
         return;
     }
 
-    float step = speed * deltaTime;
+    bombEscapeDir = EnemyDirection::NONE;
+
+    // Ventana de evitación: seguir alejándose de la última bomba vista,
+    // evitando volver hacia ella inmediatamente al salir del rango.
+    if (bombAvoidTimer > 0.0f) {
+        const float currentDist2 = glm::dot(position - lastBombPos, position - lastBombPos);
+        EnemyDirection bestDir = EnemyDirection::NONE;
+        float bestGain = -1e9f;
+
+        const EnemyDirection candidates[4] = {
+            EnemyDirection::UP, EnemyDirection::DOWN, EnemyDirection::LEFT, EnemyDirection::RIGHT
+        };
+
+        for (EnemyDirection d : candidates) {
+            if (!canMoveInDirection(d, gameMap->getTileSize() * 0.95f)) continue;
+            glm::vec2 probe = position + dirToVec(d) * gameMap->getTileSize();
+            const float nextDist2 = glm::dot(probe - lastBombPos, probe - lastBombPos);
+            const float gain = nextDist2 - currentDist2;
+            if (gain > bestGain) {
+                bestGain = gain;
+                bestDir = d;
+            }
+        }
+
+        if (bestDir != EnemyDirection::NONE && bestGain >= -0.0001f) {
+            facing = bestDir;
+            tryMove(facing, step);
+
+            switch (facing) {
+                case EnemyDirection::LEFT:
+                case EnemyDirection::UP:
+                    flipX = 1.0f;
+                    break;
+                case EnemyDirection::RIGHT:
+                case EnemyDirection::DOWN:
+                    flipX = 0.0f;
+                    break;
+                default:
+                    break;
+            }
+            currentSpriteName = std::string("fantasma.derecha.") + std::to_string(animFrame);
+            return;
+        }
+    }
+
     // Camino calculado por BFS (permite atravesar bloques destructibles).
     EnemyDirection toPlayer = findPathToPlayer();
 
@@ -228,8 +302,7 @@ void FantasmaMortal::Draw() {
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
     glUniform1f(uniformFlipX, flipX);
     
-    // Tinte rojizo durante el estado de retroceso.
-    glm::vec4 tint = retreating ? glm::vec4(1.0f, 0.5f, 0.5f, 1.0f) : glm::vec4(1.0f, 1.0f, 1.0f, 1.0f);
+    glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
     glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);

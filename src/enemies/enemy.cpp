@@ -113,6 +113,7 @@ glm::vec2 Enemy::getClosestPlayerPos(float& out_dist) const {
 
     for (Player* p : *playersList) {
         if (!p) continue;
+        if (!p->isAlive()) continue;
         glm::vec2 diff = p->position - position;
         float d = std::abs(diff.x) + std::abs(diff.y);
         if (d < out_dist) {
@@ -181,7 +182,24 @@ EnemyDirection Enemy::randomDirection() {
 bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
     if (!gameMap) return false;
 
+    auto bombBlocks = [&](int rr, int cc) {
+        if (canTraverseBombs()) return false;
+        for (auto* b : gBombs) {
+            if (!b) continue;
+            if (b->state == BombState::DONE) continue;
+            if (b->gridRow == rr && b->gridCol == cc) return true;
+        }
+        return false;
+    };
+
     if (movingToTarget) {
+        int targetR = 0, targetC = 0;
+        gameMap->ndcToGrid(targetPos, targetR, targetC);
+        if (bombBlocks(targetR, targetC)) {
+            movingToTarget = false;
+            return false;
+        }
+
         glm::vec2 d = targetPos - position;
         float distToTarget = std::sqrt(d.x * d.x + d.y * d.y);
         
@@ -207,15 +225,6 @@ bool Enemy::tryMove(EnemyDirection dir, float stepSize) {
     if (dir == EnemyDirection::DOWN) targetR++;
     if (dir == EnemyDirection::LEFT) targetC--;
     if (dir == EnemyDirection::RIGHT) targetC++;
-
-    auto bombBlocks = [&](int rr, int cc) {
-        for (auto* b : gBombs) {
-            if (!b) continue;
-            if (b->state == BombState::DONE) continue;
-            if (b->gridRow == rr && b->gridCol == cc) return true;
-        }
-        return false;
-    };
 
     auto tileBlocks = [&](int rr, int cc) {
         const bool blockedByMap =
@@ -252,10 +261,12 @@ bool Enemy::canMoveInDirection(EnemyDirection dir, float lookAhead) const {
 
     if (!gameMap->isWalkable(r, c) && !(canPassSoftBlocks && gameMap->isDestructible(r, c))) return false;
 
-    for (auto* b : gBombs) {
-        if (!b) continue;
-        if (b->state == BombState::DONE) continue;
-        if (b->gridRow == r && b->gridCol == c) return false;
+    if (!canTraverseBombs()) {
+        for (auto* b : gBombs) {
+            if (!b) continue;
+            if (b->state == BombState::DONE) continue;
+            if (b->gridRow == r && b->gridCol == c) return false;
+        }
     }
 
     return true;

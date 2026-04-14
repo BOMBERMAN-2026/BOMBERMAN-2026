@@ -51,6 +51,15 @@ include_directories(include lib/include)
 find_package(OpenGL REQUIRED)
 find_package(GLEW REQUIRED)
 find_package(glfw3 REQUIRED)
+find_package(PkgConfig REQUIRED)
+
+# FFmpeg via pkg-config (disponible en MSYS2 installado con pacman)
+pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
+    libavformat
+    libavcodec
+    libavutil
+    libswscale
+)
 
 # 4. Crear el ejecutable
 add_executable(Bomberman ${SOURCES})
@@ -58,11 +67,15 @@ add_executable(Bomberman ${SOURCES})
 # 5. Vinculación inteligente (Target Link Libraries)
 # Usamos condiciones para las librerías específicas de cada sistema
 if(WIN32)
+    # Localizar las import libraries de FFmpeg (.dll.a)
+    file(GLOB FFMPEG_IMPORT_LIBS "${FFMPEG_LIB_DIR}/*.dll.a")
+
     # En Windows, las dependencias de sistema suelen venir con el compilador o la SDK
     target_link_libraries(Bomberman PRIVATE 
         GLEW::GLEW 
         glfw 
         OpenGL::GL
+        PkgConfig::FFMPEG
     )
 
     # Copiar DLLs de runtime junto al .exe para poder ejecutarlo desde build/
@@ -94,6 +107,7 @@ else()
         GLEW::GLEW 
         glfw 
         OpenGL::GL
+        PkgConfig::FFMPEG
         X11
         Xrandr
         Xinerama

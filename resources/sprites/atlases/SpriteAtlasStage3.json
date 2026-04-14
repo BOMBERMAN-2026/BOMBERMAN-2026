@@ -1,0 +1,486 @@
+{
+  "ruta_imagen": "resources/sprites/mapas/Stage2/sprites-Stage2.png",
+  "tamano_imagen": {
+    "ancho": 1280,
+    "alto": 720
+  },
+  "sprites": {
+    "0": {
+      "x": 468,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_verde_esquinasuperiorizquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "1": {
+      "x": 523,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_verde_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "2": {
+      "x": 578,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor_arriba",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "3": {
+      "x": 632,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "4": {
+      "x": 685,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor_central",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "5": {
+      "x": 738,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "caiman",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "51": {
+      "x": 791,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "caiman2",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "44": {
+      "x": 844,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "mono",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "6": {
+      "x": 633,
+      "y": 287,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_esquina_arriba_izquierda",
+      "walkable": true,
+      "type": "floor"
+    },
+    "7": {
+      "x": 710,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_sombra_arriba",
+      "walkable": true,
+      "type": "floor"
+    },
+    "8": {
+      "x": 468,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_indestructible",
+      "walkable": false,
+      "type": "indestructible"
+    },
+    "9": {
+      "x": 770,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_sombra_izquierda",
+      "walkable": true,
+      "type": "floor"
+    },
+    "10": {
+      "x": 632,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_sombra_enmedio_del_mapa",
+      "walkable": true,
+      "type": "floor"
+    },
+    "11": {
+      "x": 710,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_sombra_enmedio_del_mapa_arriba",
+      "walkable": true,
+      "type": "floor"
+    },
+    "12": {
+      "x": 440,
+      "y": 223,
+      "w": 24,
+      "h": 48,
+      "nombre": "muroexteriorIzq",
+      "walkable": false,
+      "type": "barrier",
+      "align": "right"
+    },
+    "13": {
+      "x": 439,
+      "y": 222,
+      "w": 24,
+      "h": 48,
+      "nombre": "muroexteriorDer",
+      "walkable": false,
+      "type": "barrier",
+      "align": "left"
+    },
+    "34": {
+      "x": 377,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_verde_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "35": {
+      "x": 377,
+      "y": 275,
+      "w": 48,
+      "h": 48,
+      "nombre": "arbol_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "36": {
+      "x": 377,
+      "y": 328,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_roja_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "37": {
+      "x": 377,
+      "y": 382,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_roja_entera_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "38": {
+      "x": 377,
+      "y": 435,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_con_tierra_derecha",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "39": {
+      "x": 428,
+      "y": 292,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_derecha_molona",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "40": {
+      "x": 321,
+      "y": 486,
+      "w": 48,
+      "h": 48,
+      "nombre": "esquina_inferior",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "14": {
+      "x": 321,
+      "y": 222,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_verde_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "15": {
+      "x": 321,
+      "y": 275,
+      "w": 48,
+      "h": 48,
+      "nombre": "arbol_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "16": {
+      "x": 321,
+      "y": 328,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_roja_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "17": {
+      "x": 321,
+      "y": 382,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_roja_entera_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "18": {
+      "x": 321,
+      "y": 435,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_con_tierra_izquierda",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "19": {
+      "x": 265,
+      "y": 382,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_izqueirda_molona",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "20": {
+      "x": 767,
+      "y": 286,
+      "w": 48,
+      "h": 48,
+      "nombre": "muro_destructible",
+      "walkable": false,
+      "type": "destructible"
+    },
+    "21": {
+      "x": 555,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_sombra_arriba_indestructible",
+      "walkable": true,
+      "type": "floor"
+    },
+    "22": {
+      "x": 155,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "verde_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "23": {
+      "x": 208,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "verde_flor_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "24": {
+      "x": 261,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor_completa_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "25": {
+      "x": 314,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "planta_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "26": {
+      "x": 367,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "flor_completa_abajo_tallo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "27": {
+      "x": 420,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "matorral_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "28": {
+      "x": 473,
+      "y": 561,
+      "w": 48,
+      "h": 48,
+      "nombre": "matorral_v2_abajo",
+      "walkable": false,
+      "type": "barrier"
+    },
+    "bomb.0": {
+      "x": 1090,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bomba_frame0"
+    },
+    "bomb.1": {
+      "x": 1020,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bomba_frame1"
+    },
+    "bomb.2": {
+      "x": 948,
+      "y": 169,
+      "w": 48,
+      "h": 48,
+      "nombre": "bomba_frame2"
+    },
+    "explosion.0": {
+      "x": 1020,
+      "y": 232,
+      "w": 48,
+      "h": 48,
+      "nombre": "explosion_frame0"
+    },
+    "explosion.1": {
+      "x": 1020,
+      "y": 288,
+      "w": 48,
+      "h": 48,
+      "nombre": "explosion_frame1"
+    },
+    "explosion.2": {
+      "x": 946,
+      "y": 290,
+      "w": 48,
+      "h": 48,
+      "nombre": "explosion_frame2"
+    },
+    "explosion.3": {
+      "x": 947,
+      "y": 233,
+      "w": 48,
+      "h": 48,
+      "nombre": "explosion_frame3"
+    },
+    "explosion_mid.0": {
+      "x": 942,
+      "y": 356,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid0"
+    },
+    "explosion_mid.1": {
+      "x": 874,
+      "y": 358,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid1"
+    },
+    "explosion_mid.2": {
+      "x": 875,
+      "y": 419,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid2"
+    },
+    "explosion_mid.3": {
+      "x": 943,
+      "y": 418,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid3"
+    },
+    "explosion_end.0": {
+      "x": 1020,
+      "y": 355,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end0"
+    },
+    "explosion_end.1": {
+      "x": 1088,
+      "y": 353,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end1"
+    },
+    "explosion_end.2": {
+      "x": 1152,
+      "y": 352,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end2"
+    },
+    "explosion_end.3": {
+      "x": 1212,
+      "y": 351,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end3"
+    },
+    "destructible_break.0": {
+      "x": 555,
+      "y": 423,
+      "w": 48,
+      "h": 48,
+      "nombre": "break_0"
+    },
+    "destructible_break.1": {
+      "x": 633,
+      "y": 425,
+      "w": 48,
+      "h": 48,
+      "nombre": "break_1"
+    },
+    "destructible_break.2": {
+      "x": 711,
+      "y": 420,
+      "w": 48,
+      "h": 48,
+      "nombre": "break_2"
+    },
+    "destructible_break.3": {
+      "x": 555,
+      "y": 484,
+      "w": 48,
+      "h": 48,
+      "nombre": "break_3"
+    }
+  }
+}

@@ -337,6 +337,13 @@
       "w": 48,
       "h": 48,
       "nombre": "break_3"
+    },
+    "destructible_break.4": {
+      "x": 633,
+      "y": 484,
+      "w": 48,
+      "h": 48,
+      "nombre": "break_4"
     }
   },
   "animations": {

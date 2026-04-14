@@ -39,7 +39,7 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, 
       animFrame(1),
       animStep(0),
       animInterval(0.3f),     // Intervalo constante de la mecha
-      explodeInterval(0.08f), // Muy rápido: cada 80ms cambia frame de explosión
+      explodeInterval(0.045f), // Más rápido que 0.08: 8 frames a 0.045s = 0.36s (termina antes que 0.40s)
       currentSpriteName("bomb.1"),
       ownerIndex(ownerPlayer ? ownerPlayer->playerId : 0),
       ownerLeftTile(false),
@@ -98,16 +98,20 @@ bool Bomb::Update(float deltaTime) {
         currentSpriteName = "bomb." + std::to_string(animFrame);
 
     } else if (state == BombState::EXPLODING) {
-        // --- Explosión: 4 frames muy rápidos ---
+        // --- Explosión: 4 hacerse grande y 4 volverse pequeño (total 8) ---
         animTimer += deltaTime;
         if (animTimer >= explodeInterval) {
             animTimer -= explodeInterval;
-            animFrame++;
-            if (animFrame >= 4) {
-                // Explosión terminada
+            animStep++; // Usar animStep para la secuencia entera
+            
+            // Secuencia de frames: 0, 1, 2, 3, 3, 2, 1, 0 (8 frames)
+            const int expSequence[] = {0, 1, 2, 3, 3, 2, 1, 0};
+            if (animStep >= 8) {
+                // Explosión terminada un poco antes que el destructible
                 state = BombState::DONE;
                 return true; // Señal para eliminar
             }
+            animFrame = expSequence[animStep];
             currentSpriteName = "explosion." + std::to_string(animFrame);
         }
     }
@@ -127,6 +131,7 @@ void Bomb::detonate() {
 
     state = BombState::EXPLODING;
     animTimer = 0.0f;
+    animStep = 0;
     animFrame = 0;
 
     explosionSegments.clear();

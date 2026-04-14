@@ -8,7 +8,10 @@
 #include <string>
 #include <vector>
 
-#include "menu_intro.hpp"
+#include "menu.hpp"
+#include "cinematic_player.hpp"
+#include "gamepad_input.hpp"
+
 
 /*
  * bomberman.hpp
@@ -27,7 +30,15 @@
 enum GameState {
     GAME_INTRO,      // Pantalla de intro
     GAME_MENU,       // Pantalla selección de modo de juego
+    GAME_CINEMATIC,  // Cinematicas (video FFmpeg)
     GAME_PLAYING
+};
+
+enum class CinematicType {
+    Intro,              // Intro al abrir el juego -> GAME_MENU
+    HistoryStart,       // Introduccion modo historia -> GAME_PLAYING (Historia 1 o 2 jugadores)
+    HistoryEnd,         // Final modo historia -> GAME_MENU (Historia 1 o 2 jugadores)
+    LevelStart          // Pantalla de inicio de cada nivel -> GAME_PLAYING (nivel siguiente)
 };
 
 enum class GameMode {
@@ -47,8 +58,9 @@ enum class Camera3DType {
     FirstPerson
 };
 
-// Include MenuIntroScreen after GameMode enum
-
+static std::vector<std::string> mapNumeration = {
+    "1-2", "3-2", "3-6", "4-2", "6-6"
+};
 
 class Game
 {
@@ -97,10 +109,23 @@ private:
         "levels/level_04.txt",
         "levels/level_05.txt"
     };
+    std::vector<int> levelToStage = {
+        1, 2, 2, 3, 4
+    };
+    std::vector<std::string> levelCinematicSequence = {
+        "resources/video/levels/level_01.mp4",
+        "resources/video/levels/level_02.mp4",
+        "resources/video/levels/level_03.mp4",
+        "resources/video/levels/level_04.mp4",
+        "resources/video/levels/level_05.mp4"
+    };
 
     bool pendingLevelAdvance = false;
     float levelAdvanceTimer = 0.0f;
     float levelAdvanceDelaySeconds = 1.0f;
+
+    // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
+    bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel
 
     // Progresión de niveles (uso interno).
     void loadLevel(int levelIndex, bool preserveLivesAndScore);
@@ -109,6 +134,11 @@ private:
     void returnToMenuFromGame(bool resetRun);
 
 public:
+
+    // // Global variables for OpenGL
+    // GLuint VAO, VBO, EBO, shader, uniformModel, uniformProjection, uniformTexture, uniformTintColor, uniformUvRect, uniformFlipX, uniformWhiteFlash;
+
+    // GLuint texture;
     // Input
     std::map<GLint, GLint> keys;           // Estado: Release(0), Press(1), Repeat(2)
     GLint lastDirKey = GLFW_KEY_UNKNOWN;   // Última flecha pulsada (P1)
@@ -120,15 +150,24 @@ public:
     ViewMode viewMode = ViewMode::Mode2D;
     Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
-    MenuIntroScreen menuIntroScreen;
+        // UI Screen
+        MenuScreen menuScreen;              // Gestiona menú
+        CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
+        CinematicType currentCinematicType = CinematicType::Intro;
+        GameState nextStateAfterCinematic = GAME_INTRO;
 
-    // Ventana
-    GLint WIDTH, HEIGHT;
-    int windowedXPos = 0, windowedYPos = 0;
-    GLFWwindow* window;
+        // Ventana
+        GLint WIDTH, HEIGHT;                 // Tamaño ventana
+        int windowedXPos = 100;
+        int windowedYPos = 100;             // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
+        GLFWwindow* window;                  // GLFW window
 
     // Timing
     float deltaTime = 0.0f;
+    float levelTimeRemaining = 121.0f;
+    std::string currentGameLevel = "5-5";
+    std::string currentLevelVS = "2";
+    
 
     Game(GLFWwindow* window, GLuint width, GLuint height)
         : state(GAME_INTRO), WIDTH(width), HEIGHT(height), window(window) {}
