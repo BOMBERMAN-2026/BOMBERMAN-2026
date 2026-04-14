@@ -35,6 +35,28 @@ DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size, float speed)
 
 DragonJoven::~DragonJoven() {}
 
+bool DragonJoven::isFiringAttack() const {
+    return isFiring;
+}
+
+int DragonJoven::getActiveFireSegmentCount() const {
+    if (!isFiring || fireSegments.empty()) return 0;
+
+    const float elapsedTime = 0.5f - fireAnimTimer;
+    int activeSegments = 0;
+    if (elapsedTime >= 0.15f) {
+        activeSegments = (int)((elapsedTime - 0.15f) / 0.1f) + 1;
+    }
+
+    if (activeSegments < 0) activeSegments = 0;
+    if (activeSegments > (int)fireSegments.size()) activeSegments = (int)fireSegments.size();
+    return activeSegments;
+}
+
+const std::vector<ExplosionSegment>& DragonJoven::getFireSegments() const {
+    return fireSegments;
+}
+
 // Devuelve la dirección de disparo si el jugador está en línea y en rango.
 EnemyDirection DragonJoven::checkLineOfSight() const {
     if (!playersList || !gameMap) return EnemyDirection::NONE;
@@ -123,12 +145,7 @@ void DragonJoven::Update() {
         fireAnimFrame = newFrame;
 
         // El fuego se expande "poco a poco" con un retraso inicial para cuadrar con el sprite
-        float elapsedTime = 0.5f - fireAnimTimer;
-        int activeSegments = 0;
-        if (elapsedTime >= 0.15f) { // Sale después de 0.15s (cuando el dragón abre la boca a máxima potencia)
-            activeSegments = (int)((elapsedTime - 0.15f) / 0.1f) + 1;
-        }
-        if (activeSegments > fireSegments.size()) activeSegments = fireSegments.size();
+        const int activeSegments = getActiveFireSegmentCount();
         
         // Comprobar daño a jugadores y detonar bombas en el área del fuego (solo los segmentos activos)
         for (int i = 0; i < activeSegments; ++i) {
@@ -258,12 +275,7 @@ void DragonJoven::Draw() {
         glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
 
         // Solo dibujamos los tramos que se han ido activando ("poco a poco" con retraso para la animación)
-        float elapsedTime = 0.5f - fireAnimTimer;
-        int activeSegments = 0;
-        if (elapsedTime >= 0.15f) { // Sale después de 0.15s (cuando el dragón abre la boca a máxima potencia)
-            activeSegments = (int)((elapsedTime - 0.15f) / 0.1f) + 1;
-        }
-        if (activeSegments > fireSegments.size()) activeSegments = fireSegments.size();
+        const int activeSegments = getActiveFireSegmentCount();
 
         if (activeSegments > 0) {
             for (int i = 0; i < activeSegments; ++i) {

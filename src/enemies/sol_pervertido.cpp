@@ -22,6 +22,8 @@ SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase p
     : Enemy(pos, size, speed, /*hp=*/3, /*score=*/5000, /*passSoftBlocks=*/false, /*boss=*/true),
         currentPhase(phase), invulnerableTimer(phase != Phase::FULL ? 0.8f : 0.0f)
 {
+    spriteBaseId = "sol";
+
     float angle = randomFloat(0.1f, 1.4f); // angulo aleatorio
     
     // Incremento de velocidad principal

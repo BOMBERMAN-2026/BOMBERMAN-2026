@@ -4,12 +4,12 @@ Distribución de carpetas
 - **build/** => carpeta generada por CMake con artefactos de compilación (se puede borrar si quieres “clean build”).
 - **src/** => código fuente (.cpp).
 - **include/** => cabeceras del juego (.hpp).
-    - **include/enemies/** => cabeceras de enemigos.
-    - **include/external/** => librerías header-only (por ejemplo stb).
+  - **include/enemies/** => cabeceras de enemigos.
+  - **include/external/** => librerías header-only (por ejemplo stb).
 - **levels/** => niveles en texto (`level_XX.txt`).
 - **resources/** => assets del juego.
-    - **resources/sprites/** => sprites/atlases.
-    - **resources/sounds/** => música y efectos.
+  - **resources/sprites/** => sprites/atlases.
+  - **resources/sounds/** => música y efectos.
 - **shaders/** => shaders GLSL.
 - **tools/** => utilidades/herramientas (programas auxiliares).
 - **lib/** => librerías externas del proyecto (headers de OpenGL/GLFW/GLM, etc.).
@@ -19,26 +19,27 @@ Distribución de carpetas
 Controles
 
 - **Intro**
-    - `ESPACIO`: ir al menú.
+  - `ESPACIO`: ir al menú.
 
 - **Menú**
-    - `↑/↓` o `W/S`: mover selección.
-    - `ENTER`: confirmar (1P/2P).
+  - `↑/↓` o `W/S`: mover selección.
+  - `ENTER`: confirmar (1P/2P).
 
 - **Cinematica**
     - `ESPACIO`: Saltar.
 
 - **Juego**
-    - **Jugador 1**: `↑/↓/←/→` mover.
-        - **Jugador 1**: `CTRL derecho` poner bomba.
-        - **Jugador 1**: `ALT derecho` detonar (requiere Remote Control).
-    - **Jugador 2**: `W/A/S/D` mover.
-        - **Jugador 2**: `X` poner bomba.
-        - **Jugador 2**: `Z` detonar (requiere Remote Control).
-    - **Ratón**: no se usa.
-    - `TAB`: alternar ventana/pantalla completa.
-    - `F1`: alternar vista 2D/3D.
-    - `F2`: cambiar tipo de cámara 3D.
+  - **Jugador 1**: `↑/↓/←/→` mover.
+    - **Jugador 1**: `CTRL derecho` poner bomba.
+    - **Jugador 1**: `ALT derecho` detonar (requiere Remote Control).
+  - **Jugador 2**: `W/A/S/D` mover.
+    - **Jugador 2**: `X` poner bomba.
+    - **Jugador 2**: `Z` detonar (requiere Remote Control).
+  - **Ratón**: no se usa.
+  - `TAB`: alternar ventana/pantalla completa.
+  - `F1`: alternar vista 2D/3D.
+  - `F2`: cambiar tipo de cámara 3D.
+  - En modo 3D, pulsar `3` dos veces rápido: revelar/cargar fondo sorpresa.
 
 - **Debug/Testing**
-    - `F3`: forzar avance al siguiente nivel (sin limpiar enemigos).
+  - `F3`: forzar avance al siguiente nivel (sin limpiar enemigos).

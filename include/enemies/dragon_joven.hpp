@@ -17,6 +17,11 @@ public:
     void Update() override;
     void Draw()   override;
 
+    // Estado de la llamarada para render 3D compartido.
+    bool isFiringAttack() const;
+    int getActiveFireSegmentCount() const;
+    const std::vector<ExplosionSegment>& getFireSegments() const;
+
 private:
     // IA
     float fireCooldown;      // Tiempo restante hasta poder escupir fuego otra vez
