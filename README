@@ -24,6 +24,7 @@ Controles
 - **Menú**
   - `↑/↓` o `W/S`: mover selección.
   - `ENTER`: confirmar (1P/2P).
+  - `ESC`: salir del juego.
 
 - **Cinematica**
     - `ESPACIO`: Saltar.

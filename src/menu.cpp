@@ -18,7 +18,7 @@ MenuScreen::MenuScreen()
       menuArrowAnimTimer(0.0f), menuArrowAnimSpeed(0.1f),
       menuArrowSelected(false), menuArrowSelectedAnimSpeed(0.8f),
       menuSelectedWaitTimer(0.0f), shouldTransitionToGame(false),
-      selectedGameMode(GameMode::HistoryOnePlayer) {
+      shouldExitGame(false), selectedGameMode(GameMode::HistoryOnePlayer) {
 }
 
 // Libera texturas de intro/menú (si se llegaron a crear).
@@ -187,5 +187,11 @@ void MenuScreen::processInputMenu(std::map<int, int>& keys) {
             }
             // Las opciones Vs (0, 1) ignoran Enter por ahora
         }
+    }
+
+    // Escape para cerrar el juego desde el menú.
+    if (keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        shouldExitGame = true;
+        keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
     }
 }

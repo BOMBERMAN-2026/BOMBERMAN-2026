@@ -2367,6 +2367,10 @@ void Game::update() {
                 startNewRun(selectedMode);
             }
         }
+        // Cerrar el juego si se presionó Escape en el menú
+        if (menuScreen.isExitRequested()) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
         return;
     }
 
