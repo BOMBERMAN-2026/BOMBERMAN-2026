@@ -917,17 +917,21 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
     else if (gamemode == 1) { // Modo Versus
         // VIDAS
             // esquina superior izquierda del HUD (1er player)
-        renderHudUtils(1, livesPosVS1, scaleUsualHud, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        const uint32_t p1Lives = (gPlayers && !gPlayers->empty() && gPlayers->at(0) != nullptr) ? (uint32_t)gPlayers->at(0)->lives : 0;
+        renderHudUtils(p1Lives, livesPosVS1, scaleUsualHud, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
             // esquina inferior izquierda del HUD (2do player)
-        renderHudUtils(2, livesPosVS2, scaleUsualHud, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        const uint32_t p2Lives = (gPlayers && gPlayers->size() > 1 && gPlayers->at(1) != nullptr) ? (uint32_t)gPlayers->at(1)->lives : 0;
+        renderHudUtils(p2Lives, livesPosVS2, scaleUsualHud, typeOfHud::Lives, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
         
         // NUM WINS
-        renderHudUtils(10, numWinsPos, scaleUsualHud, typeOfHud::NumWins, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
-
-        renderHudUtils(10, numWinsPos2, scaleUsualHud, typeOfHud::NumWins, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        const uint32_t p1Wins = (playerScores && !playerScores->empty()) ? (uint32_t)playerScores->at(0) : 0;
+        const uint32_t p2Wins = (playerScores && playerScores->size() > 1) ? (uint32_t)playerScores->at(1) : 0;
+        renderHudUtils(p1Wins, numWinsPos, scaleUsualHud, typeOfHud::NumWins, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils(p2Wins, numWinsPos2, scaleUsualHud, typeOfHud::NumWins, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // NIVEL ACTUAL
+        currentLevelVS = currentGameLevel;
         renderHudUtils(0, levelPosVS, scaleUsualHud, typeOfHud::CurrentLevelVS, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // TIMER
@@ -1064,6 +1068,16 @@ bool GameMap::getVisiblePowerUpType(int row, int col, PowerUpType& outType) cons
 
     const Block& b = grid[row][col];
     if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected) return false;
+
+    outType = b.powerUpType;
+    return true;
+}
+
+bool GameMap::getHiddenPowerUpType(int row, int col, PowerUpType& outType) const {
+    if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
+
+    const Block& b = grid[row][col];
+    if (!b.hasPowerUp || b.powerUpRevealed || b.powerUpCollected) return false;
 
     outType = b.powerUpType;
     return true;

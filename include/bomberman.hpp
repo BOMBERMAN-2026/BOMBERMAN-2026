@@ -104,6 +104,7 @@ private:
     bool gameplayAssetsLoaded = false;
 
     int currentLevelIndex = 0;
+    int versusRoundNumber = 1;
     bool currentLevelHadEnemies = false;
     std::vector<int> playerScores;
     std::vector<std::string> levelSequence = {

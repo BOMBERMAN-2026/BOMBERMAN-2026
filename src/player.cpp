@@ -176,6 +176,20 @@ void Player::updateDeathAnimation() {
     }
 
     if (pendingRespawn) {
+        // Si no quedan vidas, nunca se respawnea.
+        // Importante: fijar el sprite al último frame de muerte para no caer en el
+        // sprite anterior (p.ej. mirando abajo) si el deltaTime hace saltar frames.
+        if (lives <= 0) {
+            pendingRespawn = false;
+            deathFrame = lastFrame;
+            if (prefix) {
+                currentSpriteName = std::string(prefix) + std::to_string(lastFrame);
+            } else {
+                currentSpriteName = spritePrefix + ".muerto." + std::to_string(lastFrame);
+            }
+            return;
+        }
+
         respawn();
         return;
     }

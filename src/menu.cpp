@@ -76,16 +76,20 @@ void MenuScreen::updateMenu(float deltaTime) {
         // Después de que termina la animación, esperar y luego pasar al juego
         menuSelectedWaitTimer += deltaTime;
         if (menuSelectedWaitTimer >= MENU_SELECTED_WAIT_TIME) {
-            // TODO: Añadir selección de modos Vs (1P, 2P) cuando estén implementados. Por ahora, solo modos Historia (1P, 2P).
-            // Señalar transición al juego solo si es una opción de Historia implementada
-            if (menuSelection == 2) {
+            // Mapear selección -> modo y transicionar al juego.
+            if (menuSelection == 0) {
+                selectedGameMode = GameMode::VsOnePlayer;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 1) {
+                selectedGameMode = GameMode::VsTwoPlayers;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 2) {
                 selectedGameMode = GameMode::HistoryOnePlayer;
                 shouldTransitionToGame = true;
             } else if (menuSelection == 3) {
                 selectedGameMode = GameMode::HistoryTwoPlayers;
                 shouldTransitionToGame = true;
             }
-            // Las opciones Vs (0,1) no hacen nada aún
         }
     } else {
         // Alternar entre explosion_0 y explosion_1 rápidamente
@@ -176,16 +180,12 @@ void MenuScreen::processInputMenu(std::map<int, int>& keys) {
         }
     }
 
-    // Confirmar selección (solo funcional en modos Historia, Vs aún sin implementar).
+    // Confirmar selección.
     if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
         if (!menuArrowSelected) {
-            // Solo permitir transición en opciones Historia (2, 3)
-            if (menuSelection >= 2 && menuSelection <= 3) {
-                menuArrowSelected = true;
-                menuArrowAnimTimer = 0.0f;
-                keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
-            }
-            // Las opciones Vs (0, 1) ignoran Enter por ahora
+            menuArrowSelected = true;
+            menuArrowAnimTimer = 0.0f;
+            keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
         }
     }
 

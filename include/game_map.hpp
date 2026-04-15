@@ -169,6 +169,11 @@ public:
     // Consulta el power-up visible (revelado y no recogido) en una celda.
     bool getVisiblePowerUpType(int row, int col, PowerUpType& outType) const;
 
+    // Consulta el power-up oculto en una celda.
+    // Un power-up está "oculto" cuando existe pero todavía no está revelado (p.ej. bajo un destructible intacto).
+    // Nota: pensado para IA/dificultades (p.ej. Omniscient).
+    bool getHiddenPowerUpType(int row, int col, PowerUpType& outType) const;
+
     // Consulta si en una celda hay efecto de recogida activo.
     // Devuelve el tipo de power-up y progreso normalizado [0..1].
     bool getPowerUpPickupFx(int row, int col, PowerUpType& outType, float& outNormalizedTime) const;
