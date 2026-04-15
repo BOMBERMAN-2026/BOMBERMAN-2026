@@ -266,6 +266,55 @@ void DragonJoven::Draw() {
 
     float halfTile = gameMap->getTileSize() / 2.0f;
 
+    if (lifeState == EnemyLifeState::Dying) {
+        const float enemyScaleFactor = 2.0f;
+        glm::mat4 model = glm::mat4(1.0f);
+
+        float baseHeight = 1.0f;
+        float baseWidth = 1.0f;
+        auto itBase = gEnemyAtlas.sprites.find("dragon.abajo.0");
+        if (itBase != gEnemyAtlas.sprites.end() && itBase->second.h > 0) {
+            baseHeight = static_cast<float>(itBase->second.h);
+            baseWidth = static_cast<float>(itBase->second.w);
+        }
+
+        float scaleX = 1.0f;
+        float scaleY = 1.0f;
+        float currentWidth = baseWidth;
+        auto it = gEnemyAtlas.sprites.find(currentSpriteName);
+        if (it != gEnemyAtlas.sprites.end() && it->second.h > 0) {
+            currentWidth = static_cast<float>(it->second.w);
+            scaleX = currentWidth / baseHeight; // Mantener la misma altura de ref para aspecto real
+            scaleY = static_cast<float>(it->second.h) / baseHeight;
+        }
+
+        glm::vec3 renderPos = glm::vec3(position.x, position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
+
+        // Compensar corrimiento visual a la izquierda si el sprite de humo es más ancho
+        if (currentWidth > baseWidth) {
+            renderPos.x += (halfTile * enemyScaleFactor) * ((currentWidth - baseWidth) / baseWidth) * 0.35f;
+        }
+
+        // Ajustar posición en Y para que la base de la animación no flote
+        renderPos.y -= (halfTile * enemyScaleFactor) * (1.0f - scaleY);
+        
+        model = glm::translate(model, renderPos);   
+
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);
+
+        model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor * scaleX, halfTile * enemyScaleFactor * scaleY, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glUniform1f(uniformFlipX, flipX); // mantener el último flipX
+        
+        glm::vec4 tint(1.0f, 1.0f, 1.0f, 1.0f);
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        return;
+    }
+
     // 1. Renderizar fuego (si está disparando) PRIMERO, para que quede por debajo del dragón
     if (isFiring && !fireSegments.empty()) {
         // Guardar textura actual y bindear la textura del mapa (bombas/explosiones)
@@ -299,6 +348,8 @@ void DragonJoven::Draw() {
                     if (i == 0) {
                         if (facing == EnemyDirection::LEFT || facing == EnemyDirection::RIGHT) {
                             gap = halfTile * 1.0f; // Margen para horizontal
+                        } else if (facing == EnemyDirection::DOWN) {
+                            gap = -halfTile * 0.5f; // Acercar fuego al sprite del dragón hacia abajo
                         } else {
                             gap = halfTile * 0.2f; // Margen menor para vertical
                         }
@@ -328,7 +379,6 @@ void DragonJoven::Draw() {
     const float enemyScaleFactor = 2.0f; // Tamaño relativo
     glm::mat4 model = glm::mat4(1.0f);
     glm::vec3 renderPos = glm::vec3(position.x, position.y + (enemyScaleFactor - 1.0f) * halfTile * 0.8f, 0.0f);
-    model = glm::translate(model, renderPos);   
 
     std::string prefix;
     std::string firePrefix;
@@ -368,12 +418,24 @@ void DragonJoven::Draw() {
     glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
     getUvRectForSprite(gEnemyAtlas, currentSpriteName, uvRect);
 
-    float aspect = 1.0f;
+    float baseHeight = 1.0f;
+    auto itBase = gEnemyAtlas.sprites.find("dragon.abajo.0");
+    if (itBase != gEnemyAtlas.sprites.end() && itBase->second.h > 0) {
+        baseHeight = static_cast<float>(itBase->second.h);
+    }
+
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
     auto it = gEnemyAtlas.sprites.find(currentSpriteName);
     if (it != gEnemyAtlas.sprites.end() && it->second.h > 0) {
-        aspect = static_cast<float>(it->second.w) / static_cast<float>(it->second.h);
+        scaleX = static_cast<float>(it->second.w) / baseHeight;
+        scaleY = static_cast<float>(it->second.h) / baseHeight;
     }
-    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor * aspect, halfTile * enemyScaleFactor, 1.0f));
+
+    renderPos.y -= (halfTile * enemyScaleFactor) * (1.0f - scaleY);
+    model = glm::translate(model, renderPos);
+
+    model = glm::scale(model, glm::vec3(halfTile * enemyScaleFactor * scaleX, halfTile * enemyScaleFactor * scaleY, 1.0f));
 
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
