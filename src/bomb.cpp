@@ -143,7 +143,8 @@ void Bomb::detonate() {
     // 2. Expandir en 4 direcciones
     int dr[] = {0, -1, 0, 1}; // RIGHT, UP, LEFT, DOWN
     int dc[] = {1, 0, -1, 0};
-    float angles[] = {glm::radians(-90.0f), 0.0f, glm::radians(90.0f), glm::radians(180.0f)};
+    // Ajuste solicitado: intercambiar orientacion vertical/horizontal de la llama.
+    float angles[] = {0.0f, glm::radians(90.0f), glm::radians(180.0f), glm::radians(-90.0f)};
 
     for (int i = 0; i < 4; i++) {
         for (int d = 1; d <= power; d++) {

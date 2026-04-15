@@ -83,6 +83,7 @@ static const char* kModel3DFragmentShaderPath = "shaders/model3D.frag";
 static const char* kModel3DTexturedVertexShaderPath = "shaders/model3D_textured.vs";
 static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_textured.frag";
 static const char* kPlayerGlbPath = "models/3D/cartoon astronaut 3d model.glb";
+static const char* kRedPlayerGlbPath = "models/3D/red bomberman.glb";
 static const char* kLeonGlbPath = "models/3D/monstrous creature 3d model.glb";
 static const char* kFantasmaGlbPath = "models/3D/ghost character 3d model.glb";
 static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
@@ -118,6 +119,11 @@ GLuint actorGlbVBO = 0;
 GLuint actorGlbEBO = 0;
 GLsizei actorGlbIndexCount = 0;
 GLuint actorGlbTexture = 0;
+GLuint redActorGlbVAO = 0;
+GLuint redActorGlbVBO = 0;
+GLuint redActorGlbEBO = 0;
+GLsizei redActorGlbIndexCount = 0;
+GLuint redActorGlbTexture = 0;
 GLuint leonGlbVAO = 0;
 GLuint leonGlbVBO = 0;
 GLuint leonGlbEBO = 0;
@@ -700,6 +706,17 @@ void CreateActorGlbModel(const std::string& modelPath)
                                  actorGlbEBO,
                                  actorGlbIndexCount,
                                  actorGlbTexture);
+}
+
+void CreateRedActorGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("redActorGLB",
+                                 modelPath,
+                                 redActorGlbVAO,
+                                 redActorGlbVBO,
+                                 redActorGlbEBO,
+                                 redActorGlbIndexCount,
+                                 redActorGlbTexture);
 }
 
 void CreateLeonGlbModel(const std::string& modelPath)
@@ -1298,6 +1315,7 @@ void Game::ensureRenderResources() {
     CreateCube();
     CreateSphere();
     CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
+    CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
     CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
     CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
     CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
@@ -1775,6 +1793,10 @@ Game::~Game() {
         glDeleteTextures(1, &actorGlbTexture);
         actorGlbTexture = 0;
     }
+    if (redActorGlbTexture != 0) {
+        glDeleteTextures(1, &redActorGlbTexture);
+        redActorGlbTexture = 0;
+    }
     if (leonGlbTexture != 0) {
         glDeleteTextures(1, &leonGlbTexture);
         leonGlbTexture = 0;
@@ -1853,6 +1875,9 @@ Game::~Game() {
     actorGlbVAO = actorGlbVBO = actorGlbEBO = 0;
     actorGlbIndexCount = 0;
     actorGlbTexture = 0;
+    redActorGlbVAO = redActorGlbVBO = redActorGlbEBO = 0;
+    redActorGlbIndexCount = 0;
+    redActorGlbTexture = 0;
     leonGlbVAO = leonGlbVBO = leonGlbEBO = 0;
     leonGlbIndexCount = 0;
     leonGlbTexture = 0;
@@ -2567,6 +2592,16 @@ void Game::render3D() {
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    GLint viewport[4] = {0, 0, WIDTH, HEIGHT};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    const int viewportWidth = std::max(1, viewport[2]);
+    const int viewportHeight = std::max(1, viewport[3]);
+    const bool isSplitFirstPersonPass =
+        (camera3DType == Camera3DType::FirstPerson &&
+         mode == GameMode::TwoPlayers &&
+         gPlayers.size() >= 2 &&
+         viewportWidth < WIDTH);
+
     if (surpriseHorizonVisible3D && horizonTexture != 0 && shader != 0 && VAO != 0) {
         glDepthMask(GL_FALSE);
         glDisable(GL_DEPTH_TEST);
@@ -2594,18 +2629,27 @@ void Game::render3D() {
 
     glUseProgram(shader3D);
 
-    const float safeHeight = (HEIGHT > 0) ? (float)HEIGHT : 1.0f;
-    const float aspect = std::max(0.01f, (float)WIDTH / safeHeight);
+    const float safeHeight = (float)viewportHeight;
+    const float aspect = std::max(0.01f, (float)viewportWidth / safeHeight);
     const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
     const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
     const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
     const glm::vec3 mapCenter(0.0f, 0.0f, 0.0f);
 
+    int trackedPlayerIndex = 0;
+    if (camera3DType == Camera3DType::FirstPerson && !gPlayers.empty()) {
+        trackedPlayerIndex = std::max(0, std::min(active3DViewportPlayerIndex, (int)gPlayers.size() - 1));
+    }
+    Player* trackedPlayer =
+        (trackedPlayerIndex >= 0 && trackedPlayerIndex < (int)gPlayers.size())
+            ? gPlayers[trackedPlayerIndex]
+            : nullptr;
+
     glm::vec3 trackedPlayerCenter = mapCenter + glm::vec3(0.0f, 0.55f, 0.0f);
     glm::vec3 trackedPlayerForward(0.0f, 0.0f, 1.0f);
-    if (!gPlayers.empty() && gPlayers[0] != nullptr) {
-        trackedPlayerCenter = ndcToWorld3D(gameMap, gPlayers[0]->position, 0.55f);
-        trackedPlayerForward = facingKeyToForward(gPlayers[0]->facingDirKey);
+    if (trackedPlayer != nullptr) {
+        trackedPlayerCenter = ndcToWorld3D(gameMap, trackedPlayer->position, 0.55f);
+        trackedPlayerForward = facingKeyToForward(trackedPlayer->facingDirKey);
     }
 
     glm::vec3 cameraPos(mapRadius * 0.70f, mapRadius * 1.55f + 3.0f, mapRadius * 1.25f + 2.5f);
@@ -2634,7 +2678,13 @@ void Game::render3D() {
         cameraTarget = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
     } else if (camera3DType == Camera3DType::FirstPerson) {
         // Altura de ojos mas baja para mantener los muros delante y evitar ver por encima.
-        const glm::vec3 firstPersonForward = firstPersonLookToForward(this->firstPersonYaw, this->firstPersonPitch);
+        float firstPersonCameraYaw = this->firstPersonYaw;
+        float firstPersonCameraPitch = this->firstPersonPitch;
+        if (trackedPlayerIndex > 0 && trackedPlayer != nullptr) {
+            firstPersonCameraYaw = facingKeyToYawRadians(trackedPlayer->facingDirKey);
+            firstPersonCameraPitch = -0.18f;
+        }
+        const glm::vec3 firstPersonForward = firstPersonLookToForward(firstPersonCameraYaw, firstPersonCameraPitch);
         const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
         cameraTarget = eye + firstPersonForward * 2.8f;
@@ -2989,13 +3039,13 @@ void Game::render3D() {
                 drawMesh3D(sphereOrCubeVAO,
                            sphereOrCubeIndexCount,
                            glm::vec3(feet.x, 0.03f, feet.z),
-                           glm::vec3(0.34f, 0.02f, 0.34f),
+                           glm::vec3(0.28f, 0.02f, 0.28f),
                            glm::vec3(0.05f, 0.05f, 0.05f));
                 continue;
             }
 
             const glm::vec3 center = ndcToWorld3D(gameMap, b->position, 0.30f);
-            drawMesh3D(fuseMesh, fuseMeshIndexCount, center, glm::vec3(0.45f, 0.45f, 0.45f), glm::vec3(0.08f, 0.08f, 0.08f));
+            drawMesh3D(fuseMesh, fuseMeshIndexCount, center, glm::vec3(0.34f, 0.34f, 0.34f), glm::vec3(0.08f, 0.08f, 0.08f));
             drawMesh3D(cubeVAO, cubeIndexCount, center + glm::vec3(0.0f, 0.34f, 0.0f), glm::vec3(0.06f, 0.18f, 0.06f), glm::vec3(0.95f, 0.70f, 0.20f));
         } else {
             if (canRenderFlameGlb) {
@@ -3020,7 +3070,7 @@ void Game::render3D() {
                 const glm::vec3 color = warmColor ? glm::vec3(1.00f, 0.15f, 0.10f)
                                                   : glm::vec3(1.00f, 0.92f, 0.10f);
                 const glm::vec3 center = ndcToWorld3D(gameMap, seg.pos, 0.35f);
-                const float pulse = 0.44f + 0.08f * std::sin(((float)b->animFrame * 1.15f) + ((float)i * 0.70f));
+                const float pulse = 1.05f + 0.22f * std::sin(((float)b->animFrame * 1.15f) + ((float)i * 0.70f));
                 drawMesh3D(fuseMesh, fuseMeshIndexCount, center, glm::vec3(pulse, pulse, pulse), color);
             }
         }
@@ -3136,6 +3186,8 @@ void Game::render3D() {
 
     const bool canRenderPlayerGlb =
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderRedPlayerGlb =
+        (redActorGlbVAO != 0 && redActorGlbIndexCount > 0 && redActorGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderLeonGlb =
         (leonGlbVAO != 0 && leonGlbIndexCount > 0 && leonGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFantasmaGlb =
@@ -3149,7 +3201,7 @@ void Game::render3D() {
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderFlameGlb || canRenderFlameUpGlb || canRenderSpeedUpGlb) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderFlameGlb || canRenderFlameUpGlb || canRenderSpeedUpGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -3184,7 +3236,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, ndcToWorld3D(gameMap, b->position, 0.08f) + glm::vec3(0.0f, bob, 0.0f));
                 model = glm::rotate(model, animT * 0.65f, glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(0.92f * pulse, 0.92f * pulse, 0.92f * pulse));
+                model = glm::scale(model, glm::vec3(0.76f * pulse, 0.76f * pulse, 0.76f * pulse));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                 glBindVertexArray(bombGlbVAO);
@@ -3301,7 +3353,7 @@ void Game::render3D() {
                     const bool isCenter = (seg.baseName == "explosion");
                     const bool isEnd = (seg.baseName == "explosion_end");
 
-                    const float baseScale = isCenter ? 1.02f : (isEnd ? 0.72f : 0.84f);
+                    const float baseScale = isCenter ? 2.20f : (isEnd ? 1.70f : 1.95f);
                     const float animT = now * 14.0f + ((float)b->animFrame * 1.75f) + ((float)i * 0.95f);
                     const float flicker = 1.0f + 0.12f * std::sin(animT);
                     const float bob = 0.06f + 0.02f * std::sin(animT * 0.85f);
@@ -3334,7 +3386,7 @@ void Game::render3D() {
                     const ExplosionSegment& seg = fireSegments[i];
                     const bool isEnd = (seg.baseName == "explosion_end");
 
-                    const float baseScale = isEnd ? 0.72f : 0.84f;
+                    const float baseScale = isEnd ? 1.70f : 1.95f;
                     const float animT = now * 14.0f + ((float)i * 0.95f)
                         + (dragon->position.x * 0.40f) + (dragon->position.y * 0.45f);
                     const float flicker = 1.0f + 0.12f * std::sin(animT);
@@ -3357,10 +3409,7 @@ void Game::render3D() {
             glUniform1f(uniform3DTexturedShininess, 28.0f);
         }
 
-        if (canRenderPlayerGlb) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, actorGlbTexture);
-
+        if (canRenderPlayerGlb || canRenderRedPlayerGlb) {
             // Ajuste de orientacion base del modelo GLB.
             const float kPlayerModelYawOffset = 1.57079632679f;
 
@@ -3368,9 +3417,29 @@ void Game::render3D() {
                 Player* p = gPlayers[i];
                 if (!p || !p->isAlive()) continue;
 
-                if (camera3DType == Camera3DType::FirstPerson && i == 0) {
+                if (camera3DType == Camera3DType::FirstPerson && (int)i == trackedPlayerIndex) {
                     continue;
                 }
+
+                GLuint playerVao = 0;
+                GLsizei playerIndexCount = 0;
+                GLuint playerTexture = 0;
+
+                const bool isWasdPlayer = (this->mode == GameMode::TwoPlayers && i == 1);
+                if (isWasdPlayer && canRenderRedPlayerGlb) {
+                    playerVao = redActorGlbVAO;
+                    playerIndexCount = redActorGlbIndexCount;
+                    playerTexture = redActorGlbTexture;
+                } else if (canRenderPlayerGlb) {
+                    playerVao = actorGlbVAO;
+                    playerIndexCount = actorGlbIndexCount;
+                    playerTexture = actorGlbTexture;
+                } else {
+                    continue;
+                }
+
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, playerTexture);
 
                 GLint modelFacingDirKey = p->facingDirKey;
                 if (this->camera3DType == Camera3DType::PerspectiveFixed ||
@@ -3387,8 +3456,8 @@ void Game::render3D() {
                 model = glm::scale(model, glm::vec3(1.28f, 1.28f, 1.28f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                glBindVertexArray(actorGlbVAO);
-                glDrawElements(GL_TRIANGLES, actorGlbIndexCount, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(playerVao);
+                glDrawElements(GL_TRIANGLES, playerIndexCount, GL_UNSIGNED_INT, 0);
             }
         }
 
@@ -3646,26 +3715,32 @@ void Game::render3D() {
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(spriteProjection3D));
     glUniform1i(uniformTexture, 0);
 
-    if (!canRenderPlayerGlb) {
-        for (std::size_t i = 0; i < gPlayers.size(); ++i) {
-            Player* p = gPlayers[i];
-            if (!p || !p->isAlive()) continue;
+    for (std::size_t i = 0; i < gPlayers.size(); ++i) {
+        Player* p = gPlayers[i];
+        if (!p || !p->isAlive()) continue;
 
-            if (camera3DType == Camera3DType::FirstPerson && i == 0) {
-                continue;
-            }
+        if (camera3DType == Camera3DType::FirstPerson && (int)i == trackedPlayerIndex) {
+            continue;
+        }
 
-            glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-            bool hasUv = getUvRectForSprite(gPlayerAtlas, p->currentSpriteName, uvRect);
-            if (!hasUv) {
-                const std::string fallback = p->spritePrefix + ".abajo.0";
-                hasUv = getUvRectForSprite(gPlayerAtlas, fallback, uvRect);
-            }
+        const bool isWasdPlayer = (this->mode == GameMode::TwoPlayers && i == 1);
+        const bool has3DModel =
+            (isWasdPlayer && canRenderRedPlayerGlb) ||
+            canRenderPlayerGlb;
+        if (has3DModel) {
+            continue;
+        }
 
-            if (hasUv) {
-                const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
-                drawSpriteBillboard3D(texture, uvRect, feet, 0.92f, 1.38f, p->flipX, glm::vec4(1.0f));
-            }
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+        bool hasUv = getUvRectForSprite(gPlayerAtlas, p->currentSpriteName, uvRect);
+        if (!hasUv) {
+            const std::string fallback = p->spritePrefix + ".abajo.0";
+            hasUv = getUvRectForSprite(gPlayerAtlas, fallback, uvRect);
+        }
+
+        if (hasUv) {
+            const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
+            drawSpriteBillboard3D(texture, uvRect, feet, 0.92f, 1.38f, p->flipX, glm::vec4(1.0f));
         }
     }
 
@@ -3766,8 +3841,8 @@ void Game::render3D() {
     glBindVertexArray(0);
     glUseProgram(0);
 
-    if (camera3DType == Camera3DType::FirstPerson) {
-        renderFirstPersonMiniMap2D(gameMap, WIDTH, HEIGHT);
+    if (camera3DType == Camera3DType::FirstPerson && !isSplitFirstPersonPass) {
+        renderFirstPersonMiniMap2D(gameMap, viewportWidth, viewportHeight);
     }
 }
 
@@ -3847,6 +3922,7 @@ void Game::render2D() {
 
 void Game::render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glViewport(0, 0, WIDTH, HEIGHT);
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
@@ -3865,8 +3941,40 @@ void Game::render() {
     }
 
     if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
-        render3D();
+        const bool splitFirstPersonTwoPlayers =
+            (this->camera3DType == Camera3DType::FirstPerson &&
+             this->mode == GameMode::TwoPlayers &&
+             gPlayers.size() >= 2 &&
+             gPlayers[0] != nullptr &&
+             gPlayers[1] != nullptr);
+
+        if (splitFirstPersonTwoPlayers) {
+            const int fullHeight = std::max(1, (int)this->HEIGHT);
+            const int leftWidth = std::max(1, (int)this->WIDTH / 2);
+            const int rightWidth = std::max(1, (int)this->WIDTH - leftWidth);
+
+            glEnable(GL_SCISSOR_TEST);
+
+            this->active3DViewportPlayerIndex = 0;
+            glViewport(0, 0, leftWidth, fullHeight);
+            glScissor(0, 0, leftWidth, fullHeight);
+            render3D();
+
+            this->active3DViewportPlayerIndex = 1;
+            glViewport(leftWidth, 0, rightWidth, fullHeight);
+            glScissor(leftWidth, 0, rightWidth, fullHeight);
+            render3D();
+
+            glDisable(GL_SCISSOR_TEST);
+            this->active3DViewportPlayerIndex = 0;
+            glViewport(0, 0, WIDTH, HEIGHT);
+        } else {
+            this->active3DViewportPlayerIndex = 0;
+            glViewport(0, 0, WIDTH, HEIGHT);
+            render3D();
+        }
     } else {
+        glViewport(0, 0, WIDTH, HEIGHT);
         render2D();
     }
 }
