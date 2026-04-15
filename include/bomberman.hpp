@@ -42,8 +42,12 @@ enum class CinematicType {
 };
 
 enum class GameMode {
-    OnePlayer,
-    TwoPlayers
+    VsOnePlayer,
+    VsTwoPlayers,
+    HistoryOnePlayer,
+    HistoryTwoPlayers
+    //OnePlayer,
+    //TwoPlayers
 };
 
 enum class ViewMode {
@@ -146,7 +150,7 @@ public:
 
     // Estado
     GameState state;
-    GameMode mode = GameMode::OnePlayer;
+    GameMode mode = GameMode::HistoryOnePlayer;
     ViewMode viewMode = ViewMode::Mode2D;
     Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 

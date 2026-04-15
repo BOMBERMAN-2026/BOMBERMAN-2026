@@ -14,11 +14,11 @@ extern bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spri
 
 MenuScreen::MenuScreen()
     : menuBackgroundTexture(0), menuArrowTexture(0), menuSelection(0),
-      menuArrowX(-1.4f), menuArrowY_Base(-0.255f), menuArrowY_Offset(0.275f),
+      menuArrowX(-1.4f), menuArrowY_Base(0.285f), menuArrowY_Offset(0.275f),
       menuArrowAnimTimer(0.0f), menuArrowAnimSpeed(0.1f),
       menuArrowSelected(false), menuArrowSelectedAnimSpeed(0.8f),
       menuSelectedWaitTimer(0.0f), shouldTransitionToGame(false),
-      selectedGameMode(GameMode::OnePlayer) {
+      selectedGameMode(GameMode::HistoryOnePlayer) {
 }
 
 // Libera texturas de intro/menú (si se llegaron a crear).
@@ -33,13 +33,13 @@ MenuScreen::~MenuScreen() {
 void MenuScreen::initMenu() {
     // Reset de flags (evita auto-arranque al volver del juego).
     shouldTransitionToGame = false;
-    selectedGameMode = GameMode::OnePlayer;
+    selectedGameMode = GameMode::HistoryOnePlayer;
 
     // Cargar sólo si falta (evita recargar al volver al menú).
     if (menuBackgroundTexture == 0) {
-        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreen.png").c_str());
+        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreenV2.jpg").c_str());
         if (menuBackgroundTexture == 0) {
-            std::cerr << "Error cargando MenuScreen.png\n";
+            std::cerr << "Error cargando MenuScreenV2.jpg\n";
         }
     }
 
@@ -76,9 +76,16 @@ void MenuScreen::updateMenu(float deltaTime) {
         // Después de que termina la animación, esperar y luego pasar al juego
         menuSelectedWaitTimer += deltaTime;
         if (menuSelectedWaitTimer >= MENU_SELECTED_WAIT_TIME) {
-            // Señalar transición al juego
-            selectedGameMode = (menuSelection == 0) ? GameMode::OnePlayer : GameMode::TwoPlayers;
-            shouldTransitionToGame = true;
+            // TODO: Añadir selección de modos Vs (1P, 2P) cuando estén implementados. Por ahora, solo modos Historia (1P, 2P).
+            // Señalar transición al juego solo si es una opción de Historia implementada
+            if (menuSelection == 2) {
+                selectedGameMode = GameMode::HistoryOnePlayer;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 3) {
+                selectedGameMode = GameMode::HistoryTwoPlayers;
+                shouldTransitionToGame = true;
+            }
+            // Las opciones Vs (0,1) no hacen nada aún
         }
     } else {
         // Alternar entre explosion_0 y explosion_1 rápidamente
@@ -169,12 +176,16 @@ void MenuScreen::processInputMenu(std::map<int, int>& keys) {
         }
     }
 
-    // Confirmar selección.
+    // Confirmar selección (solo funcional en modos Historia, Vs aún sin implementar).
     if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
         if (!menuArrowSelected) {
-            menuArrowSelected = true;
-            menuArrowAnimTimer = 0.0f;
-            keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+            // Solo permitir transición en opciones Historia (2, 3)
+            if (menuSelection >= 2 && menuSelection <= 3) {
+                menuArrowSelected = true;
+                menuArrowAnimTimer = 0.0f;
+                keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+            }
+            // Las opciones Vs (0, 1) ignoran Enter por ahora
         }
     }
 }

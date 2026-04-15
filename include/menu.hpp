@@ -25,8 +25,8 @@ private:
     GLuint menuBackgroundTexture;
     GLuint menuArrowTexture;
     SpriteAtlas menuBombAtlas;
-    int menuSelection;  // 0 = 1P, 1 = 2P
-    const int NUM_MENU_OPTIONS = 2;
+    int menuSelection;  // 0 = Vs 1P (no implementado), 1 = Vs 2P (no implementado), 2 = Historia 1P, 3 = Historia 2P
+    const int NUM_MENU_OPTIONS = 4;
 
     // Posición de la flecha de selección
     float menuArrowX;

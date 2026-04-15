@@ -79,8 +79,8 @@ int main() {
 
     // ============================== Juego ==============================
     bomberman = new Game(mainWindow, SCREEN_WIDTH, SCREEN_HEIGHT);
-    // Cambia a GameMode::OnePlayer si quieres modo 1 jugador.
-    bomberman->setMode(GameMode::TwoPlayers);
+    // Cambia a GameMode::HistoryOnePlayer si quieres modo 1 jugador.
+    bomberman->setMode(GameMode::HistoryTwoPlayers);
     bomberman->init();
 
     // Initialize blend to blend transparent to the background

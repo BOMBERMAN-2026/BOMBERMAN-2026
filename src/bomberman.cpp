@@ -1473,7 +1473,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     gameMap->calculateTileMetrics(aspectRatio);
 
     // Crear jugadores seg├║n el modo.
-    const int numPlayers = (mode == GameMode::TwoPlayers) ? 2 : 1;
+    const int numPlayers = (mode == GameMode::HistoryTwoPlayers) ? 2 : 1;
     if (!preserveLivesAndScore) {
         playerScores.assign(numPlayers, 0);
     } else {
@@ -1611,7 +1611,7 @@ void Game::advanceToNextLevel() {
     const int nextIndex = currentLevelIndex + 1;
     if (nextIndex >= (int)levelSequence.size()) {
         // No hay ranking ni pantalla de victoria: volver al menú.
-        if (mode == GameMode::TwoPlayers) {
+        if (mode == GameMode::HistoryTwoPlayers) {
             // Reproducir cinematica fin de historia antes de volver a menu.
             this->state = GAME_CINEMATIC;
             this->currentCinematicType = CinematicType::HistoryEnd;
@@ -2139,7 +2139,7 @@ void Game::processInput() {
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if (this->mode == GameMode::HistoryTwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
         if (!p2->isAlive()) {
@@ -2271,7 +2271,7 @@ void Game::processInput() {
     }
 
     // ======================= Bombas (Jugador 2) =======================
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if (this->mode == GameMode::HistoryTwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
         if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
@@ -2353,8 +2353,9 @@ void Game::update() {
         menuScreen.updateMenu(deltaTime);
         if (menuScreen.shouldStartGame()) {
             GameMode selectedMode = menuScreen.getSelectedMode();
-            if (selectedMode == GameMode::TwoPlayers) {
-                // Reproducir cinematica antes de empezar la partida
+            // TODO: Cambiar esto para que cada modo tenga su propia cinemática.
+            if (selectedMode == GameMode::HistoryTwoPlayers) {
+                // Reproducir cinematica antes de empezar la partida (solo para Historia 2P)
                 this->mode = selectedMode;
                 this->state = GAME_CINEMATIC;
                 this->currentCinematicType = CinematicType::HistoryStart;
@@ -3795,7 +3796,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1 );
+    gameMap->renderHud(VAO, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1 );
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
