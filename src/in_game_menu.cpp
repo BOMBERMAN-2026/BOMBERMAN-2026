@@ -59,16 +59,15 @@ static GLuint createBlackTexture() {
     return texture;
 }
 
-
 // ============================== RENDER ==============================
 
 /** Render del inGameMenu
  *  El valor de colorUse esta entre 0 (color naranja), 1 (color amarillo) y 2 (color amarillo blanquecino) 
  */
 
-void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, float scale,
-                                  const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                                  GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
+void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
+                      const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
+                      GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
     if (text.empty()) {
         return;
     }
@@ -148,18 +147,23 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    renderTextString("PAUSE", pausePos, scaleUsualHud * 1.50f, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect, 0);
-    
-    // Renderizar texto dentro del menú
-        // Parte de la izq
-    for (int i=0 ; i < inGameMenuOptions.size(); i++) {
-        if (i == posSeleccion) renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 2);
-        else renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+    if (controlsMenu.showControlsMenu) {
+        controlsMenu.renderControlsMenu(gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect);
     }
+    else {
+        renderTextString("PAUSE", pausePos, scaleUsualHud * 1.50f, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect, 0);
+    
+        // Renderizar texto dentro del menú
+            // Parte de la izq
+        for (int i=0 ; i < inGameMenuOptions.size(); i++) {
+            if (i == posSeleccion) renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 2);
+            else renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+        }
 
-        // Parte de la derecha
-    for (int i=0; i < currentOptionsSelected.size();  i++) {
-        renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+            // Parte de la derecha
+        for (int i=0; i < currentOptionsSelected.size();  i++) {
+            renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+        }
     }
 
     glBindVertexArray(0);
@@ -229,6 +233,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
             // CONTROLS
             case 5:
                 // TODO, no me sale de la polla (aun)
+                controlsMenu.showControlsMenu = true;
                 break;
             
             // EXIT
@@ -239,7 +244,6 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
                 break;
             default:
                 break;
-            
         }
 
         keys[GLFW_KEY_ENTER] = GLFW_REPEAT;

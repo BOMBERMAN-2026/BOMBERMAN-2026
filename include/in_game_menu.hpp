@@ -9,7 +9,12 @@
 #include <map>
 
 #include "sprite_atlas.hpp"
+#include "controls_menu.hpp" 
 #include <vector>
+
+void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
+                              const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
+                              GLuint uniformModel, GLuint uniformUvRect, int colorUse);
 
 /**
  * InGameMenu
@@ -23,12 +28,9 @@
  * - Salir al menu principal
  * - Salir del juego
  */
-
-
 class InGameMenu {
 
     private:
-
         // Texturas y atlases
         GLuint menuArrowTexture;
         GLuint vocabTexture; 
@@ -43,19 +45,20 @@ class InGameMenu {
         // Logica de selección
         int posSeleccion; // Indice del vector actualmente seleccionado para cambiarlo de color (y mas cosas)
 
-    public:
+        // Menu de controles
+        ControlsMenu controlsMenu;
 
+    public:
+        // True = mostrar el menu
+        // False = no mostrar
         bool showInGameMenu;
 
         InGameMenu();
         ~InGameMenu();
 
-        void initInGameMenu();
-        void updateInGameMenu(float deltaTime);
-
-        void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
-                              const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                              GLuint uniformModel, GLuint uniformUvRect, int colorUse);
+        // void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
+        //                       const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
+        //                       GLuint uniformModel, GLuint uniformUvRect, int colorUse);
 
         void renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect,
                               SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture, 
