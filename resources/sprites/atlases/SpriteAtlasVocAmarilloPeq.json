@@ -1,5 +1,5 @@
 {
-  "ruta_imagen": "resources/sprites/vocabulario/AtlasAmarillosPequeños.png",
+  "ruta_imagen": "resources/sprites/vocabulario/AtlasAmarillosPequenos.png",
   "tamano_imagen": { "ancho": 1080, "alto": 720 },
   "sprites": {
     "A_AmaBla": {"x": 0, "y": 0, "w": 36, "h": 36},
