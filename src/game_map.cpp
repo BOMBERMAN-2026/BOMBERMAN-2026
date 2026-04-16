@@ -66,6 +66,14 @@ static bool parsePowerUpTypeFromString(const std::string& raw, PowerUpType& outT
     if (s == "invincibility" || s == "invencibilidad") { outType = PowerUpType::Invincibility; return true; }
     if (s == "remote" || s == "remotecontrol" || s == "detonador") { outType = PowerUpType::RemoteControl; return true; }
 
+    // Items
+    if (s == "matches" || s == "cerillas") { outType = PowerUpType::Matches; return true; }
+    if (s == "can" || s == "lata") { outType = PowerUpType::Can; return true; }
+    if (s == "lighter" || s == "mechero") { outType = PowerUpType::Lighter; return true; }
+    if (s == "battery" || s == "pila") { outType = PowerUpType::Battery; return true; }
+    if (s == "dragonfly" || s == "libelula") { outType = PowerUpType::Dragonfly; return true; }
+    if (s == "hudsonbee" || s == "hudson") { outType = PowerUpType::HudsonBee; return true; }
+
     return false;
 }
 
@@ -411,8 +419,8 @@ void GameMap::update(float deltaTime) {
             Block& b = grid[r][c];
             if (b.breaking) {
                 b.breakTimer += deltaTime;
-                if (b.breakTimer >= 0.12f) { // velocidad de destrucción (un poco más lenta para apreciarla)
-                    b.breakTimer -= 0.12f;
+                if (b.breakTimer >= 0.13f) { // velocidad de destrucción intermedio entre 0.18s y 0.12s
+                    b.breakTimer -= 0.13f;
                     b.breakFrame++;
                     if (b.breakFrame >= 5) {
                         b.breaking = false;
@@ -960,7 +968,14 @@ void GameMap::loadPowerUpTextures() {
         {"resources/sprites/power_ups/Bomberman_AC_-_Fire_Up.png",       "resources/sprites/power_ups/Bomberman_AC_-_Fire_Up_azul.png"},
         {"resources/sprites/power_ups/Bomberman_AC_-_Speed_Up.png",      "resources/sprites/power_ups/Bomberman_AC_-_Speed_Up_azul.png"},
         {"resources/sprites/power_ups/Bomberman_AC_-_Invincibility.png", "resources/sprites/power_ups/Bomberman_AC_-_Invincibility_azul.png"},
-        {"resources/sprites/power_ups/Bomberman_AC_-_Remote_Control.png", "resources/sprites/power_ups/Bomberman_AC_-_Remote_Control_azul.png"}
+        {"resources/sprites/power_ups/Bomberman_AC_-_Remote_Control.png", "resources/sprites/power_ups/Bomberman_AC_-_Remote_Control_azul.png"},
+        
+        {"resources/sprites/items/B_AC_-_Bonus_Item_Matches.png",            "resources/sprites/items/B_AC_-_Bonus_Item_Matches_azul.png"},
+        {"resources/sprites/items/B_AC_-_Bonus_Item_Can.png",                "resources/sprites/items/B_AC_-_Bonus_Item_Can_azul.png"},
+        {"resources/sprites/items/B_AC_-_Bonus_Item_Lighter.png",            "resources/sprites/items/B_AC_-_Bonus_Item_Lighter_azul.png"},
+        {"resources/sprites/items/B_AC_-_Bonus_Item_Battery.png",            "resources/sprites/items/B_AC_-_Bonus_Item_Battery_azul.png"},
+        {"resources/sprites/items/B_AC_-_Bonus_Item_Dragonfly.png",          "resources/sprites/items/B_AC_-_Bonus_Item_Dragonfly_azul.png"},
+        {"resources/sprites/items/B_AC_-_Bonus_Item_Hudson Bee.png",         "resources/sprites/items/B_AC_-_Bonus_Item_Hudson Bee_azul.png"}
     };
 
     for (int i = 0; i < POWER_UP_TYPE_COUNT; i++) {
@@ -1066,9 +1081,46 @@ void GameMap::placePowerUps() {
             totalPlaced++;
         }
     }
+    
+    // Asignar items de puntuación en los bloques destructibles sobrantes
+    // Frecuencias: Cerillas y Lata (Común), Mechero (Poco común), Pila y Libélula (Rara), Hudson Bee (Muy rara)
+    int itemsPlaced = 0;
+    std::uniform_real_distribution<float> itemDist(0.0f, 100.0f);
 
-    std::cout << "GameMap: " << totalPlaced << " power-ups colocados en "
-              << destructibles.size() << " bloques destructibles" << std::endl;
+    while (cellIndex < (int)destructibles.size()) {
+        float randVal = itemDist(rng);
+        PowerUpType chosenItemType;
+        bool placeItem = false;
+
+        // Probabilidades acumulativas aproximadas (del 0 a 100%)
+        // ~10% de que un bloque sobrante tenga un item
+        if (randVal < 10.0f) {
+            placeItem = true;
+            float rarityRoll = itemDist(rng); // 0 a 100
+            
+            if (rarityRoll < 35.0f) chosenItemType = PowerUpType::Matches;        // 35% dentro del pool (Común)
+            else if (rarityRoll < 70.0f) chosenItemType = PowerUpType::Can;       // 35% dentro del pool (Común)
+            else if (rarityRoll < 85.0f) chosenItemType = PowerUpType::Lighter;   // 15% dentro del pool (Poco común)
+            else if (rarityRoll < 93.0f) chosenItemType = PowerUpType::Battery;   // 8% dentro del pool (Rara)
+            else if (rarityRoll < 98.0f) chosenItemType = PowerUpType::Dragonfly; // 5% dentro del pool (Rara)
+            else chosenItemType = PowerUpType::HudsonBee;                         // 2% dentro del pool (Muy rara)
+        }
+
+        if (placeItem) {
+            Cell& cell = destructibles[cellIndex];
+            Block& b = grid[cell.r][cell.c];
+            b.hasPowerUp = true;
+            b.powerUpType = chosenItemType;
+            b.powerUpRevealed = false;
+            b.powerUpCollected = false;
+            itemsPlaced++;
+        }
+        
+        cellIndex++;
+    }
+
+    std::cout << "GameMap: " << totalPlaced << " power-ups fijos y " << itemsPlaced 
+              << " items de puntuacion colocados en " << destructibles.size() << " bloques destructibles" << std::endl;
 }
 
 bool GameMap::getVisiblePowerUpType(int row, int col, PowerUpType& outType) const {
@@ -1173,6 +1225,8 @@ void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRe
     glBindVertexArray(0);
 }
 
+extern void PlayCogerPowerUpSound();
+
 bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
     if (!player) return false;
     if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
@@ -1180,6 +1234,9 @@ bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
     Block& b = grid[row][col];
     if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected)
         return false;
+
+    // Reproducir sonido instantáneo de recogida
+    PlayCogerPowerUpSound();
 
     // Aplicar el power-up y marcarlo como recogido
     player->applyPowerUp(b.powerUpType);
@@ -1189,9 +1246,10 @@ bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
     b.powerUpPickupFxTimer = 0.0f;
 
     // Log para debug
-    const char* names[] = { "1-UP", "Bomb Up", "Fire Up", "Speed Up", "Invincibility", "Remote Control" };
+    const char* names[] = { "1-UP", "Bomb Up", "Fire Up", "Speed Up", "Invincibility", "Remote Control",
+                            "Matches", "Can", "Lighter", "Battery", "Dragonfly", "HudsonBee" };
     int idx = (int)b.powerUpType;
-    if (idx >= 0 && idx < 6) {
+    if (idx >= 0 && idx < 12) {
         std::cout << "[PowerUp] Jugador " << player->playerId << " recogio " << names[idx] << std::endl;
     }
 

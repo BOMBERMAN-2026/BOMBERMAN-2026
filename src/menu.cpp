@@ -185,14 +185,9 @@ void MenuScreen::processInputMenu(std::map<int, int>& keys) {
     // Confirmar selección.
     if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
         if (!menuArrowSelected) {
-            // Solo permitir transición en opciones Historia (2, 3)
-            if (menuSelection >= 2 && menuSelection <= 3) {
-                menuArrowSelected = true;
-                menuArrowAnimTimer = 0.0f;
-                keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
-            }
-            // TODO: Permitir selección de modos Vs (0, 1, 4) cuando estén implementados. Por ahora, solo modos Historia (2, 3) hacen algo al pulsar Enter.
-            // Las opciones Vs (0, 1, 4) ignoran Enter por ahora
+            menuArrowSelected = true;
+            menuArrowAnimTimer = 0.0f;
+            keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
         }
     }
 

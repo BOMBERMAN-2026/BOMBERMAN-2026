@@ -17,7 +17,15 @@ enum class PowerUpType {
     FireUp,          // Fire Up: +1 radio de explosión
     SpeedUp,         // Speed Up: incrementa velocidad
     Invincibility,   // Invincibility: 16 segundos de invulnerabilidad
-    RemoteControl    // Remote Control: detona bombas a voluntad (se pierde al morir)
+    RemoteControl,   // Remote Control: detona bombas a voluntad (se pierde al morir)
+
+    // Items de puntuacion
+    Matches,         // Cerillas (5000 puntos)
+    Can,             // Lata (10000 puntos)
+    Lighter,         // Mechero (30000 puntos)
+    Battery,         // Pila (40000 puntos)
+    Dragonfly,       // Libélula (50000 puntos)
+    HudsonBee        // Hudson Bee (77000 puntos)
 };
 
 // Topes y balance fieles al Arcade original.

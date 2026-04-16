@@ -235,7 +235,7 @@ private:
     static BlockType blockTypeFromString(const std::string& typeStr);
 
     // === Power-Ups ===
-    static constexpr int POWER_UP_TYPE_COUNT = 6;
+    static constexpr int POWER_UP_TYPE_COUNT = 12;
     GLuint powerUpTextures[POWER_UP_TYPE_COUNT][2] = {{0}}; // Texturas indexadas por PowerUpType y frame (normal/azul)
     bool powerUpTexturesLoaded = false;
     

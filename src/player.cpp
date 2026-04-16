@@ -9,7 +9,10 @@
 #include <glm/gtc/type_ptr.hpp>
 #include "sprite_atlas.hpp"
 #include "bomb.hpp"
+#include "bomberman.hpp"
 #include <iostream>
+
+extern class Game* bomberman;
 
 extern GLuint VAO;
 extern GLuint uniformModel;
@@ -425,6 +428,21 @@ void Player::respawn() {
 
 // Aplica un power-up al jugador (respeta ArcadeCaps).
 void Player::applyPowerUp(PowerUpType type) {
+    if (type == PowerUpType::Matches || type == PowerUpType::Can || type == PowerUpType::Lighter || 
+        type == PowerUpType::Battery || type == PowerUpType::Dragonfly || type == PowerUpType::HudsonBee) {
+        
+        // Sumar al score por items
+        if (bomberman && playerId >= 0 && playerId < (int)bomberman->playerScores.size()) {
+            if (type == PowerUpType::Matches) bomberman->playerScores[playerId] += 5000;
+            else if (type == PowerUpType::Can) bomberman->playerScores[playerId] += 10000;
+            else if (type == PowerUpType::Lighter) bomberman->playerScores[playerId] += 30000;
+            else if (type == PowerUpType::Battery) bomberman->playerScores[playerId] += 40000;
+            else if (type == PowerUpType::Dragonfly) bomberman->playerScores[playerId] += 50000;
+            else if (type == PowerUpType::HudsonBee) bomberman->playerScores[playerId] += 77000;
+        }
+        return; // Los items no otorgan buffs jugables 
+    }
+
     switch (type) {
         case PowerUpType::ExtraLife:
             lives += 1;
