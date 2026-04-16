@@ -236,8 +236,11 @@ private:
 
     // === Power-Ups ===
     static constexpr int POWER_UP_TYPE_COUNT = 6;
-    GLuint powerUpTextures[POWER_UP_TYPE_COUNT] = {0}; // Texturas indexadas por PowerUpType
+    GLuint powerUpTextures[POWER_UP_TYPE_COUNT][2] = {{0}}; // Texturas indexadas por PowerUpType y frame (normal/azul)
     bool powerUpTexturesLoaded = false;
+    
+    float powerUpAnimTimer = 0.0f;
+    int powerUpAnimFrame = 0;
 };
 
 #endif // GAME_MAP_HPP

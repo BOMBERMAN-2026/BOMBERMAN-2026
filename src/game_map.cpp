@@ -399,6 +399,12 @@ bool GameMap::loadAtlas(const std::string& jsonPath) {
 void GameMap::update(float deltaTime) {
     animator.update(deltaTime);
 
+    powerUpAnimTimer += deltaTime;
+    if (powerUpAnimTimer >= 0.075f) {
+        powerUpAnimTimer -= 0.075f;
+        powerUpAnimFrame = (powerUpAnimFrame + 1) % 2;
+    }
+
     // Actualizar bloques que se están rompiendo
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
@@ -947,21 +953,23 @@ extern GLuint uniformWhiteFlash;
 void GameMap::loadPowerUpTextures() {
     if (powerUpTexturesLoaded) return;
 
-    // Rutas de cada power-up indexadas por PowerUpType
-    const char* paths[] = {
-        "resources/sprites/power_ups/Bomberman_AC_-_1-UP.png",           // ExtraLife
-        "resources/sprites/power_ups/Bomberman_AC_-_Bomb_Up.png",       // BombUp
-        "resources/sprites/power_ups/Bomberman_AC_-_Fire_Up.png",       // FireUp
-        "resources/sprites/power_ups/Bomberman_AC_-_Speed_Up.png",      // SpeedUp
-        "resources/sprites/power_ups/Bomberman_AC_-_Invincibility.png", // Invincibility
-        "resources/sprites/power_ups/Bomberman_AC_-_Remote_Control.png"  // RemoteControl
+    // Rutas de cada power-up indexadas por PowerUpType y variante (normal / azul)
+    const char* paths[POWER_UP_TYPE_COUNT][2] = {
+        {"resources/sprites/power_ups/Bomberman_AC_-_1-UP.png",           "resources/sprites/power_ups/Bomberman_AC_-_1-UP_azul.png"},
+        {"resources/sprites/power_ups/Bomberman_AC_-_Bomb_Up.png",       "resources/sprites/power_ups/Bomberman_AC_-_Bomb_Up_azul.png"},
+        {"resources/sprites/power_ups/Bomberman_AC_-_Fire_Up.png",       "resources/sprites/power_ups/Bomberman_AC_-_Fire_Up_azul.png"},
+        {"resources/sprites/power_ups/Bomberman_AC_-_Speed_Up.png",      "resources/sprites/power_ups/Bomberman_AC_-_Speed_Up_azul.png"},
+        {"resources/sprites/power_ups/Bomberman_AC_-_Invincibility.png", "resources/sprites/power_ups/Bomberman_AC_-_Invincibility_azul.png"},
+        {"resources/sprites/power_ups/Bomberman_AC_-_Remote_Control.png", "resources/sprites/power_ups/Bomberman_AC_-_Remote_Control_azul.png"}
     };
 
     for (int i = 0; i < POWER_UP_TYPE_COUNT; i++) {
-        std::string resolved = resolveAssetPath(paths[i]);
-        powerUpTextures[i] = LoadTexture(resolved.c_str());
-        if (powerUpTextures[i] == 0) {
-            std::cerr << "GameMap: Error cargando textura power-up: " << resolved << std::endl;
+        for (int j = 0; j < 2; j++) {
+            std::string resolved = resolveAssetPath(paths[i][j]);
+            powerUpTextures[i][j] = LoadTexture(resolved.c_str());
+            if (powerUpTextures[i][j] == 0) {
+                std::cerr << "GameMap: Error cargando textura power-up: " << resolved << std::endl;
+            }
         }
     }
 
@@ -1113,11 +1121,11 @@ void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRe
 
             if (block.hasPowerUp && block.powerUpRevealed && !block.powerUpCollected) {
                 int texIdx = (int)block.powerUpType;
-                if (texIdx >= 0 && texIdx < POWER_UP_TYPE_COUNT && powerUpTextures[texIdx] != 0) {
+                if (texIdx >= 0 && texIdx < POWER_UP_TYPE_COUNT && powerUpTextures[texIdx][powerUpAnimFrame] != 0) {
                     glm::vec2 center = gridToNDC(r, c);
 
                     glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
+                    glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx][powerUpAnimFrame]);
 
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, glm::vec3(center, 0.0f));
@@ -1139,9 +1147,9 @@ void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRe
                 const float fxAlpha = (1.0f - t) * kPowerUpPickupFxMaxAlpha;
 
                 int texIdx = (int)block.powerUpType;
-                if (texIdx >= 0 && texIdx < POWER_UP_TYPE_COUNT && powerUpTextures[texIdx] != 0) {
+                if (texIdx >= 0 && texIdx < POWER_UP_TYPE_COUNT && powerUpTextures[texIdx][powerUpAnimFrame] != 0) {
                     glActiveTexture(GL_TEXTURE0);
-                    glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx]);
+                    glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx][powerUpAnimFrame]);
 
                     glm::vec2 center = gridToNDC(r, c);
                     glm::mat4 fxModel = glm::mat4(1.0f);
