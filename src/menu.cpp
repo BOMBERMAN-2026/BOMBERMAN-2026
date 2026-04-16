@@ -14,7 +14,7 @@ extern bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spri
 
 MenuScreen::MenuScreen()
     : menuBackgroundTexture(0), menuArrowTexture(0), menuSelection(0),
-      menuArrowX(-1.4f), menuArrowY_Base(0.285f), menuArrowY_Offset(0.275f),
+      menuArrowX(-1.1f), menuArrowY_Base(0.435f), menuArrowY_Offset(0.275f),
       menuArrowAnimTimer(0.0f), menuArrowAnimSpeed(0.1f),
       menuArrowSelected(false), menuArrowSelectedAnimSpeed(0.8f),
       menuSelectedWaitTimer(0.0f), shouldTransitionToGame(false),
@@ -37,9 +37,9 @@ void MenuScreen::initMenu() {
 
     // Cargar sólo si falta (evita recargar al volver al menú).
     if (menuBackgroundTexture == 0) {
-        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreenV2.jpg").c_str());
+        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreenV3.jpg").c_str());
         if (menuBackgroundTexture == 0) {
-            std::cerr << "Error cargando MenuScreenV2.jpg\n";
+            std::cerr << "Error cargando MenuScreenV3.jpg\n";
         }
     }
 
@@ -85,7 +85,8 @@ void MenuScreen::updateMenu(float deltaTime) {
                 selectedGameMode = GameMode::HistoryTwoPlayers;
                 shouldTransitionToGame = true;
             }
-            // Las opciones Vs (0,1) no hacen nada aún
+            // TODO: Cargar otras opciones de juego
+            // Las opciones Vs (0,1,4) no hacen nada aún
         }
     } else {
         // Alternar entre explosion_0 y explosion_1 rápidamente
@@ -185,7 +186,8 @@ void MenuScreen::processInputMenu(std::map<int, int>& keys) {
                 menuArrowAnimTimer = 0.0f;
                 keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
             }
-            // Las opciones Vs (0, 1) ignoran Enter por ahora
+            // TODO: Permitir selección de modos Vs (0, 1, 4) cuando estén implementados. Por ahora, solo modos Historia (2, 3) hacen algo al pulsar Enter.
+            // Las opciones Vs (0, 1, 4) ignoran Enter por ahora
         }
     }
 
