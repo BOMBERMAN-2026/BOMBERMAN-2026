@@ -89,6 +89,8 @@ private:
     double firstPersonLastMouseX = 0.0;
     double firstPersonLastMouseY = 0.0;
     bool firstPersonCursorLocked = false;
+    bool firstPersonMouseLeftPressedLastFrame = false;
+    bool firstPersonMouseRightPressedLastFrame = false;
     int active3DViewportPlayerIndex = 0;
 
     // Fondo 3D sorpresa: se revela con doble pulsación de la tecla 3 en modo 3D.

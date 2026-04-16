@@ -224,6 +224,12 @@ GLuint uniform3DTexturedShininess = 0;
 
 static constexpr float kDefaultPlayerSpeed = 0.4f;
 static constexpr glm::vec2 kDefaultPlayerSize(0.2f, 0.2f);
+static constexpr float kFirstPersonMouseYawSensitivity = 0.0006135f;
+static constexpr float kFirstPersonMousePitchSensitivity = 0.0006105f;
+static constexpr float kFirstPersonHeadBobAmplitude = 0.0032f;
+static constexpr float kFirstPersonHeadBobFrequency = 10.8f;
+static constexpr int kBombExplosionVerticalLayers = 5;
+static constexpr float kBombExplosionVerticalLayerStep = 0.36f;
 
 static const char* viewModeToString(ViewMode mode) {
     return (mode == ViewMode::Mode3D) ? "3D" : "2D";
@@ -1712,6 +1718,8 @@ void Game::toggleViewMode() {
     }
     firstPersonCursorLocked = shouldCaptureFirstPersonMouse;
     firstPersonMouseInitialized = false;
+    firstPersonMouseLeftPressedLastFrame = false;
+    firstPersonMouseRightPressedLastFrame = false;
 
     refreshWindowTitle();
     std::cout << "[Render] View mode -> " << viewModeToString(viewMode) << "\n";
@@ -1733,6 +1741,8 @@ void Game::cycleCamera3DType() {
             }
             firstPersonPitch = -0.18f;
             firstPersonMouseInitialized = false;
+            firstPersonMouseLeftPressedLastFrame = false;
+            firstPersonMouseRightPressedLastFrame = false;
             break;
     }
 
@@ -1957,6 +1967,8 @@ void Game::init() {
     firstPersonPitch = -0.18f;
     firstPersonMouseInitialized = false;
     firstPersonCursorLocked = false;
+    firstPersonMouseLeftPressedLastFrame = false;
+    firstPersonMouseRightPressedLastFrame = false;
     if (window != nullptr) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
@@ -2079,8 +2091,8 @@ void Game::processInput() {
             this->firstPersonLastMouseX = mouseX;
             this->firstPersonLastMouseY = mouseY;
 
-            this->firstPersonYaw -= (float)deltaX * 0.0030f;
-            this->firstPersonPitch -= (float)deltaY * 0.0022f;
+            this->firstPersonYaw -= (float)deltaX * kFirstPersonMouseYawSensitivity;
+            this->firstPersonPitch -= (float)deltaY * kFirstPersonMousePitchSensitivity;
             this->firstPersonPitch = std::max(-1.30f, std::min(1.10f, this->firstPersonPitch));
 
             const float kPi = 3.14159265359f;
@@ -2093,7 +2105,22 @@ void Game::processInput() {
         }
     }
 
-    if (gPlayers.empty() || gPlayers[0] == nullptr) return;
+    const bool mouseLeftPressedNow = (this->window != nullptr)
+        && (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+    const bool mouseRightPressedNow = (this->window != nullptr)
+        && (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+    const bool firstPersonLeftClick = shouldCaptureFirstPersonMouse
+        && mouseLeftPressedNow
+        && !this->firstPersonMouseLeftPressedLastFrame;
+    const bool firstPersonRightClick = shouldCaptureFirstPersonMouse
+        && mouseRightPressedNow
+        && !this->firstPersonMouseRightPressedLastFrame;
+
+    if (gPlayers.empty() || gPlayers[0] == nullptr) {
+        this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
+        this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+        return;
+    }
     Player* p1 = gPlayers[0];
 
     // ======================= Jugador 1 (blanco): Flechas =======================
@@ -2254,12 +2281,20 @@ void Game::processInput() {
     if (this->keys[GLFW_KEY_F3] == GLFW_PRESS) {
         this->keys[GLFW_KEY_F3] = GLFW_REPEAT;
         advanceToNextLevel();
+        this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
+        this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
         return;
     }
 
     // ======================= Bombas (Jugador 1) =======================
-    if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT;
+    const bool p1BombByKeyboard =
+        (!shouldCaptureFirstPersonMouse && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS);
+    const bool p1BombByMouse = (firstPersonLeftClick || firstPersonRightClick);
+
+    if (p1->isAlive() && !p1->isGameOver() && (p1BombByKeyboard || p1BombByMouse)) {
+        if (p1BombByKeyboard) {
+            this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT;
+        }
 
         if (p1->canPlaceBomb()) {
             int bombRow, bombCol;
@@ -2366,6 +2401,9 @@ void Game::processInput() {
     } else {
         this->cameraOrbitDragging = false;
     }
+
+    this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
+    this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
 
 }
 
@@ -2685,7 +2723,12 @@ void Game::render3D() {
             firstPersonCameraPitch = -0.18f;
         }
         const glm::vec3 firstPersonForward = firstPersonLookToForward(firstPersonCameraYaw, firstPersonCameraPitch);
-        const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f, 0.0f) - firstPersonForward * 0.10f;
+        float headBobOffset = 0.0f;
+        if (trackedPlayer != nullptr && trackedPlayer->isAlive() && trackedPlayer->isWalking) {
+            const float headBobPhase = (float)glfwGetTime() * kFirstPersonHeadBobFrequency;
+            headBobOffset = std::sin(headBobPhase) * kFirstPersonHeadBobAmplitude;
+        }
+        const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f + headBobOffset, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
         cameraTarget = eye + firstPersonForward * 2.8f;
     }
@@ -3358,14 +3401,18 @@ void Game::render3D() {
                     const float flicker = 1.0f + 0.12f * std::sin(animT);
                     const float bob = 0.06f + 0.02f * std::sin(animT * 0.85f);
 
-                    glm::mat4 model(1.0f);
-                    model = glm::translate(model, ndcToWorld3D(gameMap, seg.pos, 0.08f) + glm::vec3(0.0f, bob, 0.0f));
-                    model = glm::rotate(model, seg.rotation + kPiHalf, glm::vec3(0.0f, 1.0f, 0.0f));
-                    model = glm::scale(model, glm::vec3(baseScale * flicker, baseScale * flicker, baseScale * flicker));
+                    for (int layerIndex = 0; layerIndex < kBombExplosionVerticalLayers; ++layerIndex) {
+                        const float layerHeight = (float)layerIndex * kBombExplosionVerticalLayerStep;
 
-                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                    glBindVertexArray(flameGlbVAO);
-                    glDrawElements(GL_TRIANGLES, flameGlbIndexCount, GL_UNSIGNED_INT, 0);
+                        glm::mat4 model(1.0f);
+                        model = glm::translate(model, ndcToWorld3D(gameMap, seg.pos, 0.08f) + glm::vec3(0.0f, bob + layerHeight, 0.0f));
+                        model = glm::rotate(model, seg.rotation + kPiHalf, glm::vec3(0.0f, 1.0f, 0.0f));
+                        model = glm::scale(model, glm::vec3(baseScale * flicker, baseScale * flicker, baseScale * flicker));
+
+                        glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                        glBindVertexArray(flameGlbVAO);
+                        glDrawElements(GL_TRIANGLES, flameGlbIndexCount, GL_UNSIGNED_INT, 0);
+                    }
                 }
             }
 
