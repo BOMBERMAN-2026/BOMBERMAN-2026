@@ -11,7 +11,7 @@
 #include "menu.hpp"
 #include "cinematic_player.hpp"
 #include "gamepad_input.hpp"
-
+#include "in_game_menu.hpp"
 
 /*
  * bomberman.hpp
@@ -160,6 +160,9 @@ public:
         CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
         CinematicType currentCinematicType = CinematicType::Intro;
         GameState nextStateAfterCinematic = GAME_INTRO;
+
+        // In-game menu
+        InGameMenu inGameMenu;
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana
