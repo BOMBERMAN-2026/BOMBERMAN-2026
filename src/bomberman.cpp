@@ -59,11 +59,15 @@ SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
 SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
 SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
+SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
+SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 
 GLuint mapTexture;
 GLuint horizonTexture;
-GLuint enemyTexture = 0;
-GLuint scoreboardTexture = 0; // Textura del scoreboard/HUD 
+GLuint enemyTexture;
+GLuint scoreboardTexture; // Textura del scoreboard/HUD 
+GLuint vocabAmarilloTexture;
+GLuint vocabNaranjaTexture;
 
 // Vectores de entidades
 std::vector<Player*> gPlayers;
@@ -1299,22 +1303,22 @@ void Game::ensureRenderResources() {
     CompileShaders();
     CreateCube();
     CreateSphere();
-    CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
-    CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
-    CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
-    CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
-    CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
-    CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
-    CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
-    CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
-    CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
-    CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
-    CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
-    CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
-    CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
-    CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
-    CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
-    CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
+    // CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
+    // CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
+    // CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
+    // CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
+    // CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
+    // CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
+    // CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
+    // CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
+    // CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
+    // CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
+    // CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
+    // CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
+    // CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
+    // CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
+    // CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
+    // CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
 
@@ -1372,6 +1376,38 @@ void Game::ensureGameplayAssets() {
         scoreboardTexture = LoadTexture(scoreboardTexPath.c_str());
         if (scoreboardTexture == 0) {
             std::cerr << "Error cargando textura del scoreboard: " << scoreboardTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Texturas del vocabulario en amarillo pequeño
+    {
+        const std::string vocabAmarilloAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasVocAmarilloPeq.json");
+        if (!loadSpriteAtlasMinimal(vocabAmarilloAtlasPath, gVocabAmarilloAtlas)) {
+            std::cerr << "Error cargando atlas del vocabulario amarillo: " << vocabAmarilloAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string vocabAmarilloTexPath = resolveAssetPath(gVocabAmarilloAtlas.imagePath);  // Usa la ruta del JSON
+        vocabAmarilloTexture = LoadTexture(vocabAmarilloTexPath.c_str());
+        if (vocabAmarilloTexture == 0) {
+            std::cerr << "Error cargando textura del vocabulario amarillo: " << vocabAmarilloTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Texturas del vocabulario en naranja grande
+    {
+        const std::string vocabNaranjaAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasVocNaranjaGrande.json");
+        if (!loadSpriteAtlasMinimal(vocabNaranjaAtlasPath, gVocabNaranjaAtlas)) {
+            std::cerr << "Error cargando atlas del vocabulario naranja: " << vocabNaranjaAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string vocabNaranjaTexPath = resolveAssetPath(gVocabNaranjaAtlas.imagePath);  // Usa la ruta del JSON
+        vocabNaranjaTexture = LoadTexture(vocabNaranjaTexPath.c_str());
+        if (vocabNaranjaTexture == 0) {
+            std::cerr << "Error cargando textura del vocabulario naranja: " << vocabNaranjaTexPath << std::endl;
             std::exit(EXIT_FAILURE);
         }
     }
@@ -2070,6 +2106,34 @@ void Game::processInput() {
 
     if (this->state != GAME_PLAYING) return;
 
+    if (this->keys[GLFW_KEY_9] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_9] = GLFW_REPEAT;
+        this->inGameMenu.showInGameMenu = !this->inGameMenu.showInGameMenu;
+    }
+    // Salimos para no recibir más inputs en caso de haber desplegado el menu
+    if (this->inGameMenu.showInGameMenu) { 
+        int result = this->inGameMenu.processInputInGameMenu(this->keys);
+
+        // Mirar processInputInGameMenu para saber que devuelve
+        switch (result) {
+            case 1:
+                break;
+            case 2:
+                break;
+            case 3:
+                break;
+            case 4:
+                break;
+            case 6:
+                returnToMenuFromGame(/*resetRun=*/true);
+                break;
+            default:
+                break;
+        }
+
+        return; 
+    }
+
     if (this->viewMode != ViewMode::Mode3D) {
         this->surpriseKey3TapCount = 0;
         this->surpriseKey3LastTapTime = -10.0;
@@ -2477,6 +2541,9 @@ void Game::update() {
     if (gameMap) {
         gameMap->update(deltaTime);
     }
+
+    // No actualizamos a los enemigos ni jugador en caso de que el menu este desplegado
+    if (this->inGameMenu.showInGameMenu) return;
 
     // Actualizar enemigos (l├│gica o animaci├│n de muerte)
     const std::size_t enemiesToUpdate = gEnemies.size();
@@ -3963,6 +4030,8 @@ void Game::render2D() {
 
         glBindVertexArray(0);
     }
+
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
 
     glUseProgram(0);
 }
