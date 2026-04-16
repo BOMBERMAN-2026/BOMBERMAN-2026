@@ -24,24 +24,12 @@
  * - Salir del juego
  */
 
-const std::vector<std::string> menuOptions = {
-    "CONTINUE",
-    "CONTROLS",
-    "MUSIC",
-    "SOUNDS",
-    "GRAPHICS",
-    "CAMERA",
-    "EXIT"
-};
 
 class InGameMenu {
 
     private:
 
-        const uint numMenuOptions = 7; // Número total de opciones en el menú (ajustar según las opciones reales)
-        glm::vec2 menuOptionPos;  // Posición base el menu
-
-       // Texturas y atlases
+        // Texturas y atlases
         GLuint menuArrowTexture;
         GLuint vocabTexture; 
         GLuint blackTexture; // Textura negra para el menú in-game
@@ -52,7 +40,8 @@ class InGameMenu {
         float inGameMenuHeight;
         float inGameMenuWidth;
 
-        glm::vec2 arrowPos; // Posición de la flecha de selección
+        // Logica de selección
+        int posSeleccion; // Indice del vector actualmente seleccionado para cambiarlo de color (y mas cosas)
 
     public:
 
@@ -63,15 +52,16 @@ class InGameMenu {
 
         void initInGameMenu();
         void updateInGameMenu(float deltaTime);
+
+        void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
+                              const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
+                              GLuint uniformModel, GLuint uniformUvRect, int colorUse);
+
         void renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect,
                               SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture, 
                               SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture);
 
-        void processInputMenu(std::map<int, int>& keys);
-
-        void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
-                              const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                              GLuint uniformModel, GLuint uniformUvRect, bool useNaranja);
+        int processInputInGameMenu(std::map<int, int>& keys);
 };
 
 #endif // IN_GAME_MENU_HPP

@@ -5,11 +5,37 @@
 #include <string>
 #include <cctype>
 
+// ============================== GLOBAL VARIABLES ==============================
+
 static constexpr float scaleUsualHud = 0.0015f;
 
-InGameMenu::InGameMenu() : showInGameMenu(false), menuOptionPos(0.0f, 0.0f), menuArrowTexture(0), blackTexture(0), 
-                           inGameMenuHeight(0.55f), inGameMenuWidth(0.30f) {
+static constexpr glm::vec2 menuOptionPos(0.0f, 0.0f);
+static constexpr glm::vec2 pausePos(-0.45f, 0.45f);
+static constexpr glm::vec2 initMenuOptionsPos(-0.45f, 0.27f);
+static constexpr glm::vec2 currentOptionsSelectedPos(0.05f, 0.145f);
 
+const std::vector<std::string> inGameMenuOptions = {
+    "CONTINUE",
+    "MUSIC",
+    "SOUNDS",
+    "GRAPHICS",
+    "CAMERA",
+    "CONTROLS",
+    "EXIT"
+};
+
+std::vector<std::string> currentOptionsSelected;
+
+// ============================== INITS / DESTROYERS ==============================
+
+InGameMenu::InGameMenu() : showInGameMenu(false), menuArrowTexture(0), blackTexture(0), 
+                           inGameMenuHeight(0.55f), inGameMenuWidth(0.30f), posSeleccion(0) {
+    currentOptionsSelected = {
+        "ON",
+        "ON",
+        "2D",
+        "LOCKED"
+    };
 
 }
 
@@ -33,9 +59,16 @@ static GLuint createBlackTexture() {
     return texture;
 }
 
+
+// ============================== RENDER ==============================
+
+/** Render del inGameMenu
+ *  El valor de colorUse esta entre 0 (color naranja), 1 (color amarillo) y 2 (color amarillo blanquecino) 
+ */
+
 void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, float scale,
                                   const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                                  GLuint uniformModel, GLuint uniformUvRect, bool useNaranja) {
+                                  GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
     if (text.empty()) {
         return;
     }
@@ -50,11 +83,18 @@ void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, f
 
     for (char c : text) {
         std::string spriteName(1, c);
-        if (useNaranja) {
-            spriteName = spriteName + "_Nar";
-        } else {
-            spriteName = spriteName + "_Ama";
+        if (spriteName == " ") {
+            currentX += 0.054f;
+            continue;
         }
+
+        if (colorUse == 0)
+            spriteName = spriteName + "_Nar";
+        else if (colorUse == 1)
+            spriteName = spriteName + "_Ama";
+        else 
+            spriteName = spriteName + "_AmaBla";
+            
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
 
         if (!getUvRectForSprite(atlas, spriteName, uvRect)) {
@@ -108,50 +148,104 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-    renderTextString("PAUSE", menuOptionPos + glm::vec2(0.10f, 0.0f), scaleUsualHud * 2.25f, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect, true);
+    renderTextString("PAUSE", pausePos, scaleUsualHud * 1.50f, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect, 0);
     
     // Renderizar texto dentro del menú
-    for (int i=0 ; i < menuOptions.size(); i++) {
-        renderTextString(menuOptions[i], menuOptionPos + glm::vec2(0.0f, 0.05f - i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, false);
+        // Parte de la izq
+    for (int i=0 ; i < inGameMenuOptions.size(); i++) {
+        if (i == posSeleccion) renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 2);
+        else renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
     }
-    //renderTextString("EXIT", menuOptionPos + glm::vec2(-0.18f, 0.05f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect);
 
-    // ===== RENDERIZAR FLECHA DE SELECCIÓN =====
-    // glBindTexture(GL_TEXTURE_2D, menuArrowTexture);
-
-    // float arrowY = menuArrowY_Base - (menuSelection * menuArrowY_Offset);
-    // float arrowX = menuArrowX;
-    // float arrowScale = 0.1f;
-
-    // model = glm::mat4(1.0f);
-    // model = glm::translate(model, glm::vec3(arrowX, arrowY, 0.0f));
-    // model = glm::scale(model, glm::vec3(arrowScale, arrowScale, 1.0f));
-    // glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-
-    // glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)));
-
-    // uvRect = glm::vec4(0.0f, 0.0f, 1.0f, 1.0f);
-    // if (!menuBombAtlas.sprites.empty()) {
-    //     std::string spriteNameToUse;
-
-    //     if (menuArrowSelected) {
-    //         if (menuArrowAnimTimer < 0.05f) {
-    //             spriteNameToUse = "explosion_2";
-    //         } else {
-    //             spriteNameToUse = (menuArrowAnimTimer < menuArrowSelectedAnimSpeed * 0.5f) ? "explosion_3" : "explosion_4";
-    //         }
-    //     } else {
-    //         spriteNameToUse = (menuArrowAnimTimer < menuArrowAnimSpeed * 0.5f) ? "explosion_0" : "explosion_1";
-    //     }
-
-    //     getUvRectForSprite(menuBombAtlas, spriteNameToUse, uvRect);
-    // }
-    // glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
-    // glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        // Parte de la derecha
+    for (int i=0; i < currentOptionsSelected.size();  i++) {
+        renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+    }
 
     glBindVertexArray(0);
-    //glUseProgram(0);
 }
 
+// ============================== INPUT ==============================
 
+int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
+
+    // Devolvemos un valor entre los siguientes
+    // -1 -> no hay que hacer nada en bomberman.cpp
+    //  1 -> hay que silenciar la musica
+    //  2 -> hay que silenciar los efectos de sonido
+    //  3 -> hay que alternar entre 2D y 3D
+    //  4 -> hay que cambiar la camara
+    //  6 -> hay que volver al menu de seleccion de juego
+    int result = -1;
+
+    if (keys[GLFW_KEY_DOWN] == GLFW_PRESS) {
+        if (posSeleccion >= inGameMenuOptions.size() - 1) posSeleccion = inGameMenuOptions.size() - 1;
+        else posSeleccion += 1;
+        keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+    }
+    
+    if (keys[GLFW_KEY_UP] == GLFW_PRESS) {
+        if (posSeleccion <= 0) posSeleccion = 0;
+        else posSeleccion -= 1;
+        keys[GLFW_KEY_UP] = GLFW_REPEAT;
+    }
+
+    if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
+        
+        // Comportamiento condicionado al indice en el vector currentOptionsSelected 
+        switch (posSeleccion) {
+            // CONTINUE 
+            case 0:
+                showInGameMenu = false;
+                posSeleccion = 0;
+                break;
+            // MUSIC
+            case 1:
+                result = 1;
+                currentOptionsSelected[posSeleccion - 1] == "ON" ? currentOptionsSelected[posSeleccion - 1] = "OFF" : currentOptionsSelected[posSeleccion - 1] = "ON";
+                break;
+
+            // SOUNDS
+            case 2:
+                result = 2;
+                currentOptionsSelected[posSeleccion - 1] == "ON" ? currentOptionsSelected[posSeleccion - 1] = "OFF" : currentOptionsSelected[posSeleccion - 1] = "ON";
+                break;
+
+            // GRAPHICS
+            case 3:
+                result = 3;
+                currentOptionsSelected[posSeleccion - 1] == "2D" ? currentOptionsSelected[posSeleccion - 1] = "3D" : currentOptionsSelected[posSeleccion - 1] = "2D";
+                break;
+
+            // CAMERA
+            case 4:
+                result = 4;
+                // LOCKED -> FREE -> BOMBERMAN -> LOCKED -> ...
+                if (currentOptionsSelected[posSeleccion - 1] == "LOCKED") currentOptionsSelected[posSeleccion - 1] = "FREE";
+                else if (currentOptionsSelected[posSeleccion - 1] == "FREE") currentOptionsSelected[posSeleccion - 1] = "BOMBERMAN";
+                else currentOptionsSelected[posSeleccion - 1] = "LOCKED";
+                break;
+
+            // CONTROLS
+            case 5:
+                // TODO, no me sale de la polla (aun)
+                break;
+            
+            // EXIT
+            case 6:
+                result = 6;
+                showInGameMenu = false;
+                posSeleccion = 0;
+                break;
+            default:
+                break;
+            
+        }
+
+        keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+    }
+
+    return result;
+
+}
 

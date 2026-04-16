@@ -2111,7 +2111,28 @@ void Game::processInput() {
         this->inGameMenu.showInGameMenu = !this->inGameMenu.showInGameMenu;
     }
     // Salimos para no recibir más inputs en caso de haber desplegado el menu
-    if (this->inGameMenu.showInGameMenu) return;
+    if (this->inGameMenu.showInGameMenu) { 
+        int result = this->inGameMenu.processInputInGameMenu(this->keys);
+
+        // Mirar processInputInGameMenu para saber que devuelve
+        switch (result) {
+            case 1:
+                break;
+            case 2:
+                break;
+            case 3:
+                break;
+            case 4:
+                break;
+            case 6:
+                returnToMenuFromGame(/*resetRun=*/true);
+                break;
+            default:
+                break;
+        }
+
+        return; 
+    }
 
     if (this->viewMode != ViewMode::Mode3D) {
         this->surpriseKey3TapCount = 0;
