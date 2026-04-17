@@ -1031,6 +1031,8 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
     const float mapRatio = (float)cols / (float)rows;
 
     const float margin = 0.06f;
+    // Reserva la misma franja superior del HUD para que el minimapa quede justo debajo.
+    constexpr float kHudReservedTopSpaceNdc = 0.25f;
     float panelHeight = 0.56f;
     float panelWidth = panelHeight * mapRatio;
 
@@ -1041,9 +1043,26 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
     }
 
     const float panelRight = aspect - margin;
-    const float panelTop = 1.0f - margin;
+    const float panelTop = 1.0f - kHudReservedTopSpaceNdc - margin;
+    const float minPanelBottom = -1.0f + margin;
+
+    float adjustedPanelHeight = panelHeight;
+    float adjustedPanelWidth = panelWidth;
+    float panelBottom = panelTop - adjustedPanelHeight;
+    if (panelBottom < minPanelBottom) {
+        adjustedPanelHeight = std::max(0.24f, panelTop - minPanelBottom);
+        adjustedPanelWidth = adjustedPanelHeight * mapRatio;
+        if (adjustedPanelWidth > maxPanelWidth) {
+            adjustedPanelWidth = maxPanelWidth;
+            adjustedPanelHeight = adjustedPanelWidth / std::max(0.2f, mapRatio);
+        }
+        panelBottom = panelTop - adjustedPanelHeight;
+    }
+
+    panelHeight = adjustedPanelHeight;
+    panelWidth = adjustedPanelWidth;
+
     const float panelLeft = panelRight - panelWidth;
-    const float panelBottom = panelTop - panelHeight;
     const float panelCenterX = (panelLeft + panelRight) * 0.5f;
     const float panelCenterY = (panelTop + panelBottom) * 0.5f;
     const float panelTileW = panelWidth / (float)cols;
@@ -4220,6 +4239,44 @@ void Game::render3D() {
 
     glBindVertexArray(0);
     glUseProgram(0);
+
+    // HUD clásico (2D) también en vista 3D: fijo en pantalla y en la misma posición que en 2D.
+    if (!isSplitFirstPersonPass && gameMap != nullptr && shader != 0 && VAO != 0 && scoreboardTexture != 0) {
+        const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
+        if (!wasBlendEnabled) {
+            glEnable(GL_BLEND);
+        }
+
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_SCISSOR_TEST);
+
+        glUseProgram(shader);
+        const glm::mat4 hudProjection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(hudProjection));
+        glUniform1i(uniformTexture, 0);
+        glUniform1f(uniformFlipX, 0.0f);
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+        glUniform1f(uniformWhiteFlash, 0.0f);
+
+        gameMap->renderHud(VAO,
+                           uniformModel,
+                           uniformUvRect,
+                           gScoreboardAtlas,
+                           scoreboardTexture,
+                           &playerScores,
+                           &gPlayers,
+                           &gEnemies,
+                           currentGameLevel,
+                           levelTimeRemaining,
+                           (mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1);
+
+        glBindVertexArray(0);
+        glUseProgram(0);
+
+        if (!wasBlendEnabled) {
+            glDisable(GL_BLEND);
+        }
+    }
 
     if (camera3DType == Camera3DType::FirstPerson && !isSplitFirstPersonPass) {
         renderFirstPersonMiniMap2D(gameMap, viewportWidth, viewportHeight);
