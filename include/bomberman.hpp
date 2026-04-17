@@ -106,7 +106,11 @@ private:
     int currentLevelIndex = 0;
     int versusRoundNumber = 1;
     bool currentLevelHadEnemies = false;
+
+public:
     std::vector<int> playerScores;
+
+private:
     std::vector<std::string> levelSequence = {
         "levels/level_01.txt",
         "levels/level_02.txt",

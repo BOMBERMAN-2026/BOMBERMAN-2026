@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -16,6 +16,35 @@
 #include "enemies/dragon_joven.hpp"
 #include "versus_mode.hpp"
 #include "cpu_bomberman.hpp"
+
+
+
+// ============================================================
+// Wrappers de audio — delegan al AudioManager (miniaudio)
+// ============================================================
+#include "audio_manager.hpp"
+
+
+
+// Llamada desde Bomb::detonate() en bomb.cpp
+void PlayExplosionSound() {
+    AudioManager::get().playVfx(VfxSound::Explosion);
+}
+
+// Llamada desde constructor de Bomb en bomb.cpp
+void PlayPlaceBombSound() {
+    AudioManager::get().playVfx(VfxSound::PlaceBomb);
+}
+
+// Llamada desde game_map.cpp / bomberman.cpp al recoger power-up
+void PlayCogerPowerUpSound() {
+    AudioManager::get().playVfx(VfxSound::Pickup);
+}
+
+void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled) {
+    // Silenciado: sistema de debug de audio MCI eliminado.
+    (void)eventName; (void)ownerIndex; (void)row; (void)col; (void)power; (void)remoteControlled;
+}
 
 /*
  * bomberman.cpp
@@ -1681,6 +1710,11 @@ void Game::startNewRun(GameMode newMode) {
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
     cinematicPlayer.open(videoPath);
 
+    // Reproducir jingle "Game Start" durante la cinemática del nivel
+    AudioManager::get().stopBgm();
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+
+
     // Por si el menú dejó la marca de transición activa.
     menuScreen.resetTransition();
 }
@@ -1731,10 +1765,18 @@ void Game::advanceToNextLevel() {
     // Abrir el video de la cinemática del nivel.
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
     cinematicPlayer.open(videoPath);
+
+    // Reproducir jingle "Game Start" durante la cinemática del nivel (siguiente nivel)
+    AudioManager::get().stopBgm();
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+
 }
 
 // Sale a menú desde gameplay (Game Over / fin de campaña / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
+    AudioManager::get().stopBgm();
+
+
     cleanupGameplayEntities();
     pendingLevelAdvance = false;
     levelAdvanceTimer = 0.0f;
@@ -1998,9 +2040,17 @@ Game::~Game() {
     dragonGlbVAO = dragonGlbVBO = dragonGlbEBO = 0;
     dragonGlbIndexCount = 0;
     dragonGlbTexture = 0;
+
+    // Apaga el sistema de audio (libera miniaudio)
+    AudioManager::get().shutdown();
 }
 
+
 void Game::init() {
+
+    // Inicializar sistema de audio (miniaudio) — solo la primera vez
+    AudioManager::get().init(resolveAssetPath(""));
+
 
     ensureRenderResources();
 
@@ -2486,6 +2536,9 @@ void Game::processInput() {
 void Game::update() {
     float deltaTime = this->deltaTime;
 
+
+
+
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
         menuScreen.updateMenu(deltaTime);
@@ -2500,6 +2553,12 @@ void Game::update() {
                 this->nextStateAfterCinematic = GAME_PLAYING;
                 std::string videoPath = resolveAssetPath("resources/video/HistoryIntro.mp4");
                 cinematicPlayer.open(videoPath);
+                
+                // Reproducir música de intro de Historia antes de la cinemática
+                AudioManager::get().stopBgm();
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+
+
                 menuScreen.resetTransition();
             } else {
                 startNewRun(selectedMode);
@@ -2514,9 +2573,29 @@ void Game::update() {
 
     // ========== CINEMATICA ==========
     if (this->state == GAME_CINEMATIC) {
+        bool audioFinished = false;
+
+        if (currentCinematicType == CinematicType::LevelStart) {
+            audioFinished = AudioManager::get().isBgmFinished();
+        }
+
+
         cinematicPlayer.update(deltaTime);
-        if (cinematicPlayer.isFinished()) {
+
+        // Termina si el video se acaba, o en el caso de LevelStart, si ademas ya acabo el audio
+        bool isDone = cinematicPlayer.isFinished();
+        
+        if (currentCinematicType == CinematicType::LevelStart) {
+            isDone = isDone && audioFinished;
+        }
+
+        if (isDone) {
             cinematicPlayer.close();
+            
+            // Parar BGM de cinematica si hay una en curso
+            AudioManager::get().stopBgm();
+
+
             if (currentCinematicType == CinematicType::Intro) {
                 this->state = GAME_MENU;
                 this->init();
@@ -2532,6 +2611,21 @@ void Game::update() {
                     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
                     loadLevelPending = false;
                     this->state = GAME_PLAYING;
+                    
+                    // Iniciar BGM del nivel con miniaudio
+                    std::string bgmFile = "";
+                    if (currentLevelIndex == 0 || currentLevelIndex == 1) {
+                        bgmFile = "resources/sounds/03 BGM 1.mp3";
+                    } else if (currentLevelIndex == 2 || currentLevelIndex == 4) {
+                        bgmFile = "resources/sounds/05 Boss BGM.mp3";
+                    } else if (currentLevelIndex == 3) {
+                        bgmFile = "resources/sounds/06 BGM 2.mp3";
+                    }
+
+                    if (!bgmFile.empty()) {
+                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                    }
+
                 }
             }
         }

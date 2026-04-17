@@ -16,6 +16,9 @@ extern GLuint uniformTintColor;
 extern GLuint mapTexture;
 extern GameMap* gameMap;
 extern SpriteAtlas gBombAtlas;
+extern void PlayExplosionSound();
+extern void PlayPlaceBombSound();
+extern void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled);
 
 /*
  * bomb.cpp
@@ -39,14 +42,17 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, 
       animFrame(1),
       animStep(0),
       animInterval(0.3f),     // Intervalo constante de la mecha
-      explodeInterval(0.045f), // Más rápido que 0.08: 8 frames a 0.045s = 0.36s (termina antes que 0.40s)
+      explodeInterval(0.065f), // Intervalo de explosión intermedio (más rápido que 0.12s, más lento que 0.045s)
       currentSpriteName("bomb.1"),
       ownerIndex(ownerPlayer ? ownerPlayer->playerId : 0),
       ownerLeftTile(false),
       power(bombPower),
       owner(ownerPlayer),
       remoteControlled(remote)
-{}
+{
+    PlayPlaceBombSound();
+    DebugLogBombLifecycleEvent("spawn", ownerIndex, gridRow, gridCol, power, remoteControlled);
+}
 
 // Ajusta contadores del owner si la bomba se destruye antes de terminar.
 Bomb::~Bomb() {
@@ -123,6 +129,8 @@ bool Bomb::Update(float deltaTime) {
 void Bomb::detonate() {
     if (state != BombState::FUSE) return;
 
+    DebugLogBombLifecycleEvent("detonate", ownerIndex, gridRow, gridCol, power, remoteControlled);
+
     // Decrementar contador de bombas activas del dueño
     if (owner) {
         owner->activeBombs--;
@@ -130,6 +138,7 @@ void Bomb::detonate() {
     }
 
     state = BombState::EXPLODING;
+    PlayExplosionSound();
     animTimer = 0.0f;
     animStep = 0;
     animFrame = 0;
