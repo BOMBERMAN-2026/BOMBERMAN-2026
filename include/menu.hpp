@@ -8,6 +8,7 @@
 #include <map>
 
 #include "sprite_atlas.hpp"
+#include "controls_menu.hpp"
 
 // Forward declaration to avoid circular dependency
 enum class GameMode;
@@ -62,7 +63,7 @@ public:
                     int WIDTH, int HEIGHT);
 
     // Procesamiento de entrada
-    void processInputMenu(std::map<int, int>& keys);
+    void processInputMenu(std::map<int, int>& keys, ControlsMenu& controls);
 
     // Getters
     int getMenuSelection() const { return menuSelection; }

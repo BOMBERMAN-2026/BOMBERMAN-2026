@@ -2078,7 +2078,7 @@ void Game::processInput() {
             this->firstPersonCursorLocked = false;
             this->firstPersonMouseInitialized = false;
         }
-        menuScreen.processInputMenu(this->keys);
+        menuScreen.processInputMenu(this->keys, inGameMenu.controlsMenu);
         return;
     }
 
@@ -2107,9 +2107,9 @@ void Game::processInput() {
     if (this->state != GAME_PLAYING) return;
 
     // ========== IN_GAME_MENU ==========
-    if (this->keys[GLFW_KEY_9] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_9] = GLFW_REPEAT;
-        this->inGameMenu.showInGameMenu = !this->inGameMenu.showInGameMenu;
+    if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
+        this->inGameMenu.showInGameMenu = true;
     }
     // Salimos para no recibir más inputs en caso de haber desplegado el menu
     if (this->inGameMenu.showInGameMenu) { 
@@ -2124,19 +2124,12 @@ void Game::processInput() {
 
         // Mirar processInputInGameMenu para saber que devuelve
         switch (result) {
-            case 1:
-                break;
-            case 2:
-                break;
-            case 3:
-                break;
-            case 4:
-                break;
-            case 6:
-                returnToMenuFromGame(/*resetRun=*/true);
-                break;
-            default:
-                break;
+            case 1: break;
+            case 2: break;
+            case 3: toggleViewMode(); break;
+            case 4: cycleCamera3DType(); break;
+            case 6: returnToMenuFromGame(/*resetRun=*/true); break;
+            default: break;
         }
 
         return; 
@@ -2210,10 +2203,10 @@ void Game::processInput() {
     // ======================= Jugador 1 (blanco): Flechas =======================
 
     if (p1->isAlive()) {
-        const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
-        const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
-        const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
-        const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
+        const bool up = (this->keys[inGameMenu.controlsMenu.upKey_P1] >= GLFW_PRESS);
+        const bool down = (this->keys[inGameMenu.controlsMenu.downKey_P1] >= GLFW_PRESS);
+        const bool left = (this->keys[inGameMenu.controlsMenu.leftKey_P1] >= GLFW_PRESS);
+        const bool right = (this->keys[inGameMenu.controlsMenu.rightKey_P1] >= GLFW_PRESS);
 
         const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
         if (pressedCount == 0) {
@@ -2282,10 +2275,10 @@ void Game::processInput() {
             p2->isWalking = false;
         } else {
 
-            const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
-            const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
-            const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
-            const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
+            const bool up2 = (this->keys[inGameMenu.controlsMenu.upKey_P2] >= GLFW_PRESS);
+            const bool down2 = (this->keys[inGameMenu.controlsMenu.downKey_P2] >= GLFW_PRESS);
+            const bool left2 = (this->keys[inGameMenu.controlsMenu.leftKey_P2] >= GLFW_PRESS);
+            const bool right2 = (this->keys[inGameMenu.controlsMenu.rightKey_P2] >= GLFW_PRESS);
 
             const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
             if (pressedCount2 == 0) {
@@ -2378,8 +2371,8 @@ void Game::processInput() {
     }
 
     // ======================= Bombas (Jugador 1) =======================
-    if (p1->isAlive() && !p1->isGameOver() && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT;
+    if (p1->isAlive() && !p1->isGameOver() && this->keys[inGameMenu.controlsMenu.bombKey_P1] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.bombKey_P1] = GLFW_REPEAT;
 
         if (p1->canPlaceBomb()) {
             int bombRow, bombCol;
@@ -2405,8 +2398,8 @@ void Game::processInput() {
         }
     }
 
-    if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
+    if (p1->isAlive() && p1->hasRemoteControl && this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] = GLFW_REPEAT;
         for (auto* b : gBombs) {
             if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
                 b->detonate();
@@ -2419,8 +2412,8 @@ void Game::processInput() {
     if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
-        if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_X] = GLFW_REPEAT;
+        if (p2->isAlive() && !p2->isGameOver() && this->keys[inGameMenu.controlsMenu.bombKey_P2] == GLFW_PRESS) {
+            this->keys[inGameMenu.controlsMenu.bombKey_P2] = GLFW_REPEAT;
 
             if (p2->canPlaceBomb()) {
                 int bombRow, bombCol;
@@ -2446,8 +2439,8 @@ void Game::processInput() {
             }
         }
 
-        if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
+        if (p2->isAlive() && p2->hasRemoteControl && this->keys[inGameMenu.controlsMenu.detonateBombKey_P2] == GLFW_PRESS) {
+            this->keys[inGameMenu.controlsMenu.detonateBombKey_P2] = GLFW_REPEAT;
             for (auto* b : gBombs) {
                 if (b && b->ownerIndex == p2->playerId && b->state == BombState::FUSE) {
                     b->detonate();
@@ -3960,6 +3953,8 @@ void Game::render3D() {
         }
     }
 
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+    
     glBindVertexArray(0);
     glUseProgram(0);
 

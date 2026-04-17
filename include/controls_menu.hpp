@@ -86,11 +86,11 @@ class ControlsMenu {
 
         void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
                               const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                              GLuint uniformModel, GLuint uniformUvRect, int colorUse);
+                              GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, int colorUse);
 
         void renderControlsMenu(const SpriteAtlas& atlas, GLuint atlasTexture, 
                                 const SpriteAtlas& atlas2, GLuint atlasTexture2,  
-                                GLuint vao, GLuint uniformModel, GLuint uniformUvRect);
+                                GLuint vao, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect);
 
         void processInputControlsMenu(std::map<int, int>& keys, int lastKeyPressed);
 

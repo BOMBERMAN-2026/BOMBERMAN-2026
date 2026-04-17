@@ -54,7 +54,7 @@ class InGameMenu {
 
         void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
                               const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                              GLuint uniformModel, GLuint uniformUvRect, int colorUse);
+                              GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, int colorUse);
 
         void renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect,
                               SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture, 

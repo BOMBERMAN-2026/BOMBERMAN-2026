@@ -67,7 +67,7 @@ static GLuint createBlackTexture() {
 
 void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, float scale,
                                   const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                                  GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
+                                  GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, int colorUse) {
     if (text.empty()) {
         return;
     }
@@ -75,6 +75,9 @@ void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, f
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, atlasTexture);
     glBindVertexArray(vao);
+
+    glm::mat4 orthoProj = glm::ortho(-2.0f, 2.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(orthoProj));
 
     float currentX = startPos.x;
     float y = startPos.y;
@@ -106,7 +109,7 @@ void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, f
         float spriteHeight = (it != atlas.sprites.end()) ? static_cast<float>(it->second.h) * scale : 23.0f * scale;
 
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));
+        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.1f)); // 0.1f en Z para que se pueda mostrar en el 3D
         model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));
 
         glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -133,6 +136,9 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     // glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
     // glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
+    glm::mat4 orthoProj = glm::ortho(-2.0f, 2.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(orthoProj));
+
     // Renderizar fondo del menú
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, glm::vec3(menuOptionPos, 0.0f)); // Le damos la posición fixeada del menú
@@ -148,24 +154,24 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
     if (controlsMenu.showControlsMenu) {
-        controlsMenu.renderControlsMenu(gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect);
+        controlsMenu.renderControlsMenu(gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformProjection, uniformUvRect);
     }
     else {
-        renderTextString("PAUSE", pausePos, scaleUsualHud * 1.50f, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformUvRect, 0);
+        renderTextString("PAUSE", pausePos, scaleUsualHud * 1.50f, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 0);
     
         // Renderizar texto dentro del menú
             // Parte de la izq
         for (int i=0 ; i < inGameMenuOptions.size(); i++) {
-            if (i == posSeleccion) renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 2);
-            else renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+            if (i == posSeleccion) renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 2);
+            else renderTextString(inGameMenuOptions[i], initMenuOptionsPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 1);
         }
 
             // Parte de la derecha
         for (int i=0; i < currentOptionsSelected.size();  i++) {
-            renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformUvRect, 1);
+            renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 1);
         }
     }
-
+    
     glBindVertexArray(0);
 }
 
@@ -182,17 +188,17 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
     //  6 -> hay que volver al menu de seleccion de juego
     int result = -1;
 
-    if (keys[GLFW_KEY_DOWN] == GLFW_PRESS) {
+    if (keys[controlsMenu.downKey_P1] == GLFW_PRESS) {
         posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
-        keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+        keys[controlsMenu.downKey_P1] = GLFW_REPEAT;
     }
     
-    if (keys[GLFW_KEY_UP] == GLFW_PRESS) {
+    if (keys[controlsMenu.upKey_P1] == GLFW_PRESS) {
         posSeleccion <= 0 ? posSeleccion = inGameMenuOptions.size() - 1 : posSeleccion -= 1;
-        keys[GLFW_KEY_UP] = GLFW_REPEAT;
+        keys[controlsMenu.upKey_P1] = GLFW_REPEAT;
     }
 
-    if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
+    if (keys[controlsMenu.selectKey] == GLFW_PRESS) {
         
         // Comportamiento condicionado al indice en el vector currentOptionsSelected 
         switch (posSeleccion) {
@@ -230,7 +236,6 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
 
             // CONTROLS
             case 5:
-                // TODO, no me sale de la polla (aun)
                 controlsMenu.showControlsMenu = true;
                 break;
             
@@ -244,7 +249,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
                 break;
         }
 
-        keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+        keys[controlsMenu.selectKey] = GLFW_REPEAT;
     }
 
     return result;

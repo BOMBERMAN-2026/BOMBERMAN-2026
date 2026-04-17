@@ -346,7 +346,7 @@ void ControlsMenu::readFromFile() {
 }
 
 void ControlsMenu::saveToNonTemps() {
-    bombKey_P1 = detonateBombKey_P1_temp;
+    bombKey_P1 = bombKey_P1_temp;
     detonateBombKey_P1 = detonateBombKey_P1_temp;
     upKey_P1 = upKey_P1_temp;
     leftKey_P1 = leftKey_P1_temp;
@@ -369,7 +369,7 @@ void ControlsMenu::saveToNonTemps() {
 }
 
 void ControlsMenu::flushTemps() {
-    bombKey_P1_temp = detonateBombKey_P1;
+    bombKey_P1_temp = bombKey_P1;
     detonateBombKey_P1_temp = detonateBombKey_P1;
     upKey_P1_temp = upKey_P1;
     leftKey_P1_temp = leftKey_P1;
@@ -456,7 +456,7 @@ void ControlsMenu::loadDefaultControls() {
 
 void ControlsMenu::renderTextString(const std::string& text, glm::vec2 startPos, float scale,
                       const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                      GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
+                      GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, int colorUse) {
     if (text.empty()) {
         return;
     }
@@ -495,7 +495,7 @@ void ControlsMenu::renderTextString(const std::string& text, glm::vec2 startPos,
         float spriteHeight = (it != atlas.sprites.end()) ? static_cast<float>(it->second.h) * scale : 23.0f * scale;
 
         glm::mat4 model = glm::mat4(1.0f);
-        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.0f));
+        model = glm::translate(model, glm::vec3(currentX + spriteWidth * 0.5f, y, 0.1f)); // 0.1f en Z para que se pueda mostrar en el 3D
         model = glm::scale(model, glm::vec3(spriteWidth * 0.5f, spriteHeight * 0.5f, 1.0f));
 
         glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -508,52 +508,52 @@ void ControlsMenu::renderTextString(const std::string& text, glm::vec2 startPos,
 
 void ControlsMenu::renderControlsMenu(const SpriteAtlas& atlas, GLuint atlasTexture, 
                                       const SpriteAtlas& atlas2, GLuint atlasTexture2,  
-                                      GLuint vao, GLuint uniformModel, GLuint uniformUvRect) {
+                                      GLuint vao, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect) {
 
     // Mini-title
-    renderTextString("BOMBERMAN 1", bomberman_1_Pos + glm::vec2(0.0f, 0.1), scaleMiniTitle, atlas2, atlasTexture2, vao, uniformModel, uniformUvRect, 0);
-    renderTextString("BOMBERMAN 2", bomberman_2_Pos + glm::vec2(0.0f, 0.1), scaleMiniTitle, atlas2, atlasTexture2, vao, uniformModel, uniformUvRect, 0);
+    renderTextString("BOMBERMAN 1", bomberman_1_Pos + glm::vec2(0.0f, 0.1), scaleMiniTitle, atlas2, atlasTexture2, vao, uniformModel, uniformProjection, uniformUvRect, 0);
+    renderTextString("BOMBERMAN 2", bomberman_2_Pos + glm::vec2(0.0f, 0.1), scaleMiniTitle, atlas2, atlasTexture2, vao, uniformModel, uniformProjection, uniformUvRect, 0);
 
     // Nombres de los controles para cada jugador
     for (int i=0; i < bombermanKeyStrings.size(); i++) {
-        renderTextString(bombermanKeyStrings[i], bomberman_1_Pos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, 1);
-        renderTextString(bombermanKeyStrings[i], bomberman_2_Pos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, 1);
+        renderTextString(bombermanKeyStrings[i], bomberman_1_Pos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, 1);
+        renderTextString(bombermanKeyStrings[i], bomberman_2_Pos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, 1);
     }
 
     // Mini-title
-    renderTextString("GLOBAL", globalKeyPos + glm::vec2(0.0f, 0.1), scaleMiniTitle, atlas2, atlasTexture2, vao, uniformModel, uniformUvRect, 0);
+    renderTextString("GLOBAL", globalKeyPos + glm::vec2(0.0f, 0.1), scaleMiniTitle, atlas2, atlasTexture2, vao, uniformModel, uniformProjection, uniformUvRect, 0);
     
     // Nombres de los controles generales
     for (int i=0; i < generalKeyStrings.size(); i++) {
         float separacion = (i == 0 ? 0.1f : 0.075f);
-        renderTextString(generalKeyStrings[i], globalKeyPos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, 1);
+        renderTextString(generalKeyStrings[i], globalKeyPos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, 1);
     }
 
     // Teclas usadas por el jugador 1
-    renderTextString(getKeyName(bombKey_P1_temp), bomberman_1_ControlsPos, scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_1_Controls == 0 ? 2 : 1);
-    renderTextString(getKeyName(detonateBombKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_1_Controls == 1 ? 2 : 1);
-    renderTextString(getKeyName(upKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.150f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_1_Controls == 2 ? 2 : 1);
-    renderTextString(getKeyName(leftKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.225f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_1_Controls == 3 ? 2 : 1);
-    renderTextString(getKeyName(downKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.300f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_1_Controls == 4 ? 2 : 1);
-    renderTextString(getKeyName(rightKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.375f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_1_Controls == 5 ? 2 : 1);
+    renderTextString(getKeyName(bombKey_P1_temp), bomberman_1_ControlsPos, scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_1_Controls == 0 ? 2 : 1);
+    renderTextString(getKeyName(detonateBombKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_1_Controls == 1 ? 2 : 1);
+    renderTextString(getKeyName(upKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.150f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_1_Controls == 2 ? 2 : 1);
+    renderTextString(getKeyName(leftKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.225f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_1_Controls == 3 ? 2 : 1);
+    renderTextString(getKeyName(downKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.300f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_1_Controls == 4 ? 2 : 1);
+    renderTextString(getKeyName(rightKey_P1_temp), bomberman_1_ControlsPos + glm::vec2(0.0f, -0.375f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_1_Controls == 5 ? 2 : 1);
 
      // Teclas usadas por el jugador 2
-    renderTextString(getKeyName(bombKey_P2_temp), bomberman_2_ControlsPos, scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_2_Controls == 0 ? 2 : 1);
-    renderTextString(getKeyName(detonateBombKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_2_Controls == 1 ? 2 : 1);
-    renderTextString(getKeyName(upKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.150f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_2_Controls == 2 ? 2 : 1);
-    renderTextString(getKeyName(leftKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.225f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_2_Controls == 3 ? 2 : 1);
-    renderTextString(getKeyName(downKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.300f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_2_Controls == 4 ? 2 : 1);
-    renderTextString(getKeyName(rightKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.375f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexBomberman_2_Controls == 5 ? 2 : 1);
+    renderTextString(getKeyName(bombKey_P2_temp), bomberman_2_ControlsPos, scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_2_Controls == 0 ? 2 : 1);
+    renderTextString(getKeyName(detonateBombKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_2_Controls == 1 ? 2 : 1);
+    renderTextString(getKeyName(upKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.150f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_2_Controls == 2 ? 2 : 1);
+    renderTextString(getKeyName(leftKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.225f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_2_Controls == 3 ? 2 : 1);
+    renderTextString(getKeyName(downKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.300f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_2_Controls == 4 ? 2 : 1);
+    renderTextString(getKeyName(rightKey_P2_temp), bomberman_2_ControlsPos + glm::vec2(0.0f, -0.375f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexBomberman_2_Controls == 5 ? 2 : 1);
 
     // Teclas usadas para los controles generales
-    renderTextString(getKeyName(swap2D_3DKey_temp), globalKeyControlsPos, scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexGlobalControls == 0 ? 2 : 1);
-    renderTextString(getKeyName(swap3DCameraKey_temp), globalKeyControlsPos + glm::vec2(0.0f, -0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexGlobalControls == 1 ? 2 : 1);
-    renderTextString(getKeyName(swapWindowModeKey_temp), globalKeyControlsPos + glm::vec2(0.0f, -0.150f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexGlobalControls == 2 ? 2 : 1);
-    renderTextString(getKeyName(selectKey_temp), globalKeyControlsPos + glm::vec2(0.0f, -0.225f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexGlobalControls == 3 ? 2 : 1);
+    renderTextString(getKeyName(swap2D_3DKey_temp), globalKeyControlsPos, scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexGlobalControls == 0 ? 2 : 1);
+    renderTextString(getKeyName(swap3DCameraKey_temp), globalKeyControlsPos + glm::vec2(0.0f, -0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexGlobalControls == 1 ? 2 : 1);
+    renderTextString(getKeyName(swapWindowModeKey_temp), globalKeyControlsPos + glm::vec2(0.0f, -0.150f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexGlobalControls == 2 ? 2 : 1);
+    renderTextString(getKeyName(selectKey_temp), globalKeyControlsPos + glm::vec2(0.0f, -0.225f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexGlobalControls == 3 ? 2 : 1);
 
     // Teclas para guardar cambios, resetearlos o salir
     for (int i=0; i < saveResetExitStrings.size(); i++) {
-        renderTextString(saveResetExitStrings[i], saveResetExitPos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformUvRect, actualIndexSaveResetExit == i ? 2 : 1);
+        renderTextString(saveResetExitStrings[i], saveResetExitPos + glm::vec2(0.0f, -i * 0.075f), scaleUsualHud, atlas, atlasTexture, vao, uniformModel, uniformProjection, uniformUvRect, actualIndexSaveResetExit == i ? 2 : 1);
     }
 
 }
@@ -764,8 +764,10 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 // RESET
                 case 1: loadDefaultControls(); break;
                  // EXIT
-                 // TODO, poner los _temp como los no _temp
-                case 2: showControlsMenu = false; flushTemps(); break;
+                case 2: showControlsMenu = false; flushTemps(); 
+                    actualIndexBomberman_1_Controls = 0; actualIndexBomberman_2_Controls = -1; 
+                    actualIndexGlobalControls = -1; actualIndexSaveResetExit = -1; 
+                    break;
                 default: break;
             }
             keys[selectKey] = GLFW_REPEAT;

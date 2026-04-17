@@ -168,28 +168,28 @@ void MenuScreen::renderMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLui
 
 // ============================== INPUT ==============================
 
-void MenuScreen::processInputMenu(std::map<int, int>& keys) {
-    if (keys[GLFW_KEY_UP] == GLFW_PRESS || keys[GLFW_KEY_W] == GLFW_PRESS) {
+void MenuScreen::processInputMenu(std::map<int, int>& keys, ControlsMenu& controls) {
+    if (keys[controls.upKey_P1] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection - 1 + NUM_MENU_OPTIONS) % NUM_MENU_OPTIONS;
-            keys[GLFW_KEY_UP] = GLFW_REPEAT;
+            keys[controls.upKey_P1] = GLFW_REPEAT;
         }
     }
-    if (keys[GLFW_KEY_DOWN] == GLFW_PRESS || keys[GLFW_KEY_S] == GLFW_PRESS) {
+    if (keys[controls.downKey_P1] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;
-            keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+            keys[controls.downKey_P1] = GLFW_REPEAT;
         }
     }
 
     // Confirmar selección.
-    if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
+    if (keys[controls.selectKey] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             // Solo permitir transición en opciones Historia (2, 3)
             if (menuSelection >= 2 && menuSelection <= 3) {
                 menuArrowSelected = true;
                 menuArrowAnimTimer = 0.0f;
-                keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+                keys[controls.selectKey] = GLFW_REPEAT;
             }
             // TODO: Permitir selección de modos Vs (0, 1, 4) cuando estén implementados. Por ahora, solo modos Historia (2, 3) hacen algo al pulsar Enter.
             // Las opciones Vs (0, 1, 4) ignoran Enter por ahora
