@@ -65,9 +65,9 @@ static GLuint createBlackTexture() {
  *  El valor de colorUse esta entre 0 (color naranja), 1 (color amarillo) y 2 (color amarillo blanquecino) 
  */
 
-void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
-                      const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
-                      GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
+void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, float scale,
+                                  const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
+                                  GLuint uniformModel, GLuint uniformUvRect, int colorUse) {
     if (text.empty()) {
         return;
     }
@@ -183,14 +183,12 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
     int result = -1;
 
     if (keys[GLFW_KEY_DOWN] == GLFW_PRESS) {
-        if (posSeleccion >= inGameMenuOptions.size() - 1) posSeleccion = inGameMenuOptions.size() - 1;
-        else posSeleccion += 1;
+        posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
         keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
     }
     
     if (keys[GLFW_KEY_UP] == GLFW_PRESS) {
-        if (posSeleccion <= 0) posSeleccion = 0;
-        else posSeleccion -= 1;
+        posSeleccion <= 0 ? posSeleccion = inGameMenuOptions.size() - 1 : posSeleccion -= 1;
         keys[GLFW_KEY_UP] = GLFW_REPEAT;
     }
 

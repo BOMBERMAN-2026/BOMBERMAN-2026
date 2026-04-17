@@ -2106,12 +2106,20 @@ void Game::processInput() {
 
     if (this->state != GAME_PLAYING) return;
 
+    // ========== IN_GAME_MENU ==========
     if (this->keys[GLFW_KEY_9] == GLFW_PRESS) {
         this->keys[GLFW_KEY_9] = GLFW_REPEAT;
         this->inGameMenu.showInGameMenu = !this->inGameMenu.showInGameMenu;
     }
     // Salimos para no recibir más inputs en caso de haber desplegado el menu
     if (this->inGameMenu.showInGameMenu) { 
+        // ========== CONTROLS_MENU ==========
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {
+            // TODO, cambiar el lastkey
+            this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+            return;
+        }
+
         int result = this->inGameMenu.processInputInGameMenu(this->keys);
 
         // Mirar processInputInGameMenu para saber que devuelve

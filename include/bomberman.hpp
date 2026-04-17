@@ -146,6 +146,7 @@ public:
     // GLuint texture;
     // Input
     std::map<GLint, GLint> keys;           // Estado: Release(0), Press(1), Repeat(2)
+    GLint lastKeyPressed;
     GLint lastDirKey = GLFW_KEY_UNKNOWN;   // Última flecha pulsada (P1)
     GLint lastDirKeyP2 = GLFW_KEY_UNKNOWN; // Última WASD pulsada (P2)
 

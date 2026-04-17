@@ -13,8 +13,22 @@
 class ControlsMenu {
     private:
 
+        // Valores para modificar el sprite y saber donde se mueve el jugador
+        // -1 -> no se encuentra en la seccion correspondiente
+        int actualIndexBomberman_1_Controls;
+        int actualIndexBomberman_2_Controls;
+        int actualIndexGlobalControls;
+        int actualIndexSaveResetExit;
+
+        void saveToNonTemps();
+        void flushTemps();
+
+        void checkAlreadyTakenControl(int control, int actualKey, int lastKeyPressed);
+
     public:
         bool showControlsMenu;
+
+        bool modifyingControls;
 
         // Bomberman 1
         GLint upKey_P1;
@@ -34,7 +48,7 @@ class ControlsMenu {
 
         // Generales
         GLint swap2D_3DKey;
-        GLint swap3DCamenraKey;
+        GLint swap3DCameraKey;
         GLint swapWindowModeKey;
         GLint selectKey;
 
@@ -58,7 +72,7 @@ class ControlsMenu {
 
             // Generales
         GLint swap2D_3DKey_temp;
-        GLint swap3DCamenraKey_temp;
+        GLint swap3DCameraKey_temp;
         GLint swapWindowModeKey_temp;
         GLint selectKey_temp;
 
@@ -70,9 +84,15 @@ class ControlsMenu {
 
         void loadDefaultControls();
 
+        void renderTextString(const std::string& text, glm::vec2 startPos, float scale,
+                              const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
+                              GLuint uniformModel, GLuint uniformUvRect, int colorUse);
+
         void renderControlsMenu(const SpriteAtlas& atlas, GLuint atlasTexture, 
                                 const SpriteAtlas& atlas2, GLuint atlasTexture2,  
                                 GLuint vao, GLuint uniformModel, GLuint uniformUvRect);
+
+        void processInputControlsMenu(std::map<int, int>& keys, int lastKeyPressed);
 
 };
 

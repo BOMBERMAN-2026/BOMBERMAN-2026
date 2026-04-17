@@ -64,6 +64,7 @@ std::string resolveAssetPath(const std::string& path)
     addMappedPair("resources/sprites/mapas/", "img/mapas/");
     addMappedPair("resources/sprites/", "img/sprites/");
     addMappedPair("resources/models/", "models/");
+    addMappedPair("resources/keyBindings/", "config/keys/");
 
     addUniqueCandidate(candidates, path);
     addUniqueCandidate(candidates, "../" + path);
