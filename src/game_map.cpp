@@ -572,7 +572,27 @@ bool GameMap::getUvRectForTile(int row, int col, glm::vec4& uvRect) const {
     }
 
     const std::string idStr = std::to_string(displayId);
-    return getUvRectForSprite(atlas, idStr, uvRect);
+    if (getUvRectForSprite(atlas, idStr, uvRect)) {
+        return true;
+    }
+
+    // Fallback defensivo para evitar "tiles grises" cuando un ID no exista en el atlas.
+    int fallbackId = 10; // Suelo neutro
+    if (block.type == BlockType::DESTRUCTIBLE) {
+        fallbackId = 20;
+    } else if (block.type == BlockType::INDESTRUCTIBLE) {
+        fallbackId = 8;
+    } else if (block.type == BlockType::BARRIER) {
+        fallbackId = 0;
+    }
+
+    const std::string fallbackIdStr = std::to_string(fallbackId);
+    if (getUvRectForSprite(atlas, fallbackIdStr, uvRect)) {
+        return true;
+    }
+
+    // Último recurso: cualquier suelo válido conocido por el motor.
+    return getUvRectForSprite(atlas, "6", uvRect);
 }
 
 bool GameMap::getUvRectForSpriteId(int spriteId, glm::vec4& uvRect) const {

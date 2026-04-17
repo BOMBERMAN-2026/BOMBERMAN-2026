@@ -2160,6 +2160,11 @@ void Game::processInput() {
 
     // ========== CINEMATICA ==========
     if (this->state == GAME_CINEMATIC) {
+        if (this->window != nullptr && this->firstPersonCursorLocked) {
+            glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            this->firstPersonCursorLocked = false;
+            this->firstPersonMouseInitialized = false;
+        }
         if (this->keys[GLFW_KEY_SPACE] == GLFW_PRESS) {
             this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;
             cinematicPlayer.skip();
@@ -4301,6 +4306,10 @@ void Game::render() {
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
+        // Menú siempre se dibuja en 2D puro: limpiar buffers y desactivar estados heredados de 3D.
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         glUseProgram(shader);
         menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
@@ -4310,6 +4319,10 @@ void Game::render() {
 
     // ========== CINEMATICA ==========
     if (this->state == GAME_CINEMATIC) {
+        // La cinemática comparte shader 2D; evitamos depth/scissor residuales de la vista 3D.
+        glDisable(GL_SCISSOR_TEST);
+        glDisable(GL_DEPTH_TEST);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         cinematicPlayer.render(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         return;

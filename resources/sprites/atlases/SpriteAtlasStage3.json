@@ -1,5 +1,5 @@
 {
-  "ruta_imagen": "resources/sprites/mapas/Stage2/sprites-Stage2.png",
+  "ruta_imagen": "resources/sprites/mapas/Stage3/sprites-Stage3.png",
   "tamano_imagen": {
     "ancho": 1280,
     "alto": 720
@@ -348,6 +348,15 @@
       "nombre": "matorral_v2_abajo",
       "walkable": false,
       "type": "barrier"
+    },
+    "30": {
+      "x": 632,
+      "y": 360,
+      "w": 48,
+      "h": 48,
+      "nombre": "suelo_neutro",
+      "walkable": true,
+      "type": "floor"
     },
     "bomb.0": {
       "x": 1090,

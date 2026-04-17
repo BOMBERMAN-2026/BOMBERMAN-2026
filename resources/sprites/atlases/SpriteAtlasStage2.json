@@ -278,11 +278,11 @@
       "type": "barrier"
     },
     "30": {
-      "x": 0,
-      "y": 0,
+      "x": 632,
+      "y": 360,
       "w": 48,
       "h": 48,
-      "nombre": "dummy",
+      "nombre": "suelo_neutro",
       "walkable": true,
       "type": "floor"
     },
