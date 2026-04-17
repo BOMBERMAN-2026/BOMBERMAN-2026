@@ -226,6 +226,19 @@ static constexpr float kDefaultPlayerSpeed = 0.4f;
 static constexpr glm::vec2 kDefaultPlayerSize(0.2f, 0.2f);
 static constexpr float kFirstPersonMouseYawSensitivity = 0.0006135f;
 static constexpr float kFirstPersonMousePitchSensitivity = 0.0006105f;
+static constexpr float kOrbitMouseYawSensitivity = 0.0080f;
+static constexpr float kOrbitMousePitchSensitivity = 0.0062f;
+static constexpr float kOrbitPitchMinRadians = -1.12f;
+static constexpr float kOrbitPitchMaxRadians = 0.64f;
+static constexpr float kOrbitZoomStep = 0.85f;
+static constexpr float kFreeCameraPitchMinRadians = -1.30f;
+static constexpr float kFreeCameraPitchMaxRadians = 1.08f;
+static constexpr float kFreeCameraRotateYawSensitivity = 0.0024f;
+static constexpr float kFreeCameraRotatePitchSensitivity = 0.0020f;
+static constexpr float kFreeCameraMoveSpeed = 8.2f;
+static constexpr float kFreeCameraRollSpeed = 1.42f;
+static constexpr float kFreeCameraZoomStep = 0.38f;
+static constexpr float kFreeCameraDragPanSensitivity = 0.0065f;
 static constexpr float kFirstPersonHeadBobAmplitude = 0.0032f;
 static constexpr float kFirstPersonHeadBobFrequency = 10.8f;
 static constexpr int kBombExplosionVerticalLayers = 5;
@@ -241,6 +254,7 @@ static const char* camera3DTypeToString(Camera3DType type) {
         case Camera3DType::PerspectiveFixed: return "IsometricaFija";
         case Camera3DType::PerspectiveMobile: return "Seguimiento";
         case Camera3DType::FirstPerson: return "PrimeraPersona";
+        case Camera3DType::FreeCamera: return "Libre";
         default: return "Unknown";
     }
 }
@@ -288,6 +302,36 @@ static glm::vec3 firstPersonLookToForward(float yawRadians, float pitchRadians)
     ));
 }
 
+static float wrapAnglePi(float angleRadians)
+{
+    const float kPi = 3.14159265359f;
+    const float kTwoPi = 6.28318530718f;
+    while (angleRadians > kPi) {
+        angleRadians -= kTwoPi;
+    }
+    while (angleRadians < -kPi) {
+        angleRadians += kTwoPi;
+    }
+    return angleRadians;
+}
+
+static glm::vec3 computeCameraUpFromForwardAndRoll(const glm::vec3& forward, float rollRadians)
+{
+    const glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
+
+    glm::vec3 right = glm::cross(forward, worldUp);
+    if (glm::length(right) < 0.0001f) {
+        right = glm::vec3(1.0f, 0.0f, 0.0f);
+    } else {
+        right = glm::normalize(right);
+    }
+
+    const glm::vec3 baseUp = glm::normalize(glm::cross(right, forward));
+    const float cosRoll = std::cos(rollRadians);
+    const float sinRoll = std::sin(rollRadians);
+    return glm::normalize(baseUp * cosRoll + right * sinRoll);
+}
+
 static int yawToControlQuadrant(float yawRadians)
 {
     const float kTwoPi = 6.28318530718f;
@@ -314,6 +358,8 @@ static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
         yawForControls = game->getCameraOrbitYaw();
     } else if (game->camera3DType == Camera3DType::FirstPerson) {
         yawForControls = game->getFirstPersonYaw();
+    } else if (game->camera3DType == Camera3DType::FreeCamera) {
+        yawForControls = game->getFreeCameraYaw();
     } else {
         return inputDirKey;
     }
@@ -369,7 +415,7 @@ static std::string buildWindowTitle(ViewMode viewMode, Camera3DType camera3DType
     if (viewMode == ViewMode::Mode3D) {
         title << " | Camara: " << camera3DTypeToString(camera3DType);
     }
-    title << " | F1 Vista | F2 Camara | TAB/F11 Fullscreen | F10 Minimizar";
+    title << " | F1 Vista | 1-4 Camara3D | F2 Ciclo | 0 FijarLibre | Rueda Zoom | TAB/F11 Fullscreen | F10 Minimizar";
     return title.str();
 }
 
@@ -1705,6 +1751,122 @@ GLuint LoadTexture(const char* filePath)
 
 // ============================== Game lifecycle ==============================
 
+void Game::resetFreeCameraPose() {
+    float mapHalfWidth = 6.0f;
+    float mapHalfDepth = 6.0f;
+    glm::vec3 target(0.0f, 0.55f, 0.0f);
+
+    if (gameMap != nullptr) {
+        mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+        mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+        if (!gPlayers.empty() && gPlayers[0] != nullptr) {
+            target = ndcToWorld3D(gameMap, gPlayers[0]->position, 0.55f);
+        }
+    }
+
+    const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+    cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
+    cameraFollowDistance = 6.8f;
+    freeCameraPosX = target.x + mapRadius * 0.90f + 1.4f;
+    freeCameraPosY = mapRadius * 1.05f + 3.2f;
+    freeCameraPosZ = target.z + mapRadius * 0.95f + 1.6f;
+    freeCameraYaw = -0.68f;
+    freeCameraPitch = -0.34f;
+    freeCameraRoll = 0.0f;
+}
+
+void Game::setCamera3DType(Camera3DType newType) {
+    camera3DType = newType;
+
+    if (camera3DType == Camera3DType::FirstPerson) {
+        if (!gPlayers.empty() && gPlayers[0] != nullptr) {
+            firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
+        }
+        firstPersonPitch = -0.18f;
+        firstPersonMouseInitialized = false;
+        firstPersonMouseLeftPressedLastFrame = false;
+        firstPersonMouseRightPressedLastFrame = false;
+    } else if (camera3DType == Camera3DType::FreeCamera) {
+        if (!freeCameraInitialized) {
+            resetFreeCameraPose();
+            freeCameraInitialized = true;
+        }
+
+        freeCameraYaw = wrapAnglePi(freeCameraYaw);
+        freeCameraPitch = std::max(kFreeCameraPitchMinRadians, std::min(kFreeCameraPitchMaxRadians, freeCameraPitch));
+        freeCameraRoll = wrapAnglePi(freeCameraRoll);
+        cameraOrbitDragging = false;
+        std::cout << "[Render] Camara libre: arrastre IZQ mueve | arrastre DER rota | rueda zoom | 0 fija/desfija\n";
+    } else if (camera3DType == Camera3DType::PerspectiveFixed ||
+               camera3DType == Camera3DType::PerspectiveMobile) {
+        cameraOrbitYaw = wrapAnglePi(cameraOrbitYaw);
+        cameraOrbitPitch = std::max(kOrbitPitchMinRadians, std::min(kOrbitPitchMaxRadians, cameraOrbitPitch));
+    }
+
+    const bool shouldCaptureFirstPersonMouse =
+        (viewMode == ViewMode::Mode3D && camera3DType == Camera3DType::FirstPerson && window != nullptr);
+    if (window != nullptr) {
+        glfwSetInputMode(window, GLFW_CURSOR, shouldCaptureFirstPersonMouse ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    }
+    firstPersonCursorLocked = shouldCaptureFirstPersonMouse;
+    if (!shouldCaptureFirstPersonMouse) {
+        firstPersonMouseInitialized = false;
+    }
+
+    refreshWindowTitle();
+    std::cout << "[Render] 3D camera -> " << camera3DTypeToString(camera3DType) << "\n";
+}
+
+void Game::onMouseScroll(double yOffset) {
+    if (std::abs(yOffset) < 0.0001 || viewMode != ViewMode::Mode3D || state != GAME_PLAYING) {
+        return;
+    }
+
+    const float scroll = (float)yOffset;
+
+    if (camera3DType == Camera3DType::PerspectiveFixed) {
+        if (!gameMap) {
+            return;
+        }
+
+        const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+        const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+        const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+        if (cameraOrbitDistance <= 0.0f) {
+            cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
+        }
+
+        cameraOrbitDistance -= scroll * kOrbitZoomStep;
+        const float minDistance = std::max(4.0f, mapRadius * 0.58f);
+        const float maxDistance = mapRadius * 2.55f + 18.0f;
+        cameraOrbitDistance = std::max(minDistance, std::min(maxDistance, cameraOrbitDistance));
+    } else if (camera3DType == Camera3DType::PerspectiveMobile) {
+        cameraFollowDistance -= scroll * (kOrbitZoomStep * 0.62f);
+        const float minDistance = 2.4f;
+        const float maxDistance = 20.0f;
+        cameraFollowDistance = std::max(minDistance, std::min(maxDistance, cameraFollowDistance));
+    } else if (camera3DType == Camera3DType::FreeCamera) {
+        const glm::vec3 forward = firstPersonLookToForward(freeCameraYaw, freeCameraPitch);
+        const float dollyStep = scroll * kFreeCameraZoomStep;
+        freeCameraPosX += forward.x * dollyStep;
+        freeCameraPosY += forward.y * dollyStep;
+        freeCameraPosZ += forward.z * dollyStep;
+
+        if (gameMap != nullptr) {
+            const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+            const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+            const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+            const float boundPad = 8.0f;
+
+            freeCameraPosX = std::max(-mapHalfWidth - boundPad, std::min(mapHalfWidth + boundPad, freeCameraPosX));
+            freeCameraPosZ = std::max(-mapHalfDepth - boundPad, std::min(mapHalfDepth + boundPad, freeCameraPosZ));
+            freeCameraPosY = std::max(0.35f, std::min(mapRadius * 3.6f + 13.0f, freeCameraPosY));
+        } else {
+            freeCameraPosY = std::max(0.35f, freeCameraPosY);
+        }
+    }
+}
+
 void Game::toggleViewMode() {
     viewMode = (viewMode == ViewMode::Mode2D) ? ViewMode::Mode3D : ViewMode::Mode2D;
     surpriseHorizonVisible3D = false;
@@ -1726,35 +1888,26 @@ void Game::toggleViewMode() {
 }
 
 void Game::cycleCamera3DType() {
+    Camera3DType nextType = Camera3DType::PerspectiveFixed;
     switch (camera3DType) {
         case Camera3DType::OrthographicFixed:
-        case Camera3DType::FirstPerson:
-            camera3DType = Camera3DType::PerspectiveFixed;
+            nextType = Camera3DType::PerspectiveFixed;
             break;
         case Camera3DType::PerspectiveFixed:
-            camera3DType = Camera3DType::PerspectiveMobile;
+            nextType = Camera3DType::PerspectiveMobile;
             break;
         case Camera3DType::PerspectiveMobile:
-            camera3DType = Camera3DType::FirstPerson;
-            if (!gPlayers.empty() && gPlayers[0] != nullptr) {
-                firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
-            }
-            firstPersonPitch = -0.18f;
-            firstPersonMouseInitialized = false;
-            firstPersonMouseLeftPressedLastFrame = false;
-            firstPersonMouseRightPressedLastFrame = false;
+            nextType = Camera3DType::FirstPerson;
+            break;
+        case Camera3DType::FirstPerson:
+            nextType = Camera3DType::FreeCamera;
+            break;
+        case Camera3DType::FreeCamera:
+            nextType = Camera3DType::PerspectiveFixed;
             break;
     }
 
-    const bool shouldCaptureFirstPersonMouse =
-        (viewMode == ViewMode::Mode3D && camera3DType == Camera3DType::FirstPerson && window != nullptr);
-    if (window != nullptr) {
-        glfwSetInputMode(window, GLFW_CURSOR, shouldCaptureFirstPersonMouse ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
-    }
-    firstPersonCursorLocked = shouldCaptureFirstPersonMouse;
-
-    refreshWindowTitle();
-    std::cout << "[Render] 3D camera -> " << camera3DTypeToString(camera3DType) << "\n";
+    setCamera3DType(nextType);
 }
 
 void Game::refreshWindowTitle() const {
@@ -1965,10 +2118,16 @@ void Game::init() {
         firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
     }
     firstPersonPitch = -0.18f;
+    cameraOrbitPitch = -0.18f;
+    cameraOrbitDistance = 0.0f;
+    cameraFollowDistance = 6.8f;
+    cameraOrbitDragging = false;
     firstPersonMouseInitialized = false;
     firstPersonCursorLocked = false;
     firstPersonMouseLeftPressedLastFrame = false;
     firstPersonMouseRightPressedLastFrame = false;
+    freeCameraInitialized = false;
+    freeCameraAnchored = false;
     if (window != nullptr) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
@@ -2024,10 +2183,11 @@ void Game::processInput() {
          this->camera3DType == Camera3DType::FirstPerson &&
          this->window != nullptr);
 
-    const bool keepScreenFacingForPerspective3D =
+    const bool keepScreenFacingForCameraRelative3D =
         (this->viewMode == ViewMode::Mode3D &&
          (this->camera3DType == Camera3DType::PerspectiveFixed ||
-          this->camera3DType == Camera3DType::PerspectiveMobile));
+          this->camera3DType == Camera3DType::PerspectiveMobile ||
+          this->camera3DType == Camera3DType::FreeCamera));
 
     if (this->window != nullptr) {
         if (shouldCaptureFirstPersonMouse && !this->firstPersonCursorLocked) {
@@ -2043,11 +2203,14 @@ void Game::processInput() {
 
     if (this->state != GAME_PLAYING) return;
 
+    const bool isFreeCamera3D =
+        (this->viewMode == ViewMode::Mode3D && this->camera3DType == Camera3DType::FreeCamera);
+
     if (this->viewMode != ViewMode::Mode3D) {
         this->surpriseKey3TapCount = 0;
         this->surpriseKey3LastTapTime = -10.0;
-    } else if (this->keys[GLFW_KEY_3] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_3] = GLFW_REPEAT;
+    } else if (this->keys[GLFW_KEY_9] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_9] = GLFW_REPEAT;
 
         const double now = glfwGetTime();
         const double kDoubleTapWindowSeconds = 0.45;
@@ -2066,7 +2229,7 @@ void Game::processInput() {
 
             if (horizonTexture != 0) {
                 this->surpriseHorizonVisible3D = true;
-                std::cout << "[Render] Fondo 3D sorpresa revelado con tecla 3\n";
+                std::cout << "[Render] Fondo 3D sorpresa revelado con tecla 9\n";
             } else {
                 std::cout << "[Render] No se pudo revelar el fondo 3D (textura no disponible)\n";
             }
@@ -2074,6 +2237,20 @@ void Game::processInput() {
             this->surpriseKey3TapCount = 0;
             this->surpriseKey3LastTapTime = -10.0;
         }
+    }
+
+    if (isFreeCamera3D && this->keys[GLFW_KEY_0] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_0] = GLFW_REPEAT;
+        this->freeCameraAnchored = !this->freeCameraAnchored;
+        std::cout << "[Render] Camara libre " << (this->freeCameraAnchored ? "fijada" : "desfijada") << "\n";
+    }
+
+    if (isFreeCamera3D && this->keys[GLFW_KEY_BACKSPACE] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_BACKSPACE] = GLFW_REPEAT;
+        resetFreeCameraPose();
+        this->freeCameraInitialized = true;
+        this->freeCameraAnchored = false;
+        std::cout << "[Render] Camara libre reiniciada\n";
     }
 
     if (shouldCaptureFirstPersonMouse) {
@@ -2094,14 +2271,7 @@ void Game::processInput() {
             this->firstPersonYaw -= (float)deltaX * kFirstPersonMouseYawSensitivity;
             this->firstPersonPitch -= (float)deltaY * kFirstPersonMousePitchSensitivity;
             this->firstPersonPitch = std::max(-1.30f, std::min(1.10f, this->firstPersonPitch));
-
-            const float kPi = 3.14159265359f;
-            const float kTwoPi = 6.28318530718f;
-            if (this->firstPersonYaw > kPi) {
-                this->firstPersonYaw -= kTwoPi;
-            } else if (this->firstPersonYaw < -kPi) {
-                this->firstPersonYaw += kTwoPi;
-            }
+            this->firstPersonYaw = wrapAnglePi(this->firstPersonYaw);
         }
     }
 
@@ -2136,7 +2306,7 @@ void Game::processInput() {
             p1->isWalking = false;
 
             if (this->lastDirKey != GLFW_KEY_UNKNOWN) {
-                const GLint idleFacingDir = keepScreenFacingForPerspective3D
+                const GLint idleFacingDir = keepScreenFacingForCameraRelative3D
                     ? this->lastDirKey
                     : remapDirectionFor3DCamera(this, this->lastDirKey);
                 p1->facingDirKey = idleFacingDir;
@@ -2170,7 +2340,7 @@ void Game::processInput() {
                 if (mappedMove != MOVE_NONE) {
                     p1->UpdateSprite(mappedMove, gameMap, this->deltaTime);
 
-                    const GLint facingDir = keepScreenFacingForPerspective3D
+                    const GLint facingDir = keepScreenFacingForCameraRelative3D
                         ? keyToUse
                         : mappedDir;
                     if (!p1->isWalking || p1->facingDirKey != facingDir) {
@@ -2215,7 +2385,7 @@ void Game::processInput() {
                         case GLFW_KEY_A: screenDir2 = GLFW_KEY_LEFT; break;
                         case GLFW_KEY_D: screenDir2 = GLFW_KEY_RIGHT; break;
                     }
-                    const GLint idleFacingDir2 = keepScreenFacingForPerspective3D
+                    const GLint idleFacingDir2 = keepScreenFacingForCameraRelative3D
                         ? screenDir2
                         : remapDirectionFor3DCamera(this, screenDir2);
                     p2->facingDirKey = idleFacingDir2;
@@ -2258,7 +2428,7 @@ void Game::processInput() {
                     if (mov2 != MOVE_NONE) {
                         p2->UpdateSprite(mov2, gameMap, this->deltaTime);
 
-                        const GLint facingDir2 = keepScreenFacingForPerspective3D
+                        const GLint facingDir2 = keepScreenFacingForCameraRelative3D
                             ? dir2Screen
                             : dir2;
                         if (!p2->isWalking || p2->facingDirKey != facingDir2) {
@@ -2373,33 +2543,123 @@ void Game::processInput() {
     }
 
     // Rotacion orbital de camaras 3D no-first-person con arrastre del raton.
-    const bool canOrbitCamera = (this->viewMode == ViewMode::Mode3D
-                              && (this->camera3DType == Camera3DType::PerspectiveFixed ||
-                                  this->camera3DType == Camera3DType::PerspectiveMobile)
-                              && this->window != nullptr);
+    const bool editingFreeCamera =
+        (this->camera3DType == Camera3DType::FreeCamera && !this->freeCameraAnchored);
+    const bool canOrbitCamera =
+        (this->viewMode == ViewMode::Mode3D
+         && this->window != nullptr
+         && ((this->camera3DType == Camera3DType::PerspectiveFixed)
+             || (this->camera3DType == Camera3DType::PerspectiveMobile)
+             || editingFreeCamera));
     if (canOrbitCamera) {
         double mouseX = 0.0;
         double mouseY = 0.0;
         glfwGetCursorPos(this->window, &mouseX, &mouseY);
 
-        const bool dragPressed =
-            (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) ||
-            (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+        const bool leftPressed = (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+        const bool rightPressed = (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+        const bool dragPressed = leftPressed || rightPressed;
 
         if (dragPressed) {
             if (!this->cameraOrbitDragging) {
                 this->cameraOrbitDragging = true;
                 this->cameraOrbitLastMouseX = mouseX;
+                this->cameraOrbitLastMouseY = mouseY;
             } else {
                 const double deltaX = mouseX - this->cameraOrbitLastMouseX;
+                const double deltaY = mouseY - this->cameraOrbitLastMouseY;
                 this->cameraOrbitLastMouseX = mouseX;
-                this->cameraOrbitYaw -= (float)deltaX * 0.0080f;
+                this->cameraOrbitLastMouseY = mouseY;
+
+                if (editingFreeCamera) {
+                    if (leftPressed) {
+                        const glm::vec3 forward = firstPersonLookToForward(this->freeCameraYaw, this->freeCameraPitch);
+                        glm::vec3 rightAxis = glm::cross(forward, glm::vec3(0.0f, 1.0f, 0.0f));
+                        if (glm::length(rightAxis) < 0.0001f) {
+                            rightAxis = glm::vec3(1.0f, 0.0f, 0.0f);
+                        } else {
+                            rightAxis = glm::normalize(rightAxis);
+                        }
+                        const glm::vec3 upAxis = computeCameraUpFromForwardAndRoll(forward, this->freeCameraRoll);
+
+                        this->freeCameraPosX += (rightAxis.x * (float)deltaX - upAxis.x * (float)deltaY) * kFreeCameraDragPanSensitivity;
+                        this->freeCameraPosY += (rightAxis.y * (float)deltaX - upAxis.y * (float)deltaY) * kFreeCameraDragPanSensitivity;
+                        this->freeCameraPosZ += (rightAxis.z * (float)deltaX - upAxis.z * (float)deltaY) * kFreeCameraDragPanSensitivity;
+                    } else if (rightPressed) {
+                        this->freeCameraYaw -= (float)deltaX * kFreeCameraRotateYawSensitivity;
+                        this->freeCameraPitch -= (float)deltaY * kFreeCameraRotatePitchSensitivity;
+                        this->freeCameraYaw = wrapAnglePi(this->freeCameraYaw);
+                        this->freeCameraPitch = std::max(kFreeCameraPitchMinRadians,
+                                                         std::min(kFreeCameraPitchMaxRadians, this->freeCameraPitch));
+                    }
+                } else {
+                    this->cameraOrbitYaw -= (float)deltaX * kOrbitMouseYawSensitivity;
+                    this->cameraOrbitPitch -= (float)deltaY * kOrbitMousePitchSensitivity;
+                    this->cameraOrbitYaw = wrapAnglePi(this->cameraOrbitYaw);
+                    this->cameraOrbitPitch = std::max(kOrbitPitchMinRadians,
+                                                      std::min(kOrbitPitchMaxRadians, this->cameraOrbitPitch));
+                }
             }
         } else {
             this->cameraOrbitDragging = false;
         }
     } else {
         this->cameraOrbitDragging = false;
+    }
+
+    // Camara libre: traslacion desacoplada de jugadores (IJKL + U/O y roll Q/E), ademas de pan con clic izquierdo.
+    const bool canMoveFreeCamera =
+        (this->viewMode == ViewMode::Mode3D
+         && this->camera3DType == Camera3DType::FreeCamera
+         && !this->freeCameraAnchored);
+    if (canMoveFreeCamera) {
+        glm::vec3 forward = firstPersonLookToForward(this->freeCameraYaw, this->freeCameraPitch);
+        glm::vec3 planarForward(forward.x, 0.0f, forward.z);
+        if (glm::length(planarForward) < 0.0001f) {
+            planarForward = glm::vec3(0.0f, 0.0f, -1.0f);
+        } else {
+            planarForward = glm::normalize(planarForward);
+        }
+        glm::vec3 right = glm::normalize(glm::cross(planarForward, glm::vec3(0.0f, 1.0f, 0.0f)));
+
+        glm::vec3 movement(0.0f);
+        if (this->keys[GLFW_KEY_I] >= GLFW_PRESS) movement += planarForward;
+        if (this->keys[GLFW_KEY_K] >= GLFW_PRESS) movement -= planarForward;
+        if (this->keys[GLFW_KEY_L] >= GLFW_PRESS) movement += right;
+        if (this->keys[GLFW_KEY_J] >= GLFW_PRESS) movement -= right;
+        if (this->keys[GLFW_KEY_O] >= GLFW_PRESS) movement += glm::vec3(0.0f, 1.0f, 0.0f);
+        if (this->keys[GLFW_KEY_U] >= GLFW_PRESS) movement -= glm::vec3(0.0f, 1.0f, 0.0f);
+
+        float moveSpeed = kFreeCameraMoveSpeed;
+        if (this->keys[GLFW_KEY_LEFT_SHIFT] >= GLFW_PRESS || this->keys[GLFW_KEY_RIGHT_SHIFT] >= GLFW_PRESS) {
+            moveSpeed *= 1.85f;
+        }
+
+        if (glm::length(movement) > 0.0001f) {
+            movement = glm::normalize(movement);
+            this->freeCameraPosX += movement.x * moveSpeed * this->deltaTime;
+            this->freeCameraPosY += movement.y * moveSpeed * this->deltaTime;
+            this->freeCameraPosZ += movement.z * moveSpeed * this->deltaTime;
+        }
+
+        if (this->keys[GLFW_KEY_Q] >= GLFW_PRESS) {
+            this->freeCameraRoll += kFreeCameraRollSpeed * this->deltaTime;
+        }
+        if (this->keys[GLFW_KEY_E] >= GLFW_PRESS) {
+            this->freeCameraRoll -= kFreeCameraRollSpeed * this->deltaTime;
+        }
+        this->freeCameraRoll = wrapAnglePi(this->freeCameraRoll);
+
+        if (gameMap != nullptr) {
+            const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+            const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+            const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+
+            const float boundPad = 8.0f;
+            this->freeCameraPosX = std::max(-mapHalfWidth - boundPad, std::min(mapHalfWidth + boundPad, this->freeCameraPosX));
+            this->freeCameraPosZ = std::max(-mapHalfDepth - boundPad, std::min(mapHalfDepth + boundPad, this->freeCameraPosZ));
+            this->freeCameraPosY = std::max(0.35f, std::min(mapRadius * 3.6f + 13.0f, this->freeCameraPosY));
+        }
     }
 
     this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
@@ -2674,6 +2934,18 @@ void Game::render3D() {
     const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
     const glm::vec3 mapCenter(0.0f, 0.0f, 0.0f);
 
+    if (cameraOrbitDistance <= 0.0f) {
+        cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
+    }
+    if (cameraFollowDistance <= 0.0f) {
+        cameraFollowDistance = 6.8f;
+    }
+
+    if (camera3DType == Camera3DType::FreeCamera && !freeCameraInitialized) {
+        resetFreeCameraPose();
+        freeCameraInitialized = true;
+    }
+
     int trackedPlayerIndex = 0;
     if (camera3DType == Camera3DType::FirstPerson && !gPlayers.empty()) {
         trackedPlayerIndex = std::max(0, std::min(active3DViewportPlayerIndex, (int)gPlayers.size() - 1));
@@ -2699,21 +2971,29 @@ void Game::render3D() {
         cameraTarget = mapCenter;
         up = glm::vec3(0.0f, 0.0f, -1.0f);
     } else if (camera3DType == Camera3DType::PerspectiveFixed) {
-        const float orbitRadius = mapRadius * 1.10f + 2.6f;
-        const float cameraHeight = mapRadius * 1.35f + 3.0f;
-        cameraPos = glm::vec3(std::sin(cameraOrbitYaw) * orbitRadius,
-                              cameraHeight,
-                              std::cos(cameraOrbitYaw) * orbitRadius);
-        cameraTarget = mapCenter;
+        const float orbitRadius = cameraOrbitDistance;
+        const glm::vec3 pivot = mapCenter + glm::vec3(0.0f, mapRadius * 0.30f + 0.75f, 0.0f);
+        const float elevation = std::max(0.16f, std::min(1.28f, 0.72f + cameraOrbitPitch));
+        const float horizontalRadius = std::cos(elevation) * orbitRadius;
+        const float verticalRadius = std::sin(elevation) * orbitRadius;
+        cameraPos = pivot + glm::vec3(std::sin(cameraOrbitYaw) * horizontalRadius,
+                                      verticalRadius,
+                                      std::cos(cameraOrbitYaw) * horizontalRadius);
+        cameraTarget = pivot;
+        up = computeCameraUpFromForwardAndRoll(glm::normalize(cameraTarget - cameraPos), 0.0f);
     } else if (camera3DType == Camera3DType::PerspectiveMobile) {
         // Camara de seguimiento orbital: mantiene foco en jugador y rota con el yaw de camara.
-        const float followDistance = 6.8f;
-        const float followHeight = 4.2f;
-        const glm::vec3 followOffset(std::sin(cameraOrbitYaw) * followDistance,
-                                     followHeight,
-                                     std::cos(cameraOrbitYaw) * followDistance);
-        cameraPos = trackedPlayerCenter + followOffset;
-        cameraTarget = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
+        const float followDistance = cameraFollowDistance;
+        const glm::vec3 pivot = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
+        const float elevation = std::max(0.10f, std::min(1.18f, 0.56f + cameraOrbitPitch));
+        const float horizontalDistance = std::cos(elevation) * followDistance;
+        const float verticalDistance = std::sin(elevation) * followDistance;
+        const glm::vec3 followOffset(std::sin(cameraOrbitYaw) * horizontalDistance,
+                                     verticalDistance,
+                                     std::cos(cameraOrbitYaw) * horizontalDistance);
+        cameraPos = pivot + followOffset;
+        cameraTarget = pivot;
+        up = computeCameraUpFromForwardAndRoll(glm::normalize(cameraTarget - cameraPos), 0.0f);
     } else if (camera3DType == Camera3DType::FirstPerson) {
         // Altura de ojos mas baja para mantener los muros delante y evitar ver por encima.
         float firstPersonCameraYaw = this->firstPersonYaw;
@@ -2731,6 +3011,12 @@ void Game::render3D() {
         const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f + headBobOffset, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
         cameraTarget = eye + firstPersonForward * 2.8f;
+        up = computeCameraUpFromForwardAndRoll(firstPersonForward, 0.0f);
+    } else if (camera3DType == Camera3DType::FreeCamera) {
+        const glm::vec3 freeForward = firstPersonLookToForward(freeCameraYaw, freeCameraPitch);
+        cameraPos = glm::vec3(freeCameraPosX, freeCameraPosY, freeCameraPosZ);
+        cameraTarget = cameraPos + freeForward * 3.4f;
+        up = computeCameraUpFromForwardAndRoll(freeForward, freeCameraRoll);
     }
 
     const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
@@ -2753,6 +3039,8 @@ void Game::render3D() {
             fovDegrees = 62.0f;
         } else if (camera3DType == Camera3DType::FirstPerson) {
             fovDegrees = 72.0f;
+        } else if (camera3DType == Camera3DType::FreeCamera) {
+            fovDegrees = 68.0f;
         }
         projection = glm::perspective(glm::radians(fovDegrees), aspect, 0.05f, 140.0f);
     }
@@ -3456,6 +3744,33 @@ void Game::render3D() {
             glUniform1f(uniform3DTexturedShininess, 28.0f);
         }
 
+        const float enemySwayTime = (float)glfwGetTime();
+        auto applyEnemySway3D = [&](glm::mat4& model,
+                                    const Enemy* enemy,
+                                    float bobAmplitude,
+                                    float tiltAmplitude,
+                                    float yawAmplitude = 0.0f) {
+            if (!enemy) {
+                return;
+            }
+
+            const float phase = enemySwayTime * 2.55f
+                + enemy->position.x * 4.21f
+                + enemy->position.y * 3.67f;
+
+            const float bob = bobAmplitude * std::sin(phase);
+            const float yawWobble = yawAmplitude * std::sin(phase * 0.85f);
+            const float pitch = tiltAmplitude * std::sin(phase * 1.35f);
+            const float roll = (tiltAmplitude * 1.15f) * std::cos(phase * 1.75f);
+
+            model = glm::translate(model, glm::vec3(0.0f, bob, 0.0f));
+            if (std::abs(yawWobble) > 0.0001f) {
+                model = glm::rotate(model, yawWobble, glm::vec3(0.0f, 1.0f, 0.0f));
+            }
+            model = glm::rotate(model, pitch, glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, roll, glm::vec3(0.0f, 0.0f, 1.0f));
+        };
+
         if (canRenderPlayerGlb || canRenderRedPlayerGlb) {
             // Ajuste de orientacion base del modelo GLB.
             const float kPlayerModelYawOffset = 1.57079632679f;
@@ -3490,7 +3805,8 @@ void Game::render3D() {
 
                 GLint modelFacingDirKey = p->facingDirKey;
                 if (this->camera3DType == Camera3DType::PerspectiveFixed ||
-                    this->camera3DType == Camera3DType::PerspectiveMobile) {
+                    this->camera3DType == Camera3DType::PerspectiveMobile ||
+                    this->camera3DType == Camera3DType::FreeCamera) {
                     modelFacingDirKey = remapDirectionFor3DCamera(this, modelFacingDirKey);
                 }
 
@@ -3529,6 +3845,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, enemy, 0.020f, 0.048f, 0.018f);
                 model = glm::scale(model, glm::vec3(1.05f, 1.05f, 1.05f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3558,6 +3875,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, enemy, 0.030f, 0.060f, 0.020f);
                 model = glm::scale(model, glm::vec3(1.08f, 1.08f, 1.08f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3587,6 +3905,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, enemy, 0.024f, 0.052f, 0.018f);
                 model = glm::scale(model, glm::vec3(0.98f, 0.98f, 0.98f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3616,6 +3935,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, enemy, 0.016f, 0.040f, 0.015f);
                 model = glm::scale(model, glm::vec3(1.02f, 1.02f, 1.02f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3657,6 +3977,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, ndcToWorld3D(gameMap, enemy->position, hoverHeight + bob));
                 model = glm::rotate(model, spin, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, enemy, 0.030f, 0.090f, 0.030f);
                 model = glm::scale(model, glm::vec3(modelScale, modelScale, modelScale));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3686,6 +4007,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.04f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, enemy, 0.028f, 0.056f, 0.020f);
                 model = glm::scale(model, glm::vec3(1.12f, 1.12f, 1.12f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3711,6 +4033,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.03f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, king, 0.014f, 0.032f, 0.014f);
                 model = glm::scale(model, glm::vec3(1.54f, 1.54f, 1.54f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3743,6 +4066,7 @@ void Game::render3D() {
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.015f, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                applyEnemySway3D(model, dron, 0.040f, 0.085f, 0.026f);
                 model = glm::scale(model, glm::vec3(0.66f, 0.66f, 0.66f));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -3880,7 +4204,11 @@ void Game::render3D() {
         }
 
         if (hasUv) {
-            const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.02f);
+            const float billboardPhase = (float)glfwGetTime() * 2.55f
+                + enemy->position.x * 4.21f
+                + enemy->position.y * 3.67f;
+            const float billboardBob = 0.028f * std::sin(billboardPhase);
+            const glm::vec3 feet = ndcToWorld3D(gameMap, enemy->position, 0.02f) + glm::vec3(0.0f, billboardBob, 0.0f);
             drawSpriteBillboard3D(enemyTexture, uvRect, feet, 0.96f, 1.30f, enemy->flipX, glm::vec4(1.0f));
         }
     }

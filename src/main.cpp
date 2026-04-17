@@ -25,6 +25,7 @@ extern int menuSelection;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
 int main() {
 
@@ -72,6 +73,7 @@ int main() {
     }
 
     glfwSetKeyCallback(mainWindow, key_callback);
+    glfwSetScrollCallback(mainWindow, scroll_callback);
 
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
@@ -151,6 +153,18 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
                 if (key == GLFW_KEY_F2 && bomberman->is3DViewEnabled()) {
                     bomberman->cycleCamera3DType();
                 }
+
+                if (bomberman->is3DViewEnabled()) {
+                    if (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1) {
+                        bomberman->setCamera3DType(Camera3DType::PerspectiveFixed);
+                    } else if (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2) {
+                        bomberman->setCamera3DType(Camera3DType::PerspectiveMobile);
+                    } else if (key == GLFW_KEY_3 || key == GLFW_KEY_KP_3) {
+                        bomberman->setCamera3DType(Camera3DType::FirstPerson);
+                    } else if (key == GLFW_KEY_4 || key == GLFW_KEY_KP_4) {
+                        bomberman->setCamera3DType(Camera3DType::FreeCamera);
+                    }
+                }
             }
 
             if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
@@ -170,5 +184,14 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
 
     if (bomberman != nullptr) {
         bomberman->onResize(width, height);
+    }
+}
+
+void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    (void)window;
+    (void)xoffset;
+
+    if (bomberman != nullptr) {
+        bomberman->onMouseScroll(yoffset);
     }
 }

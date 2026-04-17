@@ -55,7 +55,8 @@ enum class Camera3DType {
     OrthographicFixed,
     PerspectiveFixed,
     PerspectiveMobile,
-    FirstPerson
+    FirstPerson,
+    FreeCamera
 };
 
 static std::vector<std::string> mapNumeration = {
@@ -80,8 +81,12 @@ private:
 
     // Cámara 3D avanzada (estado interno de control/cursor).
     float cameraOrbitYaw = 0.0f;
+    float cameraOrbitPitch = -0.18f;
+    float cameraOrbitDistance = 0.0f;
+    float cameraFollowDistance = 6.8f;
     bool cameraOrbitDragging = false;
     double cameraOrbitLastMouseX = 0.0;
+    double cameraOrbitLastMouseY = 0.0;
 
     float firstPersonYaw = 0.0f;
     float firstPersonPitch = -0.18f;
@@ -93,7 +98,19 @@ private:
     bool firstPersonMouseRightPressedLastFrame = false;
     int active3DViewportPlayerIndex = 0;
 
-    // Fondo 3D sorpresa: se revela con doble pulsación de la tecla 3 en modo 3D.
+    // Cámara libre 3D: movimiento desacoplado del jugador.
+    float freeCameraPosX = 0.0f;
+    float freeCameraPosY = 7.5f;
+    float freeCameraPosZ = 10.0f;
+    float freeCameraYaw = -0.60f;
+    float freeCameraPitch = -0.28f;
+    float freeCameraRoll = 0.0f;
+    bool freeCameraInitialized = false;
+    bool freeCameraAnchored = false;
+
+    void resetFreeCameraPose();
+
+    // Fondo 3D sorpresa: se revela con doble pulsación de la tecla 9 en modo 3D.
     bool surpriseHorizonVisible3D = false;
     int surpriseKey3TapCount = 0;
     double surpriseKey3LastTapTime = -10.0;
@@ -179,9 +196,12 @@ public:
     void setMode(GameMode m) { mode = m; }
     void toggleViewMode();
     void cycleCamera3DType();
+    void setCamera3DType(Camera3DType newType);
+    void onMouseScroll(double yOffset);
     bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
     float getCameraOrbitYaw() const { return cameraOrbitYaw; }
     float getFirstPersonYaw() const { return firstPersonYaw; }
+    float getFreeCameraYaw() const { return freeCameraYaw; }
 
     // Init / loop
     void init();
