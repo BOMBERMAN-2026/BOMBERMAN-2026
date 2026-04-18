@@ -26,6 +26,17 @@ Controles
   - `ENTER`: confirmar (1P/2P).
   - `ESC`: salir del juego.
 
+- **Menú Custom game 1**
+  - `↑/↓`: mover selección.
+  - `ENTER`: alternar la opción y pasar a siguiente pantalla en `Next`.
+  - `ESC`: Volver a Menú.
+
+- **Menú Custom game 2**
+  - `<-/->`: cambiar de enemigo.
+  - `↑/↓`: aumentar/disminuir número de enemigos.
+  - `ENTER`: Confirmar.
+  - `ESC`: Volver a Menú Custom Game 1.
+
 - **Cinematica**
     - `ESPACIO`: Saltar.
 
