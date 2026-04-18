@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -2071,6 +2071,18 @@ void Game::init() {
         return;
     }
 
+    // ========== CUSTOM GAME (PANTALLA 1) ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        customGameMenu.initMenu1();
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 2) ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        customGameMenu.initMenu2();
+        return;
+    }
+
     // ========== JUEGO ==========
     if (this->state == GAME_PLAYING) {
         loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
@@ -2129,6 +2141,28 @@ void Game::processInput() {
             this->firstPersonMouseInitialized = false;
         }
         menuScreen.processInputMenu(this->keys, inGameMenu.controlsMenu);
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 1 ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        if (this->window != nullptr && this->firstPersonCursorLocked) {
+            glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            this->firstPersonCursorLocked = false;
+            this->firstPersonMouseInitialized = false;
+        }
+        customGameMenu.processInputMenu1(this->keys, inGameMenu.controlsMenu);
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 2 ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        if (this->window != nullptr && this->firstPersonCursorLocked) {
+            glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            this->firstPersonCursorLocked = false;
+            this->firstPersonMouseInitialized = false;
+        }
+        customGameMenu.processInputMenu2(this->keys, inGameMenu.controlsMenu);
         return;
     }
 
@@ -2564,10 +2598,69 @@ void Game::update() {
                 startNewRun(selectedMode);
             }
         }
+
+        if (menuScreen.shouldOpenCustomGame()) {
+            menuScreen.resetTransition();
+            customGameMenu.resetToDefaults();
+            this->state = GAME_CUSTOM_MENU_1;
+            this->init();
+            return;
+        }
+
         // Cerrar el juego si se presionó Escape en el menú
         if (menuScreen.isExitRequested()) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 1 ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        customGameMenu.updateMenu1(deltaTime);
+
+        if (customGameMenu.shouldBackToMainMenu()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_MENU;
+            this->init();
+            return;
+        }
+
+        if (customGameMenu.shouldAdvanceToMenu2()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_CUSTOM_MENU_2;
+            this->init();
+            return;
+        }
+
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 2 ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        customGameMenu.updateMenu2(deltaTime);
+
+        if (customGameMenu.shouldBackToMainMenu()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_MENU;
+            this->init();
+            return;
+        }
+
+        if (customGameMenu.shouldBackToMenu1()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_CUSTOM_MENU_1;
+            this->init();
+            return;
+        }
+
+        if (customGameMenu.shouldLaunchCustomGame()) {
+            // Base lista: aquí arrancaremos la partida custom en el siguiente paso.
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_MENU;
+            this->init();
+            return;
+        }
+
         return;
     }
 
@@ -4142,6 +4235,20 @@ void Game::render() {
         menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 1) ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        customGameMenu.renderMenu1(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                   uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 2) ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        customGameMenu.renderMenu2(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                   uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         return;
     }
 

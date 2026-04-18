@@ -44,6 +44,7 @@ private:
 
     // Estado interno
     bool shouldTransitionToGame;
+    bool shouldTransitionToCustomGame;
     bool shouldExitGame;  // Flag para cerrar el juego desde el menú
     GameMode selectedGameMode;
 
@@ -69,9 +70,10 @@ public:
     int getMenuSelection() const { return menuSelection; }
     bool isMenuSelected() const { return menuArrowSelected; }
     bool shouldStartGame() const { return shouldTransitionToGame; }
+    bool shouldOpenCustomGame() const { return shouldTransitionToCustomGame; }
     bool isExitRequested() const { return shouldExitGame; }
     GameMode getSelectedMode() const { return selectedGameMode; }
-    void resetTransition() { shouldTransitionToGame = false; shouldExitGame = false; }
+    void resetTransition() { shouldTransitionToGame = false; shouldTransitionToCustomGame = false; shouldExitGame = false; }
 };
 
 #endif // MENU_HPP

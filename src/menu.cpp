@@ -18,6 +18,7 @@ MenuScreen::MenuScreen()
       menuArrowAnimTimer(0.0f), menuArrowAnimSpeed(0.1f),
       menuArrowSelected(false), menuArrowSelectedAnimSpeed(0.8f),
       menuSelectedWaitTimer(0.0f), shouldTransitionToGame(false),
+      shouldTransitionToCustomGame(false),
       shouldExitGame(false), selectedGameMode(GameMode::HistoryOnePlayer) {
 }
 
@@ -33,6 +34,7 @@ MenuScreen::~MenuScreen() {
 void MenuScreen::initMenu() {
     // Reset de flags (evita auto-arranque al volver del juego).
     shouldTransitionToGame = false;
+    shouldTransitionToCustomGame = false;
     selectedGameMode = GameMode::HistoryOnePlayer;
 
     // Cargar sólo si falta (evita recargar al volver al menú).
@@ -89,9 +91,10 @@ void MenuScreen::updateMenu(float deltaTime) {
             } else if (menuSelection == 3) {
                 selectedGameMode = GameMode::HistoryTwoPlayers;
                 shouldTransitionToGame = true;
+            } else if (menuSelection == 4) {
+                shouldTransitionToCustomGame = true;
             }
-            // TODO: Cargar otras opciones de juego
-            // Las opciones Vs (0,1,4) no hacen nada aún
+            // TODO: Las opciones VS del menú principal siguen pendientes de implementación.
         }
     } else {
         // Alternar entre explosion_0 y explosion_1 rápidamente

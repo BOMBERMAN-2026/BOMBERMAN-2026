@@ -12,6 +12,7 @@
 #include "cinematic_player.hpp"
 #include "gamepad_input.hpp"
 #include "in_game_menu.hpp"
+#include "custom_game_menu.hpp"
 
 /*
  * bomberman.hpp
@@ -30,6 +31,8 @@
 enum GameState {
     GAME_INTRO,      // Pantalla de intro
     GAME_MENU,       // Pantalla selección de modo de juego
+    GAME_CUSTOM_MENU_1, // Configuración custom game (pantalla 1)
+    GAME_CUSTOM_MENU_2, // Configuración custom game (pantalla 2)
     GAME_CINEMATIC,  // Cinematicas (video FFmpeg)
     GAME_PLAYING
 };
@@ -162,6 +165,7 @@ public:
 
         // UI Screen
         MenuScreen menuScreen;              // Gestiona menú
+        CustomGameMenu customGameMenu;      // Menús de partida personalizada
         CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
         CinematicType currentCinematicType = CinematicType::Intro;
         GameState nextStateAfterCinematic = GAME_INTRO;
