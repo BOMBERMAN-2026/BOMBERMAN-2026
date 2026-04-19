@@ -8,6 +8,7 @@
 #include <map>
 
 #include "sprite_atlas.hpp"
+#include "controls_menu.hpp"
 
 // Forward declaration to avoid circular dependency
 enum class GameMode;
@@ -25,8 +26,8 @@ private:
     GLuint menuBackgroundTexture;
     GLuint menuArrowTexture;
     SpriteAtlas menuBombAtlas;
-    int menuSelection;  // 0 = 1P, 1 = 2P
-    const int NUM_MENU_OPTIONS = 2;
+    int menuSelection;  // 0 = Vs 1P (no implementado), 1 = Vs 2P (no implementado), 2 = Historia 1P, 3 = Historia 2P, 4 = Partida pers.
+    const int NUM_MENU_OPTIONS = 5;
 
     // Posición de la flecha de selección
     float menuArrowX;
@@ -43,6 +44,8 @@ private:
 
     // Estado interno
     bool shouldTransitionToGame;
+    bool shouldTransitionToCustomGame;
+    bool shouldExitGame;  // Flag para cerrar el juego desde el menú
     GameMode selectedGameMode;
 
 public:
@@ -61,14 +64,16 @@ public:
                     int WIDTH, int HEIGHT);
 
     // Procesamiento de entrada
-    void processInputMenu(std::map<int, int>& keys);
+    void processInputMenu(std::map<int, int>& keys, ControlsMenu& controls);
 
     // Getters
     int getMenuSelection() const { return menuSelection; }
     bool isMenuSelected() const { return menuArrowSelected; }
     bool shouldStartGame() const { return shouldTransitionToGame; }
+    bool shouldOpenCustomGame() const { return shouldTransitionToCustomGame; }
+    bool isExitRequested() const { return shouldExitGame; }
     GameMode getSelectedMode() const { return selectedGameMode; }
-    void resetTransition() { shouldTransitionToGame = false; }
+    void resetTransition() { shouldTransitionToGame = false; shouldTransitionToCustomGame = false; shouldExitGame = false; }
 };
 
 #endif // MENU_HPP

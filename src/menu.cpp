@@ -14,11 +14,12 @@ extern bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spri
 
 MenuScreen::MenuScreen()
     : menuBackgroundTexture(0), menuArrowTexture(0), menuSelection(0),
-      menuArrowX(-1.4f), menuArrowY_Base(-0.255f), menuArrowY_Offset(0.275f),
+      menuArrowX(-1.1f), menuArrowY_Base(0.435f), menuArrowY_Offset(0.275f),
       menuArrowAnimTimer(0.0f), menuArrowAnimSpeed(0.1f),
       menuArrowSelected(false), menuArrowSelectedAnimSpeed(0.8f),
       menuSelectedWaitTimer(0.0f), shouldTransitionToGame(false),
-      selectedGameMode(GameMode::OnePlayer) {
+      shouldTransitionToCustomGame(false),
+      shouldExitGame(false), selectedGameMode(GameMode::HistoryOnePlayer) {
 }
 
 // Libera texturas de intro/menú (si se llegaron a crear).
@@ -33,13 +34,14 @@ MenuScreen::~MenuScreen() {
 void MenuScreen::initMenu() {
     // Reset de flags (evita auto-arranque al volver del juego).
     shouldTransitionToGame = false;
-    selectedGameMode = GameMode::OnePlayer;
+    shouldTransitionToCustomGame = false;
+    selectedGameMode = GameMode::HistoryOnePlayer;
 
     // Cargar sólo si falta (evita recargar al volver al menú).
     if (menuBackgroundTexture == 0) {
-        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreen.png").c_str());
+        menuBackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/intro_menu/MenuScreenV3.jpg").c_str());
         if (menuBackgroundTexture == 0) {
-            std::cerr << "Error cargando MenuScreen.png\n";
+            std::cerr << "Error cargando MenuScreenV3.jpg\n";
         }
     }
 
@@ -76,9 +78,23 @@ void MenuScreen::updateMenu(float deltaTime) {
         // Después de que termina la animación, esperar y luego pasar al juego
         menuSelectedWaitTimer += deltaTime;
         if (menuSelectedWaitTimer >= MENU_SELECTED_WAIT_TIME) {
-            // Señalar transición al juego
-            selectedGameMode = (menuSelection == 0) ? GameMode::OnePlayer : GameMode::TwoPlayers;
-            shouldTransitionToGame = true;
+            // Mapear selección -> modo y transicionar al juego.
+            if (menuSelection == 0) {
+                selectedGameMode = GameMode::VsOnePlayer;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 1) {
+                selectedGameMode = GameMode::VsTwoPlayers;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 2) {
+                selectedGameMode = GameMode::HistoryOnePlayer;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 3) {
+                selectedGameMode = GameMode::HistoryTwoPlayers;
+                shouldTransitionToGame = true;
+            } else if (menuSelection == 4) {
+                shouldTransitionToCustomGame = true;
+            }
+            // TODO: Las opciones VS del menú principal siguen pendientes de implementación.
         }
     } else {
         // Alternar entre explosion_0 y explosion_1 rápidamente
@@ -155,26 +171,32 @@ void MenuScreen::renderMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLui
 
 // ============================== INPUT ==============================
 
-void MenuScreen::processInputMenu(std::map<int, int>& keys) {
-    if (keys[GLFW_KEY_UP] == GLFW_PRESS || keys[GLFW_KEY_W] == GLFW_PRESS) {
+void MenuScreen::processInputMenu(std::map<int, int>& keys, ControlsMenu& controls) {
+    if (keys[controls.upKey_P1] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection - 1 + NUM_MENU_OPTIONS) % NUM_MENU_OPTIONS;
-            keys[GLFW_KEY_UP] = GLFW_REPEAT;
+            keys[controls.upKey_P1] = GLFW_REPEAT;
         }
     }
-    if (keys[GLFW_KEY_DOWN] == GLFW_PRESS || keys[GLFW_KEY_S] == GLFW_PRESS) {
+    if (keys[controls.downKey_P1] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;
-            keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+            keys[controls.downKey_P1] = GLFW_REPEAT;
         }
     }
 
     // Confirmar selección.
-    if (keys[GLFW_KEY_ENTER] == GLFW_PRESS) {
+    if (keys[controls.selectKey] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuArrowSelected = true;
             menuArrowAnimTimer = 0.0f;
-            keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
+            keys[controls.selectKey] = GLFW_REPEAT;
         }
+    }
+
+    // Escape para cerrar el juego desde el menú.
+    if (keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        shouldExitGame = true;
+        keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
     }
 }

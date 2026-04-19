@@ -169,6 +169,11 @@ public:
     // Consulta el power-up visible (revelado y no recogido) en una celda.
     bool getVisiblePowerUpType(int row, int col, PowerUpType& outType) const;
 
+    // Consulta el power-up oculto en una celda.
+    // Un power-up está "oculto" cuando existe pero todavía no está revelado (p.ej. bajo un destructible intacto).
+    // Nota: pensado para IA/dificultades (p.ej. Omniscient).
+    bool getHiddenPowerUpType(int row, int col, PowerUpType& outType) const;
+
     // Consulta si en una celda hay efecto de recogida activo.
     // Devuelve el tipo de power-up y progreso normalizado [0..1].
     bool getPowerUpPickupFx(int row, int col, PowerUpType& outType, float& outNormalizedTime) const;
@@ -230,9 +235,12 @@ private:
     static BlockType blockTypeFromString(const std::string& typeStr);
 
     // === Power-Ups ===
-    static constexpr int POWER_UP_TYPE_COUNT = 6;
-    GLuint powerUpTextures[POWER_UP_TYPE_COUNT] = {0}; // Texturas indexadas por PowerUpType
+    static constexpr int POWER_UP_TYPE_COUNT = 12;
+    GLuint powerUpTextures[POWER_UP_TYPE_COUNT][2] = {{0}}; // Texturas indexadas por PowerUpType y frame (normal/azul)
     bool powerUpTexturesLoaded = false;
+    
+    float powerUpAnimTimer = 0.0f;
+    int powerUpAnimFrame = 0;
 };
 
 #endif // GAME_MAP_HPP

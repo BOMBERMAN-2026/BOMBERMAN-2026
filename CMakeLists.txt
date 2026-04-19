@@ -61,6 +61,25 @@ pkg_check_modules(FFMPEG REQUIRED IMPORTED_TARGET
     libswscale
 )
 
+# En Windows, `pkg-config` de MSYS2 suele devolver rutas POSIX como `/ucrt64/include`.
+# CMake valida que esas rutas existan en el sistema de ficheros de Windows, así que
+# las convertimos al prefijo real de MSYS2 (por defecto: C:/msys64/ucrt64).
+if(WIN32)
+    set(MSYS2_UCRT_ROOT "C:/msys64/ucrt64")
+
+    get_target_property(_ffmpeg_includes PkgConfig::FFMPEG INTERFACE_INCLUDE_DIRECTORIES)
+    if(_ffmpeg_includes)
+        set(_ffmpeg_includes_fixed "")
+        foreach(_inc IN LISTS _ffmpeg_includes)
+            if(_inc MATCHES "^/ucrt64(/|$)")
+                string(REGEX REPLACE "^/ucrt64" "${MSYS2_UCRT_ROOT}" _inc "${_inc}")
+            endif()
+            list(APPEND _ffmpeg_includes_fixed "${_inc}")
+        endforeach()
+        set_property(TARGET PkgConfig::FFMPEG PROPERTY INTERFACE_INCLUDE_DIRECTORIES "${_ffmpeg_includes_fixed}")
+    endif()
+endif()
+
 # 4. Crear el ejecutable
 add_executable(Bomberman ${SOURCES})
 

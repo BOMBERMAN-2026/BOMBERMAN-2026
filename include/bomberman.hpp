@@ -11,7 +11,8 @@
 #include "menu.hpp"
 #include "cinematic_player.hpp"
 #include "gamepad_input.hpp"
-
+#include "in_game_menu.hpp"
+#include "custom_game_menu.hpp"
 
 /*
  * bomberman.hpp
@@ -30,6 +31,8 @@
 enum GameState {
     GAME_INTRO,      // Pantalla de intro
     GAME_MENU,       // Pantalla selección de modo de juego
+    GAME_CUSTOM_MENU_1, // Configuración custom game (pantalla 1)
+    GAME_CUSTOM_MENU_2, // Configuración custom game (pantalla 2)
     GAME_CINEMATIC,  // Cinematicas (video FFmpeg)
     GAME_PLAYING
 };
@@ -42,6 +45,10 @@ enum class CinematicType {
 };
 
 enum class GameMode {
+    VsOnePlayer,
+    VsTwoPlayers,
+    HistoryOnePlayer,
+    HistoryTwoPlayers,
     OnePlayer,
     TwoPlayers
 };
@@ -120,8 +127,13 @@ private:
     bool gameplayAssetsLoaded = false;
 
     int currentLevelIndex = 0;
+    int versusRoundNumber = 1;
     bool currentLevelHadEnemies = false;
+
+public:
     std::vector<int> playerScores;
+
+private:
     std::vector<std::string> levelSequence = {
         "levels/level_01.txt",
         "levels/level_02.txt",
@@ -161,20 +173,25 @@ public:
     // GLuint texture;
     // Input
     std::map<GLint, GLint> keys;           // Estado: Release(0), Press(1), Repeat(2)
+    GLint lastKeyPressed;
     GLint lastDirKey = GLFW_KEY_UNKNOWN;   // Última flecha pulsada (P1)
     GLint lastDirKeyP2 = GLFW_KEY_UNKNOWN; // Última WASD pulsada (P2)
 
     // Estado
     GameState state;
-    GameMode mode = GameMode::OnePlayer;
+    GameMode mode = GameMode::HistoryOnePlayer;
     ViewMode viewMode = ViewMode::Mode2D;
     Camera3DType camera3DType = Camera3DType::PerspectiveFixed;
 
         // UI Screen
         MenuScreen menuScreen;              // Gestiona menú
+        CustomGameMenu customGameMenu;      // Menús de partida personalizada
         CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
         CinematicType currentCinematicType = CinematicType::Intro;
         GameState nextStateAfterCinematic = GAME_INTRO;
+
+        // In-game menu
+        InGameMenu inGameMenu;
 
         // Ventana
         GLint WIDTH, HEIGHT;                 // Tamaño ventana

@@ -1,0 +1,16 @@
+bombKey_P1=345
+detonateBombKey_P1=346
+upKey_P1=265
+leftKey_P1=263
+downKey_P1=264
+rightKey_P1=262
+bombKey_P2=88
+detonateBombKey_P2=90
+upKey_P2=87
+leftKey_P2=65
+downKey_P2=83
+rightKey_P2=68
+swap2D_3DKey=49
+swap3DCamenraKey=50
+swapWindowModeKey=258
+selectKey=257

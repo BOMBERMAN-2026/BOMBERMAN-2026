@@ -14,6 +14,37 @@
 #include "enemies/king_bomber.hpp"
 #include "enemies/dron_bombardero.hpp"
 #include "enemies/dragon_joven.hpp"
+#include "versus_mode.hpp"
+#include "cpu_bomberman.hpp"
+
+
+
+// ============================================================
+// Wrappers de audio — delegan al AudioManager (miniaudio)
+// ============================================================
+#include "audio_manager.hpp"
+
+
+
+// Llamada desde Bomb::detonate() en bomb.cpp
+void PlayExplosionSound() {
+    AudioManager::get().playVfx(VfxSound::Explosion);
+}
+
+// Llamada desde constructor de Bomb en bomb.cpp
+void PlayPlaceBombSound() {
+    AudioManager::get().playVfx(VfxSound::PlaceBomb);
+}
+
+// Llamada desde game_map.cpp / bomberman.cpp al recoger power-up
+void PlayCogerPowerUpSound() {
+    AudioManager::get().playVfx(VfxSound::Pickup);
+}
+
+void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled) {
+    // Silenciado: sistema de debug de audio MCI eliminado.
+    (void)eventName; (void)ownerIndex; (void)row; (void)col; (void)power; (void)remoteControlled;
+}
 
 /*
  * bomberman.cpp
@@ -57,6 +88,8 @@ SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
 SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
 SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
+SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
+SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 
 GLuint mapTexture;
 GLuint horizonTexture;
@@ -66,6 +99,8 @@ GLuint overlayWhiteTexture = 0; // Textura blanca 1x1 para overlays/filtros en 3
 
 // Estado de asistencia visual en primera persona (P1, P2).
 static float gFirstPersonBlockedHintTimer[2] = {0.0f, 0.0f};
+GLuint vocabAmarilloTexture;
+GLuint vocabNaranjaTexture;
 
 // Vectores de entidades
 std::vector<Player*> gPlayers;
@@ -1482,6 +1517,38 @@ void Game::ensureGameplayAssets() {
         }
     }
 
+    // Texturas del vocabulario en amarillo pequeño
+    {
+        const std::string vocabAmarilloAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasVocAmarilloPeq.json");
+        if (!loadSpriteAtlasMinimal(vocabAmarilloAtlasPath, gVocabAmarilloAtlas)) {
+            std::cerr << "Error cargando atlas del vocabulario amarillo: " << vocabAmarilloAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string vocabAmarilloTexPath = resolveAssetPath(gVocabAmarilloAtlas.imagePath);  // Usa la ruta del JSON
+        vocabAmarilloTexture = LoadTexture(vocabAmarilloTexPath.c_str());
+        if (vocabAmarilloTexture == 0) {
+            std::cerr << "Error cargando textura del vocabulario amarillo: " << vocabAmarilloTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
+    // Texturas del vocabulario en naranja grande
+    {
+        const std::string vocabNaranjaAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasVocNaranjaGrande.json");
+        if (!loadSpriteAtlasMinimal(vocabNaranjaAtlasPath, gVocabNaranjaAtlas)) {
+            std::cerr << "Error cargando atlas del vocabulario naranja: " << vocabNaranjaAtlasPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+
+        const std::string vocabNaranjaTexPath = resolveAssetPath(gVocabNaranjaAtlas.imagePath);  // Usa la ruta del JSON
+        vocabNaranjaTexture = LoadTexture(vocabNaranjaTexPath.c_str());
+        if (vocabNaranjaTexture == 0) {
+            std::cerr << "Error cargando textura del vocabulario naranja: " << vocabNaranjaTexPath << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
     gameplayAssetsLoaded = true;
 }
 
@@ -1516,10 +1583,18 @@ bool Game::allEnemiesCleared() const {
 // Carga completa de un nivel.
 void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     ensureGameplayAssets();
-    // Guardar progreso a preservar.
+
+    const bool versus = VersusMode::isVersusMode(mode);
+    const auto& activeLevelSequence = versus ? VersusMode::levelSequence() : levelSequence;
+    const auto& activeLevelToStage = versus ? VersusMode::levelToStage() : levelToStage;
+
+    // Evita heredar orientación del nivel anterior (especialmente al hacer skip).
+    lastDirKey = GLFW_KEY_UNKNOWN;
+    lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+
+    // Guardar progreso a preservar (solo Historia).
     std::vector<int> savedLives;
-    if (preserveLivesAndScore) {
-        // Conserva vidas y puntuaci├│n acumulada.
+    if (preserveLivesAndScore && !versus) {
         savedLives.reserve(gPlayers.size());
         for (auto* p : gPlayers) {
             savedLives.push_back(p ? p->lives : 0);
@@ -1529,24 +1604,28 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     // Limpiar entidades del nivel anterior.
     cleanupGameplayEntities();
 
-    // Reset de transici├│n de nivel (para no arrastrar timers entre niveles).
+    // Reset de transición de nivel (para no arrastrar timers entre niveles).
     pendingLevelAdvance = false;
     levelAdvanceTimer = 0.0f;
 
     // Cargar / recargar mapa.
     if (!gameMap) gameMap = new GameMap();
 
-    if (levelIndex < 0 || levelIndex >= (int)levelSequence.size()) {
-        // Seguridad: si algo fuerza un ├¡ndice inv├ílido, terminamos run y volvemos al men├║.
+    if (levelIndex < 0 || levelIndex >= (int)activeLevelSequence.size()) {
+        // Seguridad: si algo fuerza un índice inválido, terminamos run y volvemos al menú.
         std::cerr << "Nivel fuera de rango: " << levelIndex << std::endl;
         returnToMenuFromGame(/*resetRun=*/true);
         return;
     }
 
-    int stageNum = levelToStage[levelIndex];
+    int stageNum = activeLevelToStage[levelIndex];
     std::string stageNumStr = std::to_string(stageNum);
 
-    currentGameLevel = mapNumeration[levelIndex];
+    if (versus) {
+        currentGameLevel = std::to_string(versusRoundNumber);
+    } else {
+        currentGameLevel = mapNumeration[levelIndex];
+    }
     levelTimeRemaining = 121.0f;
 
     if (mapTexture != 0) {
@@ -1566,8 +1645,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
     }
 
-    if (!gameMap->loadFromFile(levelSequence[levelIndex])) {
-        std::cerr << "Error cargando mapa: " << levelSequence[levelIndex] << std::endl;
+    if (!gameMap->loadFromFile(activeLevelSequence[levelIndex])) {
+        std::cerr << "Error cargando mapa: " << activeLevelSequence[levelIndex] << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -1580,26 +1659,44 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     float aspectRatio = (float)WIDTH / (float)HEIGHT;
     gameMap->calculateTileMetrics(aspectRatio);
 
-    // Crear jugadores seg├║n el modo.
-    const int numPlayers = (mode == GameMode::TwoPlayers) ? 2 : 1;
-    if (!preserveLivesAndScore) {
-        playerScores.assign(numPlayers, 0);
-    } else {
+    // Crear jugadores según el modo.
+    const int numPlayers = versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1);
+    if (versus) {
+        // En VS, playerScores representa wins y debe persistir entre rondas.
         if ((int)playerScores.size() < numPlayers) playerScores.resize(numPlayers, 0);
+    } else {
+        if (!preserveLivesAndScore) {
+            playerScores.assign(numPlayers, 0);
+        } else {
+            if ((int)playerScores.size() < numPlayers) playerScores.resize(numPlayers, 0);
+        }
     }
+
+    static const std::string kPlayerPrefixes[4] = {
+        "jugadorblanco",
+        "jugadorrojo",
+        "jugadorazul",
+        "jugadoramarillo"
+    };
 
     gPlayers.reserve(numPlayers);
     for (int i = 0; i < numPlayers; ++i) {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(i);
-        const std::string prefix = (i == 0) ? "jugadorblanco" : "jugadorrojo";
+        const std::string prefix = (i >= 0 && i < 4) ? kPlayerPrefixes[i] : "jugadorblanco";
         Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/i, prefix);
-        if (preserveLivesAndScore && i < (int)savedLives.size()) {
+
+        if (versus) {
+            // VS arcade: sin respawn/vidas acumuladas; morir = fuera de la ronda.
+            // Usamos `lives = 1` como flag simple "sigue en ronda".
+            p->lives = 1;
+        } else if (preserveLivesAndScore && i < (int)savedLives.size()) {
             p->lives = savedLives[i];
         }
+
         gPlayers.push_back(p);
     }
 
-    // Crear enemigos seg├║n el nivel.
+    // Crear enemigos según el nivel.
     // La lista de spawns viene del TXT (enemy <type> <x> <y>).
     {
         const auto& spawns = gameMap->getEnemySpawns();
@@ -1690,15 +1787,26 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     // Power-Ups (texturas: se cargan una vez por instancia de GameMap)
     gameMap->loadPowerUpTextures();
-    gameMap->placePowerUps();
+    if (!versus) {
+        gameMap->placePowerUps();
+    }
 }
 
 // Arranca una partida nueva desde nivel_01 (índice 0).
 void Game::startNewRun(GameMode newMode) {
     mode = newMode;
     currentLevelIndex = 0;
+    versusRoundNumber = 1;
     currentLevelHadEnemies = false;
     playerScores.clear();
+
+    if (VersusMode::isVersusMode(mode)) {
+        playerScores.assign(4, 0);
+        this->state = GAME_PLAYING;
+        loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+        menuScreen.resetTransition();
+        return;
+    }
 
     // Transicionar a CINEMATIC para reproducir cinemática del primer nivel antes de cargar
     this->state = GAME_CINEMATIC;
@@ -1710,16 +1818,38 @@ void Game::startNewRun(GameMode newMode) {
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
     cinematicPlayer.open(videoPath);
 
+    // Reproducir jingle "Game Start" durante la cinemática del nivel
+    AudioManager::get().stopBgm();
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+
+
     // Por si el menú dejó la marca de transición activa.
     menuScreen.resetTransition();
 }
 
 // Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
 void Game::advanceToNextLevel() {
+    const bool versus = VersusMode::isVersusMode(mode);
+
+    if (versus) {
+        // VS: si alguien llega al límite de wins, termina el encuentro (por ahora: volver al menú).
+        if (VersusMode::hasMatchWinner(playerScores)) {
+            returnToMenuFromGame(/*resetRun=*/true);
+            return;
+        }
+
+        // VS arcade: modo infinito -> ciclar rondas.
+        versusRoundNumber += 1;
+        currentLevelIndex = VersusMode::nextLevelIndex(currentLevelIndex);
+        loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+        this->state = GAME_PLAYING;
+        return;
+    }
+
     const int nextIndex = currentLevelIndex + 1;
     if (nextIndex >= (int)levelSequence.size()) {
         // No hay ranking ni pantalla de victoria: volver al menú.
-        if (mode == GameMode::TwoPlayers) {
+        if (mode == GameMode::HistoryTwoPlayers) {
             // Reproducir cinematica fin de historia antes de volver a menu.
             this->state = GAME_CINEMATIC;
             this->currentCinematicType = CinematicType::HistoryEnd;
@@ -1733,27 +1863,39 @@ void Game::advanceToNextLevel() {
     }
 
     currentLevelIndex = nextIndex;
-    // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar
+
+    // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar.
     this->state = GAME_CINEMATIC;
     this->currentCinematicType = CinematicType::LevelStart;
     this->nextStateAfterCinematic = GAME_PLAYING;
     this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
 
-    // Abrir el video de la cinemática del nivel
+    // Abrir el video de la cinemática del nivel.
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
     cinematicPlayer.open(videoPath);
+
+    // Reproducir jingle "Game Start" durante la cinemática del nivel (siguiente nivel)
+    AudioManager::get().stopBgm();
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+
 }
 
-// Sale a men├║ desde gameplay (Game Over / fin de campa├▒a).
+// Sale a menú desde gameplay (Game Over / fin de campaña / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
+    AudioManager::get().stopBgm();
+
+
     cleanupGameplayEntities();
     pendingLevelAdvance = false;
     levelAdvanceTimer = 0.0f;
+
     if (resetRun) {
         currentLevelIndex = 0;
+        versusRoundNumber = 1;
         currentLevelHadEnemies = false;
         playerScores.clear();
     }
+
     state = GAME_MENU;
     init();
 }
@@ -2131,9 +2273,17 @@ Game::~Game() {
     dragonGlbVAO = dragonGlbVBO = dragonGlbEBO = 0;
     dragonGlbIndexCount = 0;
     dragonGlbTexture = 0;
+
+    // Apaga el sistema de audio (libera miniaudio)
+    AudioManager::get().shutdown();
 }
 
+
 void Game::init() {
+
+    // Inicializar sistema de audio (miniaudio) — solo la primera vez
+    AudioManager::get().init(resolveAssetPath(""));
+
 
     ensureRenderResources();
 
@@ -2151,6 +2301,18 @@ void Game::init() {
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
         menuScreen.initMenu();
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 1) ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        customGameMenu.initMenu1();
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 2) ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        customGameMenu.initMenu2();
         return;
     }
 
@@ -2226,7 +2388,29 @@ void Game::processInput() {
             this->firstPersonCursorLocked = false;
             this->firstPersonMouseInitialized = false;
         }
-        menuScreen.processInputMenu(this->keys);
+        menuScreen.processInputMenu(this->keys, inGameMenu.controlsMenu);
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 1 ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        if (this->window != nullptr && this->firstPersonCursorLocked) {
+            glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            this->firstPersonCursorLocked = false;
+            this->firstPersonMouseInitialized = false;
+        }
+        customGameMenu.processInputMenu1(this->keys, inGameMenu.controlsMenu);
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 2 ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        if (this->window != nullptr && this->firstPersonCursorLocked) {
+            glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            this->firstPersonCursorLocked = false;
+            this->firstPersonMouseInitialized = false;
+        }
+        customGameMenu.processInputMenu2(this->keys, inGameMenu.controlsMenu);
         return;
     }
 
@@ -2255,7 +2439,65 @@ void Game::processInput() {
 
     if (this->state != GAME_PLAYING) return;
 
-    const bool isFreeCamera3D =
+    // ========== IN_GAME_MENU ==========
+    if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
+        this->inGameMenu.showInGameMenu = true;
+    }
+    // Salimos para no recibir más inputs en caso de haber desplegado el menu
+    if (this->inGameMenu.showInGameMenu) { 
+        // ========== CONTROLS_MENU ==========
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {
+            // TODO, cambiar el lastkey
+            this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+            return;
+        }
+
+        int result = this->inGameMenu.processInputInGameMenu(this->keys);
+
+        // Mirar processInputInGameMenu para saber que devuelve
+        switch (result) {
+            case 1: break;
+            case 2: break;
+            case 3: toggleViewMode(); break;
+            case 4: cycleCamera3DType(); break;
+            case 6: returnToMenuFromGame(/*resetRun=*/true); break;
+            default: break;
+        }
+
+        return; 
+    }
+
+    // ========== IN_GAME_MENU ==========
+    if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
+        this->inGameMenu.showInGameMenu = true;
+    }
+    // Salimos para no recibir más inputs en caso de haber desplegado el menu
+    if (this->inGameMenu.showInGameMenu) { 
+        // ========== CONTROLS_MENU ==========
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {
+            // TODO, cambiar el lastkey
+            this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+            return;
+        }
+
+        int result = this->inGameMenu.processInputInGameMenu(this->keys);
+
+        // Mirar processInputInGameMenu para saber que devuelve
+        switch (result) {
+            case 1: break;
+            case 2: break;
+            case 3: toggleViewMode(); break;
+            case 4: cycleCamera3DType(); break;
+            case 6: returnToMenuFromGame(/*resetRun=*/true); break;
+            default: break;
+        }
+
+        return; 
+    }
+
+const bool isFreeCamera3D =
         (this->viewMode == ViewMode::Mode3D && this->camera3DType == Camera3DType::FreeCamera);
 
     if (this->viewMode != ViewMode::Mode3D) {
@@ -2430,10 +2672,10 @@ void Game::processInput() {
     // ======================= Jugador 1 (blanco): Flechas =======================
 
     if (p1->isAlive()) {
-        const bool up = (this->keys[GLFW_KEY_UP] >= GLFW_PRESS);
-        const bool down = (this->keys[GLFW_KEY_DOWN] >= GLFW_PRESS);
-        const bool left = (this->keys[GLFW_KEY_LEFT] >= GLFW_PRESS);
-        const bool right = (this->keys[GLFW_KEY_RIGHT] >= GLFW_PRESS);
+        const bool up = (this->keys[inGameMenu.controlsMenu.upKey_P1] >= GLFW_PRESS);
+        const bool down = (this->keys[inGameMenu.controlsMenu.downKey_P1] >= GLFW_PRESS);
+        const bool left = (this->keys[inGameMenu.controlsMenu.leftKey_P1] >= GLFW_PRESS);
+        const bool right = (this->keys[inGameMenu.controlsMenu.rightKey_P1] >= GLFW_PRESS);
 
         const int pressedCount = (up ? 1 : 0) + (down ? 1 : 0) + (left ? 1 : 0) + (right ? 1 : 0);
         if (pressedCount == 0) {
@@ -2495,17 +2737,17 @@ void Game::processInput() {
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
         if (!p2->isAlive()) {
             p2->isWalking = false;
         } else {
 
-            const bool up2 = (this->keys[GLFW_KEY_W] >= GLFW_PRESS);
-            const bool down2 = (this->keys[GLFW_KEY_S] >= GLFW_PRESS);
-            const bool left2 = (this->keys[GLFW_KEY_A] >= GLFW_PRESS);
-            const bool right2 = (this->keys[GLFW_KEY_D] >= GLFW_PRESS);
+            const bool up2 = (this->keys[inGameMenu.controlsMenu.upKey_P2] >= GLFW_PRESS);
+            const bool down2 = (this->keys[inGameMenu.controlsMenu.downKey_P2] >= GLFW_PRESS);
+            const bool left2 = (this->keys[inGameMenu.controlsMenu.leftKey_P2] >= GLFW_PRESS);
+            const bool right2 = (this->keys[inGameMenu.controlsMenu.rightKey_P2] >= GLFW_PRESS);
 
             const int pressedCount2 = (up2 ? 1 : 0) + (down2 ? 1 : 0) + (left2 ? 1 : 0) + (right2 ? 1 : 0);
             if (pressedCount2 == 0) {
@@ -2581,6 +2823,15 @@ void Game::processInput() {
         }
     }
 
+    // ======================= CPU (VS) =======================
+    if (VersusMode::isVersusMode(this->mode)) {
+        CpuBomberman::Context cpuContext;
+        cpuContext.versusRoundNumber = this->versusRoundNumber;
+
+        CpuBomberman::Settings cpuSettings;
+        CpuBomberman::updateCpuPlayers(this->mode, gameMap, gPlayers, this->deltaTime, cpuContext, cpuSettings);
+    }
+
     // Debug: forzar avance al siguiente nivel.
     if (this->keys[GLFW_KEY_F3] == GLFW_PRESS) {
         this->keys[GLFW_KEY_F3] = GLFW_REPEAT;
@@ -2624,8 +2875,8 @@ void Game::processInput() {
         }
     }
 
-    if (p1->isAlive() && p1->hasRemoteControl && this->keys[GLFW_KEY_RIGHT_ALT] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_RIGHT_ALT] = GLFW_REPEAT;
+    if (p1->isAlive() && p1->hasRemoteControl && this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] = GLFW_REPEAT;
         for (auto* b : gBombs) {
             if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
                 b->detonate();
@@ -2635,11 +2886,11 @@ void Game::processInput() {
     }
 
     // ======================= Bombas (Jugador 2) =======================
-    if (this->mode == GameMode::TwoPlayers && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
-        if (p2->isAlive() && !p2->isGameOver() && this->keys[GLFW_KEY_X] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_X] = GLFW_REPEAT;
+        if (p2->isAlive() && !p2->isGameOver() && this->keys[inGameMenu.controlsMenu.bombKey_P2] == GLFW_PRESS) {
+            this->keys[inGameMenu.controlsMenu.bombKey_P2] = GLFW_REPEAT;
 
             if (p2->canPlaceBomb()) {
                 int bombRow, bombCol;
@@ -2665,8 +2916,8 @@ void Game::processInput() {
             }
         }
 
-        if (p2->isAlive() && p2->hasRemoteControl && this->keys[GLFW_KEY_Z] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_Z] = GLFW_REPEAT;
+        if (p2->isAlive() && p2->hasRemoteControl && this->keys[inGameMenu.controlsMenu.detonateBombKey_P2] == GLFW_PRESS) {
+            this->keys[inGameMenu.controlsMenu.detonateBombKey_P2] = GLFW_REPEAT;
             for (auto* b : gBombs) {
                 if (b && b->ownerIndex == p2->playerId && b->state == BombState::FUSE) {
                     b->detonate();
@@ -2812,27 +3063,117 @@ void Game::update() {
         menuScreen.updateMenu(deltaTime);
         if (menuScreen.shouldStartGame()) {
             GameMode selectedMode = menuScreen.getSelectedMode();
-            if (selectedMode == GameMode::TwoPlayers) {
-                // Reproducir cinematica antes de empezar la partida
+            // TODO: Cambiar esto para que cada modo tenga su propia cinemática.
+            if (selectedMode == GameMode::HistoryTwoPlayers) {
+                // Reproducir cinematica antes de empezar la partida (solo para Historia 2P)
                 this->mode = selectedMode;
                 this->state = GAME_CINEMATIC;
                 this->currentCinematicType = CinematicType::HistoryStart;
                 this->nextStateAfterCinematic = GAME_PLAYING;
                 std::string videoPath = resolveAssetPath("resources/video/HistoryIntro.mp4");
                 cinematicPlayer.open(videoPath);
+                
+                // Reproducir música de intro de Historia antes de la cinemática
+                AudioManager::get().stopBgm();
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+
+
                 menuScreen.resetTransition();
             } else {
                 startNewRun(selectedMode);
             }
         }
+
+        if (menuScreen.shouldOpenCustomGame()) {
+            menuScreen.resetTransition();
+            customGameMenu.resetToDefaults();
+            this->state = GAME_CUSTOM_MENU_1;
+            this->init();
+            return;
+        }
+
+        // Cerrar el juego si se presionó Escape en el menú
+        if (menuScreen.isExitRequested()) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 1 ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        customGameMenu.updateMenu1(deltaTime);
+
+        if (customGameMenu.shouldBackToMainMenu()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_MENU;
+            this->init();
+            return;
+        }
+
+        if (customGameMenu.shouldAdvanceToMenu2()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_CUSTOM_MENU_2;
+            this->init();
+            return;
+        }
+
+        return;
+    }
+
+    // ========== CUSTOM GAME MENU 2 ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        customGameMenu.updateMenu2(deltaTime);
+
+        if (customGameMenu.shouldBackToMainMenu()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_MENU;
+            this->init();
+            return;
+        }
+
+        if (customGameMenu.shouldBackToMenu1()) {
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_CUSTOM_MENU_1;
+            this->init();
+            return;
+        }
+
+        if (customGameMenu.shouldLaunchCustomGame()) {
+            // Base lista: aquí arrancaremos la partida custom en el siguiente paso.
+            customGameMenu.resetFlowFlags();
+            this->state = GAME_MENU;
+            this->init();
+            return;
+        }
+
         return;
     }
 
     // ========== CINEMATICA ==========
     if (this->state == GAME_CINEMATIC) {
+        bool audioFinished = false;
+
+        if (currentCinematicType == CinematicType::LevelStart) {
+            audioFinished = AudioManager::get().isBgmFinished();
+        }
+
+
         cinematicPlayer.update(deltaTime);
-        if (cinematicPlayer.isFinished()) {
+
+        // Termina si el video se acaba, o en el caso de LevelStart, si ademas ya acabo el audio
+        bool isDone = cinematicPlayer.isFinished();
+        
+        if (currentCinematicType == CinematicType::LevelStart) {
+            isDone = isDone && audioFinished;
+        }
+
+        if (isDone) {
             cinematicPlayer.close();
+            
+            // Parar BGM de cinematica si hay una en curso
+            AudioManager::get().stopBgm();
+
+
             if (currentCinematicType == CinematicType::Intro) {
                 this->state = GAME_MENU;
                 this->init();
@@ -2848,6 +3189,21 @@ void Game::update() {
                     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
                     loadLevelPending = false;
                     this->state = GAME_PLAYING;
+                    
+                    // Iniciar BGM del nivel con miniaudio
+                    std::string bgmFile = "";
+                    if (currentLevelIndex == 0 || currentLevelIndex == 1) {
+                        bgmFile = "resources/sounds/03 BGM 1.mp3";
+                    } else if (currentLevelIndex == 2 || currentLevelIndex == 4) {
+                        bgmFile = "resources/sounds/05 Boss BGM.mp3";
+                    } else if (currentLevelIndex == 3) {
+                        bgmFile = "resources/sounds/06 BGM 2.mp3";
+                    }
+
+                    if (!bgmFile.empty()) {
+                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                    }
+
                 }
             }
         }
@@ -2858,6 +3214,9 @@ void Game::update() {
     if (gameMap) {
         gameMap->update(deltaTime);
     }
+
+    // No actualizamos a los enemigos ni jugador en caso de que el menu este desplegado
+    if (this->inGameMenu.showInGameMenu) return;
 
     // Actualizar enemigos (l├│gica o animaci├│n de muerte)
     const std::size_t enemiesToUpdate = gEnemies.size();
@@ -2989,29 +3348,86 @@ void Game::update() {
 
     // ========== Transiciones: Game Over / Next Level ==========
     if (this->state == GAME_PLAYING) {
-        if (allPlayersOutOfLives()) {
-            // No hay pantalla de Game Over: volver al men├║.
-            returnToMenuFromGame(/*resetRun=*/true);
-            return;
-        }
+        if (VersusMode::isVersusMode(mode)) {
+            const int remaining = VersusMode::countPlayersStillInMatch(gPlayers);
 
-        // Si se ha completado el nivel, esperamos un momento antes de avanzar.
-        // Esto permite ver la animaci├│n de muerte del ├║ltimo enemigo y que el jugador reaccione.
-        if (!pendingLevelAdvance) {
-            if (allEnemiesCleared()) {
-                pendingLevelAdvance = true;
-                levelAdvanceTimer = 0.0f;
+            // Si todos los humanos están fuera y aún queda algún rival vivo, se pierde el encuentro.
+            // (Si no queda nadie vivo, es Draw y se pasa de ronda.)
+            if (VersusMode::humansOut(mode, gPlayers) && remaining > 0) {
+                returnToMenuFromGame(/*resetRun=*/true);
+                return;
+            }
+
+            // Draw (muerte simultánea) o Draw por tiempo.
+            const bool isDraw = VersusMode::isDraw(remaining, levelTimeRemaining);
+
+            if (remaining == 1) {
+                if (!pendingLevelAdvance) {
+                    // Registrar win del último jugador en pie (una sola vez por ronda).
+                    const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
+                    if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
+                        playerScores[winnerIndex] += 1;
+                    }
+
+                    pendingLevelAdvance = true;
+                    levelAdvanceTimer = 0.0f;
+                } else {
+                    levelAdvanceTimer += deltaTime;
+                    if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
+                        pendingLevelAdvance = false;
+                        levelAdvanceTimer = 0.0f;
+                        advanceToNextLevel();
+                        return;
+                    }
+                }
+            } else if (isDraw) {
+                if (!pendingLevelAdvance) {
+                    pendingLevelAdvance = true;
+                    levelAdvanceTimer = 0.0f;
+                } else {
+                    levelAdvanceTimer += deltaTime;
+                    if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
+                        pendingLevelAdvance = false;
+                        levelAdvanceTimer = 0.0f;
+                        advanceToNextLevel();
+                        return;
+                    }
+                }
             }
         } else {
-            levelAdvanceTimer += deltaTime;
-            if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
-                pendingLevelAdvance = false;
-                levelAdvanceTimer = 0.0f;
-
-                // Pasar de nivel: se conservan vidas y puntuaci├│n; se reinician stats.
-                // Cinematica final de historia si el modo de juego corresponde
-                advanceToNextLevel();
+            if (allPlayersOutOfLives()) {
+                // No hay pantalla de Game Over: volver al menú.
+                returnToMenuFromGame(/*resetRun=*/true);
                 return;
+            }
+
+            // Si se ha completado el nivel, esperamos un momento antes de avanzar.
+            if (!pendingLevelAdvance) {
+                if (allEnemiesCleared()) {
+                    pendingLevelAdvance = true;
+                    levelAdvanceTimer = 0.0f;
+                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/04 Stage Clear.mp3"), false);
+                    for (auto* p : gPlayers) {
+                        if (p && p->isAlive()) {
+                            p->startWinning();
+                        }
+                    }
+                }
+            } else {
+                bool allWinnersFinished = true;
+                for (auto* p : gPlayers) {
+                    if (p && p->lifeState == PlayerLifeState::Winning && !p->hasFinishedWinning) {
+                        allWinnersFinished = false;
+                        break;
+                    }
+                }
+
+                if (allWinnersFinished) {
+                    pendingLevelAdvance = false;
+                    levelAdvanceTimer = 0.0f;
+                    advanceToNextLevel();
+                    return;
+                }
             }
         }
     }
@@ -4346,6 +4762,8 @@ void Game::render3D() {
         }
     }
 
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+    
     glBindVertexArray(0);
     glUseProgram(0);
 
@@ -4547,7 +4965,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1 );
+    gameMap->renderHud(VAO, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1 );
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {
@@ -4594,6 +5012,8 @@ void Game::render2D() {
         glBindVertexArray(0);
     }
 
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+
     glUseProgram(0);
 }
 
@@ -4611,6 +5031,20 @@ void Game::render() {
         menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         glUseProgram(0);
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 1) ==========
+    if (this->state == GAME_CUSTOM_MENU_1) {
+        customGameMenu.renderMenu1(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                   uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        return;
+    }
+
+    // ========== CUSTOM GAME (PANTALLA 2) ==========
+    if (this->state == GAME_CUSTOM_MENU_2) {
+        customGameMenu.renderMenu2(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                   uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
         return;
     }
 

@@ -81,8 +81,8 @@ int main() {
 
     // ============================== Juego ==============================
     bomberman = new Game(mainWindow, SCREEN_WIDTH, SCREEN_HEIGHT);
-    // Cambia a GameMode::OnePlayer si quieres modo 1 jugador.
-    bomberman->setMode(GameMode::TwoPlayers);
+    // Cambia a GameMode::HistoryOnePlayer si quieres modo 1 jugador.
+    bomberman->setMode(GameMode::HistoryTwoPlayers);
     bomberman->init();
 
     // Initialize blend to blend transparent to the background
@@ -135,6 +135,7 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
     if (key >= 0 && key < 1024) {
         bomberman->keys[key] = action;
+        bomberman->lastKeyPressed = key;
 
         if (action == GLFW_PRESS) {
             // ========== INTRO: pasar al menú ==========

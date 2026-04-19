@@ -1,0 +1,34 @@
+# VS - 4 Bomberman (blanco/rojo/azul/amarillo)
+# Spawns con coordenadas x y (columna, fila) - rotación
+spawn 0 2 11
+spawn 1 2 1
+spawn 2 18 11
+spawn 3 18 1
+
+# Power-ups con coordenadas x y (columna, fila)
+powerup flame 18 1
+powerup flame 2 11
+powerup flame 10 3
+powerup flame 10 9
+powerup bomba 2 1
+powerup bomba 18 11
+powerup bomba 6 6
+powerup bomba 14 6
+powerup velocidad 10 1
+powerup velocidad 10 11
+
+# Enemigos: VS sin enemigos
+
+12 3 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 13
+12 0 6 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 7 0 13
+12 1 9 8 10 8 10 8 10 8 10 8 10 8 10 8 10 8 9 1 13
+12 0 9 7 10 7 10 10 10 10 10 10 10 10 10 7 10 7 10 0 13
+12 1 10 8 9 8 10 8 9 8 9 8 9 8 10 8 9 8 10 1 13
+12 0 9 10 10 10 10 7 10 7 10 7 10 7 10 10 10 10 10 0 13
+12 1 9 8 9 8 10 8 9 8 10 8 9 8 10 8 9 8 9 1 13
+12 0 9 10 10 10 10 7 10 7 10 7 10 7 10 10 10 10 10 0 13
+12 1 10 8 9 8 10 8 9 8 9 8 9 8 10 8 9 8 10 1 13
+12 0 9 7 10 7 10 10 10 10 10 10 10 10 10 7 10 7 10 0 13
+12 1 9 8 10 8 10 8 10 8 10 8 10 8 10 8 10 8 9 1 13
+12 0 9 7 10 7 10 7 10 7 10 7 10 7 10 7 10 7 10 0 13
+12 1 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 2 4 5 13
