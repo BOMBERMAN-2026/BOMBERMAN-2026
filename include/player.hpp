@@ -20,7 +20,8 @@ class GameMap;
 enum class PlayerLifeState {
     Alive,           // Se mueve y responde a inputs.
     DyingByEnemy,    // Muerte por enemigo: "jugador(color).muerto.N".
-    DyingByExplosion // Muerte por explosión: "jugador.muerto.quemado.N".
+    DyingByExplosion,// Muerte por explosión: "jugador.muerto.quemado.N".
+    Winning          // Animación de victoria y salida de nivel.
 };
 
 enum Move {
@@ -68,6 +69,15 @@ class Player : public Entity {
         float deathTimer = 0.0f;                          // Acumulador para frames de muerte
         int deathFrame = 0;                               // Frame actual de muerte
         bool pendingRespawn = false;                      // true si terminó animación y toca respawnear
+
+        // Vida y animaciones de victoria
+        bool hasFinishedWinning = false;
+        float winTimer = 0.0f;
+        int winPhase = 0; // 0 = Creciendo/Pose V, 1 = Girando y saliendo
+        float winScale = 1.8f; // Escala dinámica durante la victoria
+        glm::vec2 winVelocity = glm::vec2(0.0f); // Para la dirección aleatoria diagonal
+        void startWinning();
+        void updateWinningAnimation();
 
         Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId = 0, const std::string& prefix = "jugadorblanco");
         ~Player() override;

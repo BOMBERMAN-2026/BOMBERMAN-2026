@@ -2921,10 +2921,23 @@ void Game::update() {
                 if (allEnemiesCleared()) {
                     pendingLevelAdvance = true;
                     levelAdvanceTimer = 0.0f;
+                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/04 Stage Clear.mp3"), false);
+                    for (auto* p : gPlayers) {
+                        if (p && p->isAlive()) {
+                            p->startWinning();
+                        }
+                    }
                 }
             } else {
-                levelAdvanceTimer += deltaTime;
-                if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
+                bool allWinnersFinished = true;
+                for (auto* p : gPlayers) {
+                    if (p && p->lifeState == PlayerLifeState::Winning && !p->hasFinishedWinning) {
+                        allWinnersFinished = false;
+                        break;
+                    }
+                }
+
+                if (allWinnersFinished) {
                     pendingLevelAdvance = false;
                     levelAdvanceTimer = 0.0f;
                     advanceToNextLevel();

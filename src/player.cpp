@@ -3,6 +3,7 @@
 #include "game_map.hpp"
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -206,9 +207,68 @@ void Player::updateDeathAnimation() {
 
 // ============================== API base ==============================
 
+
+void Player::startWinning() {
+    lifeState = PlayerLifeState::Winning;
+    isWalking = false;
+    winTimer = 0.0f;
+    winPhase = 0;
+    winScale = 1.8f;
+    hasFinishedWinning = false;
+    invincible = true; // Para que no muera por explosiones tardías
+
+    // Aleatorizar dirección para huir (diagonal hacia cualquier lado, evitando rectas)
+    float dx = (std::rand() % 100 / 100.0f) * 2.0f - 1.0f; // -1 a 1
+    float dy = (std::rand() % 100 / 100.0f) * 2.0f - 1.0f; // -1 a 1
+    if (std::abs(dx) < 0.3f) dx = (dx < 0) ? -0.3f : 0.3f;
+    if (std::abs(dy) < 0.3f) dy = (dy < 0) ? -0.3f : 0.3f;
+    winVelocity = glm::normalize(glm::vec2(dx, dy)) * (baseSpeed * 2.5f);
+}
+
+void Player::updateWinningAnimation() {
+    winTimer += deltaTime;
+
+    // Fase 0: Pose de victoria (agrandarse)
+    if (winPhase == 0) {
+        if (winTimer < 0.5f) {
+            // Pose inicial de paz normal
+            currentSpriteName = spritePrefix + ".victoria.recto.0";
+            winScale = 1.8f;
+        } else if (winTimer < 1.5f) {
+            // Pose gigante
+            currentSpriteName = spritePrefix + ".victoria.dedos.0"; 
+            winScale = 2.8f; // Crecimiento
+        } else {
+            // Transición a la fase de escape girando
+            winPhase = 1;
+            winTimer = 0.0f;
+            winScale = 1.8f; // Vuelve al tamaño normal para girar
+        }
+    } 
+    // Fase 1: Girar sobre si mismo y salir del mapa (diagonal aleatoria)
+    else if (winPhase == 1) {
+        int giroFrame = (int)(winTimer * 20.0f) % 4; // x20.0f para girar más rápido
+        if (giroFrame == 0 || giroFrame == 2) currentSpriteName = spritePrefix + ".victoria.delado.0";
+        else if (giroFrame == 1) currentSpriteName = spritePrefix + ".victoria.bocabajo.0";
+        else currentSpriteName = spritePrefix + ".victoria.recto.0"; // Vuelve a ponerse recto para completar el giro 360
+        
+        flipX = (giroFrame == 2) ? 1.0f : 0.0f;
+
+        position += winVelocity * deltaTime; // Sube fuera de la cámara en su vec2 diagonal
+        
+        // Verifica límites de la pantalla (NDC usualmente de -1 a 1 o un poco más con aspect ratio)
+        if (position.y > 1.5f || position.y < -1.5f || position.x > 2.0f || position.x < -2.0f) { 
+            hasFinishedWinning = true;
+        }
+    }
+}
+
 // Tick de lógica: animación de caminar o de muerte + invincibilidad.
 void Player::Update() {
-    if (lifeState == PlayerLifeState::Alive) {
+    if (lifeState == PlayerLifeState::Winning) {
+        updateWinningAnimation();
+        return;
+    } else if (lifeState == PlayerLifeState::Alive) {
         // Invulnerabilidad: decrementar temporizador (sin "frames extra" al acabar).
         if (invincible) {
             invincibilityTimer -= deltaTime;
@@ -227,7 +287,7 @@ void Player::Update() {
 
 // Render del sprite actual (el orden de pintado lo decide `bomberman.cpp`).
 void Player::Draw() {
-    const float playerScaleFactor = 1.8f;
+    float playerScaleFactor = (lifeState == PlayerLifeState::Winning) ? winScale : 1.8f;
     float halfTile = gameMap->getTileSize() / 2.0f;
 
     glm::mat4 model = glm::mat4(1.0f);
