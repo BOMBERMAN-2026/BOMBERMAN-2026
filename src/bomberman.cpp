@@ -62,6 +62,10 @@ GLuint mapTexture;
 GLuint horizonTexture;
 GLuint enemyTexture = 0;
 GLuint scoreboardTexture = 0; // Textura del scoreboard/HUD 
+GLuint overlayWhiteTexture = 0; // Textura blanca 1x1 para overlays/filtros en 3D
+
+// Estado de asistencia visual en primera persona (P1, P2).
+static float gFirstPersonBlockedHintTimer[2] = {0.0f, 0.0f};
 
 // Vectores de entidades
 std::vector<Player*> gPlayers;
@@ -241,6 +245,8 @@ static constexpr float kFreeCameraZoomStep = 0.38f;
 static constexpr float kFreeCameraDragPanSensitivity = 0.0065f;
 static constexpr float kFirstPersonHeadBobAmplitude = 0.0032f;
 static constexpr float kFirstPersonHeadBobFrequency = 10.8f;
+static constexpr float kFirstPersonCrossProbeTiles = 1.05f;
+static constexpr float kFirstPersonCrossBlockedHintDuration = 0.36f;
 static constexpr int kBombExplosionVerticalLayers = 5;
 static constexpr float kBombExplosionVerticalLayerStep = 0.36f;
 
@@ -256,17 +262,6 @@ static const char* camera3DTypeToString(Camera3DType type) {
         case Camera3DType::FirstPerson: return "PrimeraPersona";
         case Camera3DType::FreeCamera: return "Libre";
         default: return "Unknown";
-    }
-}
-
-static glm::vec3 facingKeyToForward(int facingKey)
-{
-    switch (facingKey) {
-        case GLFW_KEY_UP: return glm::vec3(0.0f, 0.0f, -1.0f);
-        case GLFW_KEY_DOWN: return glm::vec3(0.0f, 0.0f, 1.0f);
-        case GLFW_KEY_LEFT: return glm::vec3(-1.0f, 0.0f, 0.0f);
-        case GLFW_KEY_RIGHT: return glm::vec3(1.0f, 0.0f, 0.0f);
-        default: return glm::vec3(0.0f, 0.0f, 1.0f);
     }
 }
 
@@ -1349,6 +1344,29 @@ void CompileShaders()
 
 GLuint LoadTexture(const char* filePath);
 
+static void ensureOverlayWhiteTexture() {
+    if (overlayWhiteTexture != 0) {
+        return;
+    }
+
+    const unsigned char whitePixel[4] = {255, 255, 255, 255};
+    glGenTextures(1, &overlayWhiteTexture);
+    glBindTexture(GL_TEXTURE_2D, overlayWhiteTexture);
+    glTexImage2D(GL_TEXTURE_2D,
+                 0,
+                 GL_RGBA,
+                 1,
+                 1,
+                 0,
+                 GL_RGBA,
+                 GL_UNSIGNED_BYTE,
+                 whitePixel);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+}
+
 static GLuint loadHorizonTextureWithFallback() {
     GLuint textureId = 0;
     for (const char* candidatePath : kHorizonBackgroundCandidates) {
@@ -1404,6 +1422,7 @@ void Game::ensureRenderResources() {
     CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
+    ensureOverlayWhiteTexture();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1798,6 +1817,8 @@ void Game::setCamera3DType(Camera3DType newType) {
     camera3DType = newType;
 
     if (camera3DType == Camera3DType::FirstPerson) {
+        gFirstPersonBlockedHintTimer[0] = 0.0f;
+        gFirstPersonBlockedHintTimer[1] = 0.0f;
         if (!gPlayers.empty() && gPlayers[0] != nullptr) {
             firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
         }
@@ -2039,6 +2060,10 @@ Game::~Game() {
         glDeleteTextures(1, &dragonGlbTexture);
         dragonGlbTexture = 0;
     }
+    if (overlayWhiteTexture != 0) {
+        glDeleteTextures(1, &overlayWhiteTexture);
+        overlayWhiteTexture = 0;
+    }
 
     ResourceManager::clear();
 
@@ -2046,6 +2071,7 @@ Game::~Game() {
     mapTexture = 0;
     horizonTexture = 0;
     enemyTexture = 0;
+    overlayWhiteTexture = 0;
 
     shader = 0;
     shader3D = 0;
@@ -2147,6 +2173,8 @@ void Game::init() {
     firstPersonMouseRightPressedLastFrame = false;
     freeCameraInitialized = false;
     freeCameraAnchored = false;
+    gFirstPersonBlockedHintTimer[0] = 0.0f;
+    gFirstPersonBlockedHintTimer[1] = 0.0f;
     if (window != nullptr) {
         glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
     }
@@ -2310,6 +2338,88 @@ void Game::processInput() {
         && mouseRightPressedNow
         && !this->firstPersonMouseRightPressedLastFrame;
 
+    auto bombBlocksCellForPlayer = [&](int row, int col, int playerId) {
+        for (auto* bomb : gBombs) {
+            if (!bomb || bomb->state == BombState::DONE) {
+                continue;
+            }
+            if (bomb->gridRow == row && bomb->gridCol == col && bomb->blocksForPlayer(playerId)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto movePlayerWithCrossRule = [&](Player* player, Move moveDir) {
+        if (!player || moveDir == MOVE_NONE || gameMap == nullptr) {
+            return false;
+        }
+
+        const bool firstPersonCrossRuleActive =
+            (this->viewMode == ViewMode::Mode3D && this->camera3DType == Camera3DType::FirstPerson);
+        if (!firstPersonCrossRuleActive) {
+            const glm::vec2 before = player->position;
+            player->UpdateSprite(moveDir, gameMap, this->deltaTime);
+            return glm::length(player->position - before) > 0.0001f;
+        }
+
+        const float halfTile = gameMap->getTileSize() * 0.5f;
+        const float probeDistance = halfTile * kFirstPersonCrossProbeTiles;
+
+        glm::vec2 probePos = player->position;
+        switch (moveDir) {
+            case MOVE_UP: probePos.y += probeDistance; break;
+            case MOVE_DOWN: probePos.y -= probeDistance; break;
+            case MOVE_LEFT: probePos.x -= probeDistance; break;
+            case MOVE_RIGHT: probePos.x += probeDistance; break;
+            default: break;
+        }
+
+        int probeRow = 0;
+        int probeCol = 0;
+        gameMap->ndcToGrid(probePos, probeRow, probeCol);
+
+        const bool crossBlocked =
+            (!gameMap->isWalkable(probeRow, probeCol)) ||
+            bombBlocksCellForPlayer(probeRow, probeCol, player->playerId);
+
+        if (crossBlocked) {
+            const int slot = std::max(0, std::min(1, player->playerId));
+            gFirstPersonBlockedHintTimer[slot] = std::max(gFirstPersonBlockedHintTimer[slot],
+                                                          kFirstPersonCrossBlockedHintDuration);
+            return false;
+        }
+
+        // En primera persona avanza por el centro del tile usando la regla de la cruz.
+        const float rawStep = std::max(0.0f, player->speed * this->deltaTime);
+        const float step = std::min(rawStep, halfTile * 0.45f);
+        glm::vec2 nextPos = player->position;
+        switch (moveDir) {
+            case MOVE_UP: nextPos.y += step; break;
+            case MOVE_DOWN: nextPos.y -= step; break;
+            case MOVE_LEFT: nextPos.x -= step; break;
+            case MOVE_RIGHT: nextPos.x += step; break;
+            default: break;
+        }
+
+        int nextRow = 0;
+        int nextCol = 0;
+        gameMap->ndcToGrid(nextPos, nextRow, nextCol);
+        const bool nextBlocked =
+            (!gameMap->isWalkable(nextRow, nextCol)) ||
+            bombBlocksCellForPlayer(nextRow, nextCol, player->playerId);
+
+        if (nextBlocked) {
+            const int slot = std::max(0, std::min(1, player->playerId));
+            gFirstPersonBlockedHintTimer[slot] = std::max(gFirstPersonBlockedHintTimer[slot],
+                                                          kFirstPersonCrossBlockedHintDuration);
+            return false;
+        }
+
+        player->position = nextPos;
+        return true;
+    };
+
     if (gPlayers.empty() || gPlayers[0] == nullptr) {
         this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
         this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
@@ -2362,7 +2472,7 @@ void Game::processInput() {
                 const GLint mappedDir = remapDirectionFor3DCamera(this, keyToUse);
                 const Move mappedMove = directionKeyToMove(mappedDir);
                 if (mappedMove != MOVE_NONE) {
-                    p1->UpdateSprite(mappedMove, gameMap, this->deltaTime);
+                    const bool moved = movePlayerWithCrossRule(p1, mappedMove);
 
                     const GLint facingDir = keepScreenFacingForCameraRelative3D
                         ? keyToUse
@@ -2372,7 +2482,7 @@ void Game::processInput() {
                         p1->walkPhase = 0;
                     }
                     p1->facingDirKey = facingDir;
-                    p1->isWalking = true;
+                    p1->isWalking = moved;
                 } else {
                     p1->isWalking = false;
                 }
@@ -2450,7 +2560,7 @@ void Game::processInput() {
                     const Move mov2 = directionKeyToMove(dir2);
 
                     if (mov2 != MOVE_NONE) {
-                        p2->UpdateSprite(mov2, gameMap, this->deltaTime);
+                        const bool moved2 = movePlayerWithCrossRule(p2, mov2);
 
                         const GLint facingDir2 = keepScreenFacingForCameraRelative3D
                             ? dir2Screen
@@ -2460,7 +2570,7 @@ void Game::processInput() {
                             p2->walkPhase = 0;
                         }
                         p2->facingDirKey = facingDir2;
-                        p2->isWalking = true;
+                        p2->isWalking = moved2;
                     } else {
                         p2->isWalking = false;
                     }
@@ -2694,6 +2804,8 @@ void Game::processInput() {
 // Tick de l├│gica: mapa, enemigos, bombas (da├▒o) y contacto enemigo-jugador.
 void Game::update() {
     float deltaTime = this->deltaTime;
+    gFirstPersonBlockedHintTimer[0] = std::max(0.0f, gFirstPersonBlockedHintTimer[0] - deltaTime);
+    gFirstPersonBlockedHintTimer[1] = std::max(0.0f, gFirstPersonBlockedHintTimer[1] - deltaTime);
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
@@ -2980,10 +3092,8 @@ void Game::render3D() {
             : nullptr;
 
     glm::vec3 trackedPlayerCenter = mapCenter + glm::vec3(0.0f, 0.55f, 0.0f);
-    glm::vec3 trackedPlayerForward(0.0f, 0.0f, 1.0f);
     if (trackedPlayer != nullptr) {
         trackedPlayerCenter = ndcToWorld3D(gameMap, trackedPlayer->position, 0.55f);
-        trackedPlayerForward = facingKeyToForward(trackedPlayer->facingDirKey);
     }
 
     glm::vec3 cameraPos(mapRadius * 0.70f, mapRadius * 1.55f + 3.0f, mapRadius * 1.25f + 2.5f);
@@ -3019,7 +3129,6 @@ void Game::render3D() {
         cameraTarget = pivot;
         up = computeCameraUpFromForwardAndRoll(glm::normalize(cameraTarget - cameraPos), 0.0f);
     } else if (camera3DType == Camera3DType::FirstPerson) {
-        // Altura de ojos mas baja para mantener los muros delante y evitar ver por encima.
         float firstPersonCameraYaw = this->firstPersonYaw;
         float firstPersonCameraPitch = this->firstPersonPitch;
         if (trackedPlayerIndex > 0 && trackedPlayer != nullptr) {
@@ -4280,6 +4389,137 @@ void Game::render3D() {
 
     if (camera3DType == Camera3DType::FirstPerson && !isSplitFirstPersonPass) {
         renderFirstPersonMiniMap2D(gameMap, viewportWidth, viewportHeight);
+    }
+
+    if (shader != 0 && VAO != 0 && overlayWhiteTexture != 0 && !gPlayers.empty()) {
+        const int overlayPlayerIndex =
+            std::max(0, std::min(active3DViewportPlayerIndex, (int)gPlayers.size() - 1));
+        Player* overlayPlayer = gPlayers[overlayPlayerIndex];
+        if (!overlayPlayer || !overlayPlayer->isAlive()) {
+            overlayPlayer = nullptr;
+        }
+
+        if (overlayPlayer != nullptr) {
+
+            const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
+            if (!wasBlendEnabled) {
+                glEnable(GL_BLEND);
+            }
+
+        glDisable(GL_DEPTH_TEST);
+        glUseProgram(shader);
+
+        const glm::mat4 overlayProjection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
+        const glm::vec4 whiteUv(0.0f, 0.0f, 1.0f, 1.0f);
+
+        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(overlayProjection));
+        glUniform1i(uniformTexture, 0);
+        glUniform1f(uniformFlipX, 0.0f);
+        glUniform1f(uniformWhiteFlash, 0.0f);
+
+        glBindVertexArray(VAO);
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, overlayWhiteTexture);
+
+        auto drawOverlayRect = [&](float centerX,
+                                   float centerY,
+                                   float halfW,
+                                   float halfH,
+                                   const glm::vec4& tint) {
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
+            model = glm::scale(model, glm::vec3(halfW, halfH, 1.0f));
+
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(whiteUv));
+            glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        };
+
+        const float now = (float)glfwGetTime();
+        const int hintSlot = std::max(0, std::min(1, overlayPlayer->playerId));
+        const float blockedHint =
+            (camera3DType == Camera3DType::FirstPerson) ? gFirstPersonBlockedHintTimer[hintSlot] : 0.0f;
+        const float speedBoost = std::max(0.0f, overlayPlayer->baseSpeed - kDefaultPlayerSpeed);
+        const float speedBoostNorm = std::min(1.0f, speedBoost / 0.35f);
+
+        if (camera3DType == Camera3DType::FirstPerson) {
+            // Cruz central y guías más visibles para entrar en huecos.
+            const float crossAlpha = 0.88f + blockedHint * 0.12f;
+            const glm::vec4 crossColor = (blockedHint > 0.001f)
+                ? glm::vec4(1.0f, 0.30f, 0.20f, crossAlpha)
+                : glm::vec4(1.0f, 1.0f, 1.0f, crossAlpha);
+            drawOverlayRect(0.0f, 0.0f, 0.0032f, 0.038f, crossColor);
+            drawOverlayRect(0.0f, 0.0f, 0.022f, 0.0032f, crossColor);
+        }
+
+        if (overlayPlayer->invincible) {
+            const float pulse = 0.55f + 0.45f * std::sin(now * 8.0f);
+            const float screenAlpha = 0.14f + 0.10f * pulse;
+            drawOverlayRect(0.0f, 0.0f, aspect, 1.0f, glm::vec4(0.20f, 0.82f, 1.0f, screenAlpha));
+
+            const float invTotal = std::max(0.01f, overlayPlayer->invincibilityTotalSeconds);
+            const float invRatio = std::max(0.0f, std::min(1.0f, overlayPlayer->invincibilityTimer / invTotal));
+            const float barHalfW = aspect * 0.44f;
+            const float barY = 0.90f;
+            drawOverlayRect(0.0f, barY, barHalfW, 0.035f, glm::vec4(0.04f, 0.09f, 0.14f, 0.86f));
+            if (invRatio > 0.001f) {
+                const float fillHalfW = barHalfW * invRatio;
+                drawOverlayRect(-barHalfW + fillHalfW,
+                                barY,
+                                fillHalfW,
+                                0.023f,
+                                glm::vec4(0.40f, 0.96f, 1.0f, 0.98f));
+            }
+        }
+
+        if (speedBoostNorm > 0.001f) {
+            const float speedAlpha = 0.10f + speedBoostNorm * 0.22f;
+            drawOverlayRect(-aspect + 0.028f, 0.0f, 0.028f, 1.0f, glm::vec4(0.30f, 1.0f, 0.55f, speedAlpha));
+            drawOverlayRect(aspect - 0.028f, 0.0f, 0.028f, 1.0f, glm::vec4(0.30f, 1.0f, 0.55f, speedAlpha));
+        }
+
+        if (overlayPlayer->hasRemoteControl) {
+            drawOverlayRect(0.0f, -0.90f, aspect * 0.26f, 0.032f, glm::vec4(0.18f, 0.11f, 0.03f, 0.82f));
+            drawOverlayRect(0.0f, -0.90f, aspect * 0.20f, 0.019f, glm::vec4(1.0f, 0.75f, 0.20f, 0.98f));
+        }
+
+        if (camera3DType == Camera3DType::FirstPerson && blockedHint > 0.001f) {
+            const float pulse = 0.55f + 0.45f * std::sin(now * 11.0f);
+            const float blockedAlpha = blockedHint * (0.10f + 0.12f * pulse);
+            drawOverlayRect(0.0f, 0.0f, aspect, 1.0f, glm::vec4(1.0f, 0.16f, 0.06f, blockedAlpha));
+            drawOverlayRect(0.0f,
+                            -0.72f,
+                            aspect * 0.26f,
+                            0.050f,
+                            glm::vec4(0.95f, 0.22f, 0.08f, 0.24f + blockedHint * 0.24f));
+        }
+
+        // Recuadros de estado (sin texto) para identificar efectos activos.
+        float badgeY = 0.80f;
+        auto drawBadge = [&](const glm::vec4& color) {
+            drawOverlayRect(-aspect + 0.17f, badgeY, 0.14f, 0.070f, glm::vec4(0.04f, 0.04f, 0.04f, 0.84f));
+            drawOverlayRect(-aspect + 0.17f, badgeY, 0.12f, 0.051f, color);
+            badgeY -= 0.13f;
+        };
+
+        if (overlayPlayer->invincible) {
+            drawBadge(glm::vec4(0.38f, 0.95f, 1.0f, 0.92f));
+        }
+        if (speedBoostNorm > 0.001f) {
+            drawBadge(glm::vec4(0.35f, 1.0f, 0.58f, 0.92f));
+        }
+        if (overlayPlayer->hasRemoteControl) {
+            drawBadge(glm::vec4(1.0f, 0.72f, 0.22f, 0.92f));
+        }
+
+        glBindVertexArray(0);
+        glUseProgram(0);
+
+            if (!wasBlendEnabled) {
+                glDisable(GL_BLEND);
+            }
+        }
     }
 }
 
