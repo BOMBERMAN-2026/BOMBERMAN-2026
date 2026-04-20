@@ -393,6 +393,12 @@ void KingBomber::emitSpecialCrossExplosion(int stepDist) {
 
     const int dr[4] = {-1, 1, 0, 0};
     const int dc[4] = {0, 0, -1, 1};
+    const float segmentRot[4] = {
+        0.0f,
+        glm::radians(180.0f),
+        glm::radians(90.0f),
+        glm::radians(-90.0f)
+    };
 
     // Draw center tile on step 1
     if (stepDist == 1) {
@@ -433,10 +439,26 @@ void KingBomber::emitSpecialCrossExplosion(int stepDist) {
             }
         }
 
-        // Crear bomba fake que detone inmediatamente para mostrar fuego visual
+        // Crear bomba fake que detone inmediatamente para mostrar fuego visual.
+        // Luego se ajusta el segmento para usar mid/end con orientacion correcta.
         auto* visualFire = new Bomb(gameMap->gridToNDC(nr, nc), nr, nc, nullptr, 0, false);
         visualFire->fuseTime = 0.0f;
         visualFire->detonate();
+
+        if (!visualFire->explosionSegments.empty()) {
+            bool isLast = (stepDist >= 4);
+            if (!isLast) {
+                int nextR = nr + dr[d];
+                int nextC = nc + dc[d];
+                if (!gameMap->isWalkable(nextR, nextC)) {
+                    isLast = true;
+                }
+            }
+
+            visualFire->explosionSegments[0].baseName = isLast ? "explosion_end" : "explosion_mid";
+            visualFire->explosionSegments[0].rotation = segmentRot[d];
+        }
+
         gBombs.push_back(visualFire);
     }
 }

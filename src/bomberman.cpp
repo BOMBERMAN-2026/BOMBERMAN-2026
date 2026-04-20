@@ -345,6 +345,14 @@ static float wrapAnglePi(float angleRadians)
     return angleRadians;
 }
 
+static float explosionSpriteRotationTo3DYaw(float spriteRotationRadians)
+{
+    // Los segmentos de explosion en 2D se orientan con rotacion Z.
+    // En 3D solo hace falta invertir el signo para mantener el mismo eje
+    // (vertical/horizontal) que en 2D.
+    return -spriteRotationRadians;
+}
+
 static glm::vec3 computeCameraUpFromForwardAndRoll(const glm::vec3& forward, float rollRadians)
 {
     const glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
@@ -4291,7 +4299,6 @@ void Game::render3D() {
             glUniform1f(uniform3DTexturedShininess, 12.0f);
 
             const float now = (float)glfwGetTime();
-            const float kPiHalf = 1.57079632679f;
 
             for (auto* b : gBombs) {
                 if (!b || b->state != BombState::EXPLODING) {
@@ -4313,7 +4320,7 @@ void Game::render3D() {
 
                         glm::mat4 model(1.0f);
                         model = glm::translate(model, ndcToWorld3D(gameMap, seg.pos, 0.08f) + glm::vec3(0.0f, bob + layerHeight, 0.0f));
-                        model = glm::rotate(model, seg.rotation + kPiHalf, glm::vec3(0.0f, 1.0f, 0.0f));
+                        model = glm::rotate(model, explosionSpriteRotationTo3DYaw(seg.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
                         model = glm::scale(model, glm::vec3(baseScale * flicker, baseScale * flicker, baseScale * flicker));
 
                         glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
@@ -4348,7 +4355,7 @@ void Game::render3D() {
 
                     glm::mat4 model(1.0f);
                     model = glm::translate(model, ndcToWorld3D(gameMap, seg.pos, 0.08f) + glm::vec3(0.0f, bob, 0.0f));
-                    model = glm::rotate(model, seg.rotation + kPiHalf, glm::vec3(0.0f, 1.0f, 0.0f));
+                    model = glm::rotate(model, explosionSpriteRotationTo3DYaw(seg.rotation), glm::vec3(0.0f, 1.0f, 0.0f));
                     model = glm::scale(model, glm::vec3(baseScale * flicker, baseScale * flicker, baseScale * flicker));
 
                     glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
