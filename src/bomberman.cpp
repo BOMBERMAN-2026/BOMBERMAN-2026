@@ -131,6 +131,11 @@ static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
 static const char* kFlamePowerUpGlbPath = "models/3D/fireball 3d model.glb";
 static const char* kSpeedPowerUpGlbPath = "models/3D/roller skate 3d model.glb";
+static const char* kExtraLifePowerUpGlbPath = "models/3D/vidaExtra.glb";
+static const char* kRemoteControlPowerUpGlbPath = "models/3D/detonator.glb";
+static const char* kMatchesItemGlbPath = "models/3D/cerilla power-up.glb";
+static const char* kCanItemGlbPath = "models/3D/lata.glb";
+static const char* kLighterItemGlbPath = "models/3D/mechero.glb";
 static const char* kKingBomberGlbPath = "models/3D/king bomber 3d model.glb";
 static const char* kDronAzulGlbPath = "models/3D/blue robot 3d model.glb";
 static const char* kDronRosaGlbPath = "models/3D/pink robot 3d model.glb";
@@ -203,6 +208,31 @@ GLuint speedPowerUpGlbVBO = 0;
 GLuint speedPowerUpGlbEBO = 0;
 GLsizei speedPowerUpGlbIndexCount = 0;
 GLuint speedPowerUpGlbTexture = 0;
+GLuint extraLifePowerUpGlbVAO = 0;
+GLuint extraLifePowerUpGlbVBO = 0;
+GLuint extraLifePowerUpGlbEBO = 0;
+GLsizei extraLifePowerUpGlbIndexCount = 0;
+GLuint extraLifePowerUpGlbTexture = 0;
+GLuint remoteControlPowerUpGlbVAO = 0;
+GLuint remoteControlPowerUpGlbVBO = 0;
+GLuint remoteControlPowerUpGlbEBO = 0;
+GLsizei remoteControlPowerUpGlbIndexCount = 0;
+GLuint remoteControlPowerUpGlbTexture = 0;
+GLuint matchesItemGlbVAO = 0;
+GLuint matchesItemGlbVBO = 0;
+GLuint matchesItemGlbEBO = 0;
+GLsizei matchesItemGlbIndexCount = 0;
+GLuint matchesItemGlbTexture = 0;
+GLuint canItemGlbVAO = 0;
+GLuint canItemGlbVBO = 0;
+GLuint canItemGlbEBO = 0;
+GLsizei canItemGlbIndexCount = 0;
+GLuint canItemGlbTexture = 0;
+GLuint lighterItemGlbVAO = 0;
+GLuint lighterItemGlbVBO = 0;
+GLuint lighterItemGlbEBO = 0;
+GLsizei lighterItemGlbIndexCount = 0;
+GLuint lighterItemGlbTexture = 0;
 GLuint kingBomberGlbVAO = 0;
 GLuint kingBomberGlbVBO = 0;
 GLuint kingBomberGlbEBO = 0;
@@ -278,8 +308,8 @@ static constexpr float kFreeCameraMoveSpeed = 8.2f;
 static constexpr float kFreeCameraRollSpeed = 1.42f;
 static constexpr float kFreeCameraZoomStep = 0.38f;
 static constexpr float kFreeCameraDragPanSensitivity = 0.0065f;
-static constexpr float kFirstPersonHeadBobAmplitude = 0.0032f;
-static constexpr float kFirstPersonHeadBobFrequency = 10.8f;
+static constexpr float kFirstPersonHeadBobAmplitude = 0.060f;
+static constexpr float kFirstPersonHeadBobFrequency = 15.2f;
 static constexpr float kFirstPersonCrossProbeTiles = 1.05f;
 static constexpr float kFirstPersonCrossBlockedHintDuration = 0.36f;
 static constexpr int kBombExplosionVerticalLayers = 5;
@@ -897,6 +927,61 @@ void CreateSpeedPowerUpGlbModel(const std::string& modelPath)
                                  speedPowerUpGlbTexture);
 }
 
+void CreateExtraLifePowerUpGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("extraLifePowerUpGLB",
+                                 modelPath,
+                                 extraLifePowerUpGlbVAO,
+                                 extraLifePowerUpGlbVBO,
+                                 extraLifePowerUpGlbEBO,
+                                 extraLifePowerUpGlbIndexCount,
+                                 extraLifePowerUpGlbTexture);
+}
+
+void CreateRemoteControlPowerUpGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("remoteControlPowerUpGLB",
+                                 modelPath,
+                                 remoteControlPowerUpGlbVAO,
+                                 remoteControlPowerUpGlbVBO,
+                                 remoteControlPowerUpGlbEBO,
+                                 remoteControlPowerUpGlbIndexCount,
+                                 remoteControlPowerUpGlbTexture);
+}
+
+void CreateMatchesItemGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("matchesItemGLB",
+                                 modelPath,
+                                 matchesItemGlbVAO,
+                                 matchesItemGlbVBO,
+                                 matchesItemGlbEBO,
+                                 matchesItemGlbIndexCount,
+                                 matchesItemGlbTexture);
+}
+
+void CreateCanItemGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("canItemGLB",
+                                 modelPath,
+                                 canItemGlbVAO,
+                                 canItemGlbVBO,
+                                 canItemGlbEBO,
+                                 canItemGlbIndexCount,
+                                 canItemGlbTexture);
+}
+
+void CreateLighterItemGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("lighterItemGLB",
+                                 modelPath,
+                                 lighterItemGlbVAO,
+                                 lighterItemGlbVBO,
+                                 lighterItemGlbEBO,
+                                 lighterItemGlbIndexCount,
+                                 lighterItemGlbTexture);
+}
+
 void CreateKingBomberGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("kingBomberGLB",
@@ -1456,6 +1541,11 @@ void Game::ensureRenderResources() {
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
     CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
     CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
+    CreateExtraLifePowerUpGlbModel(resolveAssetPath(kExtraLifePowerUpGlbPath));
+    CreateRemoteControlPowerUpGlbModel(resolveAssetPath(kRemoteControlPowerUpGlbPath));
+    CreateMatchesItemGlbModel(resolveAssetPath(kMatchesItemGlbPath));
+    CreateCanItemGlbModel(resolveAssetPath(kCanItemGlbPath));
+    CreateLighterItemGlbModel(resolveAssetPath(kLighterItemGlbPath));
     CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
     CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
     CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
@@ -2182,6 +2272,26 @@ Game::~Game() {
         glDeleteTextures(1, &speedPowerUpGlbTexture);
         speedPowerUpGlbTexture = 0;
     }
+    if (extraLifePowerUpGlbTexture != 0) {
+        glDeleteTextures(1, &extraLifePowerUpGlbTexture);
+        extraLifePowerUpGlbTexture = 0;
+    }
+    if (remoteControlPowerUpGlbTexture != 0) {
+        glDeleteTextures(1, &remoteControlPowerUpGlbTexture);
+        remoteControlPowerUpGlbTexture = 0;
+    }
+    if (matchesItemGlbTexture != 0) {
+        glDeleteTextures(1, &matchesItemGlbTexture);
+        matchesItemGlbTexture = 0;
+    }
+    if (canItemGlbTexture != 0) {
+        glDeleteTextures(1, &canItemGlbTexture);
+        canItemGlbTexture = 0;
+    }
+    if (lighterItemGlbTexture != 0) {
+        glDeleteTextures(1, &lighterItemGlbTexture);
+        lighterItemGlbTexture = 0;
+    }
     if (kingBomberGlbTexture != 0) {
         glDeleteTextures(1, &kingBomberGlbTexture);
         kingBomberGlbTexture = 0;
@@ -2260,6 +2370,21 @@ Game::~Game() {
     speedPowerUpGlbVAO = speedPowerUpGlbVBO = speedPowerUpGlbEBO = 0;
     speedPowerUpGlbIndexCount = 0;
     speedPowerUpGlbTexture = 0;
+    extraLifePowerUpGlbVAO = extraLifePowerUpGlbVBO = extraLifePowerUpGlbEBO = 0;
+    extraLifePowerUpGlbIndexCount = 0;
+    extraLifePowerUpGlbTexture = 0;
+    remoteControlPowerUpGlbVAO = remoteControlPowerUpGlbVBO = remoteControlPowerUpGlbEBO = 0;
+    remoteControlPowerUpGlbIndexCount = 0;
+    remoteControlPowerUpGlbTexture = 0;
+    matchesItemGlbVAO = matchesItemGlbVBO = matchesItemGlbEBO = 0;
+    matchesItemGlbIndexCount = 0;
+    matchesItemGlbTexture = 0;
+    canItemGlbVAO = canItemGlbVBO = canItemGlbEBO = 0;
+    canItemGlbIndexCount = 0;
+    canItemGlbTexture = 0;
+    lighterItemGlbVAO = lighterItemGlbVBO = lighterItemGlbEBO = 0;
+    lighterItemGlbIndexCount = 0;
+    lighterItemGlbTexture = 0;
     kingBomberGlbVAO = kingBomberGlbVBO = kingBomberGlbEBO = 0;
     kingBomberGlbIndexCount = 0;
     kingBomberGlbTexture = 0;
@@ -3561,9 +3686,14 @@ void Game::render3D() {
         }
         const glm::vec3 firstPersonForward = firstPersonLookToForward(firstPersonCameraYaw, firstPersonCameraPitch);
         float headBobOffset = 0.0f;
-        if (trackedPlayer != nullptr && trackedPlayer->isAlive() && trackedPlayer->isWalking) {
+        if (kFirstPersonHeadBobAmplitude > 0.0f &&
+            trackedPlayer != nullptr &&
+            trackedPlayer->isAlive() &&
+            trackedPlayer->isWalking) {
             const float headBobPhase = (float)glfwGetTime() * kFirstPersonHeadBobFrequency;
-            headBobOffset = std::sin(headBobPhase) * kFirstPersonHeadBobAmplitude;
+            const float headBobPrimary = std::sin(headBobPhase);
+            const float headBobSecondary = std::sin(headBobPhase * 2.0f);
+            headBobOffset = (headBobPrimary * 0.72f + headBobSecondary * 0.28f) * kFirstPersonHeadBobAmplitude;
         }
         const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f + headBobOffset, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
@@ -3843,6 +3973,16 @@ void Game::render3D() {
         (flamePowerUpGlbVAO != 0 && flamePowerUpGlbIndexCount > 0 && flamePowerUpGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderSpeedPowerUpGlb =
         (speedPowerUpGlbVAO != 0 && speedPowerUpGlbIndexCount > 0 && speedPowerUpGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderExtraLifePowerUpGlb =
+        (extraLifePowerUpGlbVAO != 0 && extraLifePowerUpGlbIndexCount > 0 && extraLifePowerUpGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderRemoteControlPowerUpGlb =
+        (remoteControlPowerUpGlbVAO != 0 && remoteControlPowerUpGlbIndexCount > 0 && remoteControlPowerUpGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderMatchesItemGlb =
+        (matchesItemGlbVAO != 0 && matchesItemGlbIndexCount > 0 && matchesItemGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderCanItemGlb =
+        (canItemGlbVAO != 0 && canItemGlbIndexCount > 0 && canItemGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderLighterItemGlb =
+        (lighterItemGlbVAO != 0 && lighterItemGlbIndexCount > 0 && lighterItemGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderKingBomberGlb =
         (kingBomberGlbVAO != 0 && kingBomberGlbIndexCount > 0 && kingBomberGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderDronAzulGlb =
@@ -4000,9 +4140,6 @@ void Game::render3D() {
             if (!gameMap->getPowerUpPickupFx(r, c, pickupType, pickupFxT)) {
                 continue;
             }
-            if (pickupType != PowerUpType::BombUp && pickupType != PowerUpType::FireUp && pickupType != PowerUpType::SpeedUp) {
-                continue;
-            }
 
             const float easeOut = 1.0f - (1.0f - pickupFxT) * (1.0f - pickupFxT);
             const float intensity = 1.0f - pickupFxT;
@@ -4069,6 +4206,15 @@ void Game::render3D() {
 
     const bool canRenderFlameUpGlb = canRenderFlamePowerUpGlb || canRenderFlameGlb;
     const bool canRenderSpeedUpGlb = canRenderSpeedPowerUpGlb;
+    const bool canRenderAnyPowerUpGlb =
+        canRenderBombGlb ||
+        canRenderFlameUpGlb ||
+        canRenderSpeedUpGlb ||
+        canRenderExtraLifePowerUpGlb ||
+        canRenderRemoteControlPowerUpGlb ||
+        canRenderMatchesItemGlb ||
+        canRenderCanItemGlb ||
+        canRenderLighterItemGlb;
     const bool canRenderKingBomber3D = canRenderKingBomberGlb;
     const bool canRenderDrones3D = canRenderAnyDronGlb;
 
@@ -4089,7 +4235,7 @@ void Game::render3D() {
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderFlameGlb || canRenderFlameUpGlb || canRenderSpeedUpGlb) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -4130,90 +4276,185 @@ void Game::render3D() {
                 glBindVertexArray(bombGlbVAO);
                 glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
             }
-
-            // Power-up Bomb Up en 3D: usa el mismo modelo GLB de bomba y rota sobre su propio eje.
-            const float now = (float)glfwGetTime();
-            const float kBombUpSpinSpeed = 1.85f;
-            const float kBombUpScale = 0.74f;
-
-            for (int r = 0; r < gameMap->getRows(); ++r) {
-                for (int c = 0; c < gameMap->getCols(); ++c) {
-                    PowerUpType puType;
-                    if (!gameMap->getVisiblePowerUpType(r, c, puType) || puType != PowerUpType::BombUp) {
-                        continue;
-                    }
-
-                    glm::mat4 model(1.0f);
-                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.11f));
-                    model = glm::rotate(model, now * kBombUpSpinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
-                    model = glm::scale(model, glm::vec3(kBombUpScale, kBombUpScale, kBombUpScale));
-
-                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                    glBindVertexArray(bombGlbVAO);
-                    glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
-                }
-            }
         }
 
-        if (canRenderFlameUpGlb) {
-            const bool useDedicatedFlamePowerUpMesh = canRenderFlamePowerUpGlb;
-            const GLuint flameUpVao = useDedicatedFlamePowerUpMesh ? flamePowerUpGlbVAO : flameGlbVAO;
-            const GLsizei flameUpIndexCount = useDedicatedFlamePowerUpMesh ? flamePowerUpGlbIndexCount : flameGlbIndexCount;
-            const GLuint flameUpTexture = useDedicatedFlamePowerUpMesh ? flamePowerUpGlbTexture : flameGlbTexture;
+        if (canRenderAnyPowerUpGlb) {
+            struct PowerUpRenderModelSpec {
+                GLuint vao = 0;
+                GLsizei indexCount = 0;
+                GLuint texture = 0;
+                float scale = 1.0f;
+                float spinSpeed = 0.0f;
+                float baseHeight = 0.10f;
+                float bobAmplitude = 0.0f;
+                float bobSpeed = 3.0f;
+            };
 
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, flameUpTexture);
+            auto makePowerUpSpec = [](GLuint vao,
+                                      GLsizei indexCount,
+                                      GLuint texture,
+                                      float scale,
+                                      float spinSpeed,
+                                      float baseHeight,
+                                      float bobAmplitude,
+                                      float bobSpeed) {
+                PowerUpRenderModelSpec spec;
+                spec.vao = vao;
+                spec.indexCount = indexCount;
+                spec.texture = texture;
+                spec.scale = scale;
+                spec.spinSpeed = spinSpeed;
+                spec.baseHeight = baseHeight;
+                spec.bobAmplitude = bobAmplitude;
+                spec.bobSpeed = bobSpeed;
+                return spec;
+            };
 
-            const float now = (float)glfwGetTime();
-            const float kFlameUpSpinSpeed = 2.05f;
-            const float kFlameUpScale = useDedicatedFlamePowerUpMesh ? 0.66f : 0.74f;
-
-            for (int r = 0; r < gameMap->getRows(); ++r) {
-                for (int c = 0; c < gameMap->getCols(); ++c) {
-                    PowerUpType puType;
-                    if (!gameMap->getVisiblePowerUpType(r, c, puType) || puType != PowerUpType::FireUp) {
-                        continue;
-                    }
-
-                    const float bob = 0.02f * std::sin((now * 3.2f) + ((float)r * 0.45f) + ((float)c * 0.40f));
-
-                    glm::mat4 model(1.0f);
-                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.12f) + glm::vec3(0.0f, bob, 0.0f));
-                    model = glm::rotate(model, now * kFlameUpSpinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
-                    model = glm::scale(model, glm::vec3(kFlameUpScale, kFlameUpScale, kFlameUpScale));
-
-                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                    glBindVertexArray(flameUpVao);
-                    glDrawElements(GL_TRIANGLES, flameUpIndexCount, GL_UNSIGNED_INT, 0);
+            auto resolvePowerUpModelSpec = [&](PowerUpType type, PowerUpRenderModelSpec& outSpec) -> bool {
+                switch (type) {
+                    case PowerUpType::BombUp:
+                        if (canRenderBombGlb) {
+                            outSpec = makePowerUpSpec(bombGlbVAO, bombGlbIndexCount, bombGlbTexture,
+                                                      0.74f, 1.85f, 0.11f, 0.012f, 2.8f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::FireUp:
+                        if (canRenderFlamePowerUpGlb) {
+                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                      0.66f, 2.05f, 0.12f, 0.020f, 3.2f);
+                            return true;
+                        }
+                        if (canRenderFlameGlb) {
+                            outSpec = makePowerUpSpec(flameGlbVAO, flameGlbIndexCount, flameGlbTexture,
+                                                      0.74f, 2.05f, 0.12f, 0.020f, 3.2f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::SpeedUp:
+                        if (canRenderSpeedPowerUpGlb) {
+                            outSpec = makePowerUpSpec(speedPowerUpGlbVAO, speedPowerUpGlbIndexCount, speedPowerUpGlbTexture,
+                                                      0.76f, 2.35f, 0.11f, 0.022f, 3.6f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::ExtraLife:
+                        if (canRenderExtraLifePowerUpGlb) {
+                            outSpec = makePowerUpSpec(extraLifePowerUpGlbVAO, extraLifePowerUpGlbIndexCount, extraLifePowerUpGlbTexture,
+                                                      0.84f, 1.65f, 0.11f, 0.016f, 2.7f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::Invincibility:
+                        if (canRenderFlamePowerUpGlb) {
+                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                      0.78f, 2.70f, 0.13f, 0.024f, 4.2f);
+                            return true;
+                        }
+                        if (canRenderFlameGlb) {
+                            outSpec = makePowerUpSpec(flameGlbVAO, flameGlbIndexCount, flameGlbTexture,
+                                                      0.82f, 2.70f, 0.13f, 0.024f, 4.2f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::RemoteControl:
+                        if (canRenderRemoteControlPowerUpGlb) {
+                            outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
+                                                      0.64f, 1.92f, 0.10f, 0.015f, 3.1f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::Matches:
+                        if (canRenderMatchesItemGlb) {
+                            outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
+                                                      0.58f, 1.75f, 0.10f, 0.014f, 2.9f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::Can:
+                        if (canRenderCanItemGlb) {
+                            outSpec = makePowerUpSpec(canItemGlbVAO, canItemGlbIndexCount, canItemGlbTexture,
+                                                      0.60f, 1.68f, 0.10f, 0.014f, 2.6f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::Lighter:
+                        if (canRenderLighterItemGlb) {
+                            outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
+                                                      0.62f, 1.92f, 0.10f, 0.015f, 3.0f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::Battery:
+                        if (canRenderRemoteControlPowerUpGlb) {
+                            outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
+                                                      0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
+                            return true;
+                        }
+                        if (canRenderCanItemGlb) {
+                            outSpec = makePowerUpSpec(canItemGlbVAO, canItemGlbIndexCount, canItemGlbTexture,
+                                                      0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::Dragonfly:
+                        if (canRenderMatchesItemGlb) {
+                            outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
+                                                      0.60f, 2.30f, 0.12f, 0.021f, 4.0f);
+                            return true;
+                        }
+                        if (canRenderFlamePowerUpGlb) {
+                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                      0.62f, 2.30f, 0.12f, 0.021f, 4.0f);
+                            return true;
+                        }
+                        break;
+                    case PowerUpType::HudsonBee:
+                        if (canRenderLighterItemGlb) {
+                            outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
+                                                      0.64f, 2.45f, 0.12f, 0.022f, 4.2f);
+                            return true;
+                        }
+                        if (canRenderFlamePowerUpGlb) {
+                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                      0.66f, 2.45f, 0.12f, 0.022f, 4.2f);
+                            return true;
+                        }
+                        break;
                 }
-            }
-        }
 
-        if (canRenderSpeedUpGlb) {
-            glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, speedPowerUpGlbTexture);
+                return false;
+            };
 
             const float now = (float)glfwGetTime();
-            const float kSpeedUpSpinSpeed = 2.35f;
-            const float kSpeedUpScale = 0.76f;
-
             for (int r = 0; r < gameMap->getRows(); ++r) {
                 for (int c = 0; c < gameMap->getCols(); ++c) {
                     PowerUpType puType;
-                    if (!gameMap->getVisiblePowerUpType(r, c, puType) || puType != PowerUpType::SpeedUp) {
+                    if (!gameMap->getVisiblePowerUpType(r, c, puType)) {
                         continue;
                     }
 
-                    const float bob = 0.022f * std::sin((now * 3.6f) + ((float)r * 0.42f) + ((float)c * 0.33f));
+                    PowerUpRenderModelSpec spec;
+                    if (!resolvePowerUpModelSpec(puType, spec) ||
+                        spec.vao == 0 ||
+                        spec.indexCount <= 0 ||
+                        spec.texture == 0) {
+                        continue;
+                    }
+
+                    const float bobPhase = (now * spec.bobSpeed) + ((float)r * 0.42f) + ((float)c * 0.33f);
+                    const float bob = spec.bobAmplitude * std::sin(bobPhase);
 
                     glm::mat4 model(1.0f);
-                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.11f) + glm::vec3(0.0f, bob, 0.0f));
-                    model = glm::rotate(model, now * kSpeedUpSpinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
-                    model = glm::scale(model, glm::vec3(kSpeedUpScale, kSpeedUpScale, kSpeedUpScale));
+                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, spec.baseHeight) + glm::vec3(0.0f, bob, 0.0f));
+                    model = glm::rotate(model, now * spec.spinSpeed, glm::vec3(0.0f, 1.0f, 0.0f));
+                    model = glm::scale(model, glm::vec3(spec.scale, spec.scale, spec.scale));
 
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, spec.texture);
                     glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                    glBindVertexArray(speedPowerUpGlbVAO);
-                    glDrawElements(GL_TRIANGLES, speedPowerUpGlbIndexCount, GL_UNSIGNED_INT, 0);
+                    glBindVertexArray(spec.vao);
+                    glDrawElements(GL_TRIANGLES, spec.indexCount, GL_UNSIGNED_INT, 0);
                 }
             }
         }
