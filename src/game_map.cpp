@@ -270,6 +270,14 @@ bool GameMap::loadFromFile(const std::string& filePath) {
 
                 EnemySpawnType type;
                 if (!parseEnemySpawnTypeFromString(typeStr, type)) {
+                    const bool isNumericSlot = !typeStr.empty() && std::all_of(typeStr.begin(), typeStr.end(), [](unsigned char ch) {
+                        return std::isdigit(ch) != 0;
+                    });
+                    if (isNumericSlot) {
+                        // Formato custom game: enemy <slotId> <x> <y>.
+                        // Se procesa fuera de GameMap para mantener el flujo clásico intacto.
+                        continue;
+                    }
                     std::cerr << "GameMap: enemy: tipo desconocido '" << typeStr << "'\n";
                     continue;
                 }

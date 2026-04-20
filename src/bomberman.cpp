@@ -502,6 +502,11 @@ static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm:
     return false;
 }
 
+static bool isHostileEnemyForPlayers(const Enemy* enemy) {
+    if (!enemy) return false;
+    return !CpuBomberman::isAllyAgent(enemy);
+}
+
 // ============================== OpenGL: helpers ==============================
 
 static bool readTextFile(const std::string& filePath, std::string& out)
@@ -1577,14 +1582,19 @@ bool Game::allPlayersOutOfLives() const {
 
 bool Game::allEnemiesCleared() const {
     if (!currentLevelHadEnemies) return false; // El nivel nunca tuvo enemigos
-    return gEnemies.empty();
+    for (auto* enemy : gEnemies) {
+        if (!isHostileEnemyForPlayers(enemy)) continue;
+        return false;
+    }
+    return true;
 }
 
 // Carga completa de un nivel.
 void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     ensureGameplayAssets();
 
-    const bool versus = VersusMode::isVersusMode(mode);
+    const bool custom = customGameMode.isActive();
+    const bool versus = (!custom && VersusMode::isVersusMode(mode));
     const auto& activeLevelSequence = versus ? VersusMode::levelSequence() : levelSequence;
     const auto& activeLevelToStage = versus ? VersusMode::levelToStage() : levelToStage;
 
@@ -1594,7 +1604,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     // Guardar progreso a preservar (solo Historia).
     std::vector<int> savedLives;
-    if (preserveLivesAndScore && !versus) {
+    if (preserveLivesAndScore && !versus && !custom) {
         savedLives.reserve(gPlayers.size());
         for (auto* p : gPlayers) {
             savedLives.push_back(p ? p->lives : 0);
@@ -1611,22 +1621,34 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     // Cargar / recargar mapa.
     if (!gameMap) gameMap = new GameMap();
 
-    if (levelIndex < 0 || levelIndex >= (int)activeLevelSequence.size()) {
-        // Seguridad: si algo fuerza un índice inválido, terminamos run y volvemos al menú.
-        std::cerr << "Nivel fuera de rango: " << levelIndex << std::endl;
-        returnToMenuFromGame(/*resetRun=*/true);
-        return;
-    }
+    int stageNum = 1;
+    std::string mapLevelPath;
 
-    int stageNum = activeLevelToStage[levelIndex];
-    std::string stageNumStr = std::to_string(stageNum);
-
-    if (versus) {
-        currentGameLevel = std::to_string(versusRoundNumber);
+    if (custom) {
+        stageNum = customGameMode.getStageNumber();
+        mapLevelPath = customGameMode.getLevelPath();
+        currentGameLevel = customGameMode.getHudLevelLabel();
+        levelTimeRemaining = customGameMode.getInitialTimeSeconds();
     } else {
-        currentGameLevel = mapNumeration[levelIndex];
+        if (levelIndex < 0 || levelIndex >= (int)activeLevelSequence.size()) {
+            // Seguridad: si algo fuerza un índice inválido, terminamos run y volvemos al menú.
+            std::cerr << "Nivel fuera de rango: " << levelIndex << std::endl;
+            returnToMenuFromGame(/*resetRun=*/true);
+            return;
+        }
+
+        stageNum = activeLevelToStage[levelIndex];
+
+        if (versus) {
+            currentGameLevel = std::to_string(versusRoundNumber);
+        } else {
+            currentGameLevel = mapNumeration[levelIndex];
+        }
+        levelTimeRemaining = 121.0f;
+        mapLevelPath = activeLevelSequence[levelIndex];
     }
-    levelTimeRemaining = 121.0f;
+
+    std::string stageNumStr = std::to_string(stageNum);
 
     if (mapTexture != 0) {
         glDeleteTextures(1, &mapTexture);
@@ -1645,8 +1667,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
     }
 
-    if (!gameMap->loadFromFile(activeLevelSequence[levelIndex])) {
-        std::cerr << "Error cargando mapa: " << activeLevelSequence[levelIndex] << std::endl;
+    if (!gameMap->loadFromFile(mapLevelPath)) {
+        std::cerr << "Error cargando mapa: " << mapLevelPath << std::endl;
         std::exit(EXIT_FAILURE);
     }
 
@@ -1660,12 +1682,13 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     gameMap->calculateTileMetrics(aspectRatio);
 
     // Crear jugadores según el modo.
-    const int numPlayers = versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1);
+    const int numPlayers = custom ? customGameMode.getPlayerCount()
+                                  : (versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1));
     if (versus) {
         // En VS, playerScores representa wins y debe persistir entre rondas.
         if ((int)playerScores.size() < numPlayers) playerScores.resize(numPlayers, 0);
     } else {
-        if (!preserveLivesAndScore) {
+        if (!preserveLivesAndScore || custom) {
             playerScores.assign(numPlayers, 0);
         } else {
             if ((int)playerScores.size() < numPlayers) playerScores.resize(numPlayers, 0);
@@ -1698,7 +1721,13 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     // Crear enemigos según el nivel.
     // La lista de spawns viene del TXT (enemy <type> <x> <y>).
-    {
+    if (custom) {
+        customGameMode.spawnConfiguredEnemies(gameMap,
+                                              &gPlayers,
+                                              gEnemies,
+                                              kDefaultPlayerSize,
+                                              kDefaultPlayerSpeed);
+    } else {
         const auto& spawns = gameMap->getEnemySpawns();
         for (const auto& s : spawns) {
             glm::vec2 pos = gameMap->gridToNDC(s.row, s.col);
@@ -1783,7 +1812,13 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         }
     }
 
-    currentLevelHadEnemies = !gEnemies.empty();
+    currentLevelHadEnemies = false;
+    for (auto* enemy : gEnemies) {
+        if (isHostileEnemyForPlayers(enemy)) {
+            currentLevelHadEnemies = true;
+            break;
+        }
+    }
 
     // Power-Ups (texturas: se cargan una vez por instancia de GameMap)
     gameMap->loadPowerUpTextures();
@@ -1794,6 +1829,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
 // Arranca una partida nueva desde nivel_01 (índice 0).
 void Game::startNewRun(GameMode newMode) {
+    customGameMode.deactivate();
     mode = newMode;
     currentLevelIndex = 0;
     versusRoundNumber = 1;
@@ -1829,6 +1865,12 @@ void Game::startNewRun(GameMode newMode) {
 
 // Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
 void Game::advanceToNextLevel() {
+    if (customGameMode.isActive()) {
+        // En Custom Game hay un solo nivel: al completarlo volvemos al menú principal.
+        returnToMenuFromGame(/*resetRun=*/true);
+        return;
+    }
+
     const bool versus = VersusMode::isVersusMode(mode);
 
     if (versus) {
@@ -1884,6 +1926,7 @@ void Game::advanceToNextLevel() {
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
 
+    customGameMode.deactivate();
 
     cleanupGameplayEntities();
     pendingLevelAdvance = false;
@@ -3139,10 +3182,24 @@ void Game::update() {
         }
 
         if (customGameMenu.shouldLaunchCustomGame()) {
-            // Base lista: aquí arrancaremos la partida custom en el siguiente paso.
+            customGameMode.activate(customGameMenu.getSettings(), customGameMenu.getEnemyCounts());
             customGameMenu.resetFlowFlags();
-            this->state = GAME_MENU;
-            this->init();
+
+            // 1P + Comp se trata como 1P de momento.
+            mode = (customGameMode.getPlayerCount() == 2)
+                ? GameMode::HistoryTwoPlayers
+                : GameMode::HistoryOnePlayer;
+
+            currentLevelIndex = 0;
+            versusRoundNumber = 1;
+            currentLevelHadEnemies = false;
+            playerScores.clear();
+
+            this->state = GAME_PLAYING;
+            loadLevel(0, /*preserveLivesAndScore=*/false);
+
+            AudioManager::get().stopBgm();
+            AudioManager::get().playBgm(resolveAssetPath("resources/sounds/03 BGM 1.mp3"), /*loop=*/true, 0.35f);
             return;
         }
 
@@ -3307,11 +3364,19 @@ void Game::update() {
             }
             for (auto* enemy : gEnemies) {
                 if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+
+                const bool hostileEnemy = isHostileEnemyForPlayers(enemy);
+                if (!hostileEnemy && b && b->ownerIndex >= 0) {
+                    // Las bombas de jugador no deben matar al compañero CPU en cooperativo.
+                    continue;
+                }
+
                 if (explosionHitsEntity(gameMap, b, enemy->position)) {
-                    if (enemy->takeDamage(gEnemyAtlas, 999)) {
+                    const SpriteAtlas& damageAtlas = CpuBomberman::isAgent(enemy) ? gPlayerAtlas : gEnemyAtlas;
+                    if (enemy->takeDamage(damageAtlas, 999)) {
                         // Puntuaci├│n: s├│lo suma una vez cuando el enemigo pasa de Alive -> Dying.
                         // `takeDamage` devuelve true justo en ese cambio de estado.
-                        if (b && b->ownerIndex >= 0 && b->ownerIndex < (int)playerScores.size()) {
+                        if (hostileEnemy && b && b->ownerIndex >= 0 && b->ownerIndex < (int)playerScores.size()) {
                             playerScores[b->ownerIndex] += enemy->scoreValue;
                         }
                     }
@@ -3338,6 +3403,9 @@ void Game::update() {
     // Colisi├│n enemigo Ôåö jugador: el jugador muere y respawnea.
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+        // Los Bomberman CPU no son letales por contacto directo (como en VS).
+        if (CpuBomberman::isAgent(enemy)) continue;
+        if (!isHostileEnemyForPlayers(enemy)) continue;
         for (auto* p : gPlayers) {
             if (!p || !p->isAlive()) continue;
             if (overlapsEnemyPlayer(gameMap, enemy->position, p->position)) {
@@ -3432,9 +3500,11 @@ void Game::update() {
         }
     }
 
-    // Decrementar el timer del nivel
-    levelTimeRemaining -= deltaTime;
-    if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
+    // Decrementar el timer del nivel (en tiempo infinito de custom no decrece).
+    if (!(customGameMode.isActive() && customGameMode.isInfiniteTime())) {
+        levelTimeRemaining -= deltaTime;
+        if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
+    }
 }
 
 // Renderiza mapa, bombas, jugadores y enemigos en 3D.

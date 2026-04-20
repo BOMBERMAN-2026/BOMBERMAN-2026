@@ -13,6 +13,7 @@
 #include "gamepad_input.hpp"
 #include "in_game_menu.hpp"
 #include "custom_game_menu.hpp"
+#include "custom_game_mode.hpp"
 
 /*
  * bomberman.hpp
@@ -186,6 +187,7 @@ public:
         // UI Screen
         MenuScreen menuScreen;              // Gestiona menú
         CustomGameMenu customGameMenu;      // Menús de partida personalizada
+        CustomGameMode customGameMode;      // Runtime de partida personalizada
         CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
         CinematicType currentCinematicType = CinematicType::Intro;
         GameState nextStateAfterCinematic = GAME_INTRO;
