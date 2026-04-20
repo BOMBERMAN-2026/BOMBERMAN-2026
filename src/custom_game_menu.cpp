@@ -626,16 +626,13 @@ void CustomGameMenu::processInputMenu2(std::map<int, int>& keys, ControlsMenu& c
     }
 
     if (keys[controls.selectKey] == GLFW_PRESS) {
-        menu2PlaySelected = true;
-        menu2ArrowAnimTimer = 0.0f;
-        menu2SelectedWaitTimer = 0.0f;
+        if (getEnemyTotalCount() > 0) {
+            menu2PlaySelected = true;
+            menu2ArrowAnimTimer = 0.0f;
+            menu2SelectedWaitTimer = 0.0f;
+        }
         keys[controls.selectKey] = GLFW_REPEAT;
     }
-
-    //if (keys[GLFW_KEY_BACKSPACE] == GLFW_PRESS) {
-    //    shouldReturnToMenu1 = true;
-    //    keys[GLFW_KEY_BACKSPACE] = GLFW_REPEAT;
-    //}
 
     if (keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
         //shouldReturnToMainMenu = true;
