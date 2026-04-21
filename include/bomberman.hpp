@@ -97,6 +97,7 @@ private:
 
     float firstPersonYaw = 0.0f;
     float firstPersonPitch = -0.18f;
+    float firstPersonHeadBobIntensity = 0.0f; // Para suavizar el inicio/fin del balanceo
     bool firstPersonMouseInitialized = false;
     double firstPersonLastMouseX = 0.0;
     double firstPersonLastMouseY = 0.0;

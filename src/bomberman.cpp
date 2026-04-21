@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -3191,6 +3191,22 @@ void Game::update() {
     gFirstPersonBlockedHintTimer[0] = std::max(0.0f, gFirstPersonBlockedHintTimer[0] - deltaTime);
     gFirstPersonBlockedHintTimer[1] = std::max(0.0f, gFirstPersonBlockedHintTimer[1] - deltaTime);
 
+    // Actualizar intensidad del head bobbing para suavizar transiciones
+    bool isAnyoneWalking = false;
+    if (this->camera3DType == Camera3DType::FirstPerson && !gPlayers.empty()) {
+        int trackedIdx = std::max(0, std::min(active3DViewportPlayerIndex, (int)gPlayers.size() - 1));
+        Player* p = gPlayers[trackedIdx];
+        if (p && p->isAlive() && p->isWalking) {
+            isAnyoneWalking = true;
+        }
+    }
+
+    if (isAnyoneWalking) {
+        firstPersonHeadBobIntensity = std::min(1.0f, firstPersonHeadBobIntensity + deltaTime * 8.0f);
+    } else {
+        firstPersonHeadBobIntensity = std::max(0.0f, firstPersonHeadBobIntensity - deltaTime * 12.0f);
+    }
+
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
         menuScreen.updateMenu(deltaTime);
@@ -3689,11 +3705,12 @@ void Game::render3D() {
         if (kFirstPersonHeadBobAmplitude > 0.0f &&
             trackedPlayer != nullptr &&
             trackedPlayer->isAlive() &&
-            trackedPlayer->isWalking) {
+            (trackedPlayer->isWalking || firstPersonHeadBobIntensity > 0.001f)) {
             const float headBobPhase = (float)glfwGetTime() * kFirstPersonHeadBobFrequency;
+            // Usamos una combinación más suave (88% sin, 12% sin2x) para evitar la brusquedad en el ascenso
             const float headBobPrimary = std::sin(headBobPhase);
             const float headBobSecondary = std::sin(headBobPhase * 2.0f);
-            headBobOffset = (headBobPrimary * 0.72f + headBobSecondary * 0.28f) * kFirstPersonHeadBobAmplitude;
+            headBobOffset = (headBobPrimary * 0.88f + headBobSecondary * 0.12f) * kFirstPersonHeadBobAmplitude * firstPersonHeadBobIntensity;
         }
         const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f + headBobOffset, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
