@@ -35,6 +35,7 @@ enum GameState {
     GAME_CUSTOM_MENU_1, // Configuración custom game (pantalla 1)
     GAME_CUSTOM_MENU_2, // Configuración custom game (pantalla 2)
     GAME_CINEMATIC,  // Cinematicas (video FFmpeg)
+    GAME_RANKING,    // Pantalla de ranking tras Game Over
     GAME_PLAYING
 };
 
@@ -86,6 +87,15 @@ private:
     // Helpers de progresión.
     bool allPlayersOutOfLives() const;
     bool allEnemiesCleared() const;
+    void startContinueSequence();
+    void updateContinueSequence(float deltaTime);
+    void enterRankingScreen();
+    void renderContinueOverlay(float aspect);
+
+    // Secuencia TIME UP (se agotó el tiempo sin eliminar enemigos).
+    void startTimeUpSequence();
+    void updateTimeUpSequence(float deltaTime);
+    void renderTimeUpOverlay(float aspect);
 
     // Cámara 3D avanzada (estado interno de control/cursor).
     float cameraOrbitYaw = 0.0f;
@@ -156,6 +166,22 @@ private:
     bool pendingLevelAdvance = false;
     float levelAdvanceTimer = 0.0f;
     float levelAdvanceDelaySeconds = 1.0f;
+
+    // Secuencia de fin de partida (CONTINUE -> GAME OVER -> RANKING).
+    bool continueSequenceActive = false;
+    bool continueShowingGameOver = false;
+    float continueTimerSeconds = 0.0f;
+    float continueProgress01 = 0.0f;
+    int continueCountdownValue = 9;
+
+    // Secuencia TIME UP.
+    bool timeUpSequenceActive = false;
+    float timeUpTimer = 0.0f;
+    static constexpr float kTimeUpAnimDuration = 4.5f; // segundos hasta matar jugadores
+
+    // Ranking tras Game Over.
+    float rankingScreenTimer = 0.0f;
+    float rankingAutoExitSeconds = 5.0f;
 
     // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
     bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel
