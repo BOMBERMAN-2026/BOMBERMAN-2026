@@ -114,7 +114,7 @@ public:
                 GLuint uniformModel, GLuint uniformUvRect,
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
-    void renderHud(GLuint vao,GLuint uniformModel, GLuint uniformUvRect, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
+    void renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
                    std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode);
     
     void renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, 
@@ -177,6 +177,11 @@ public:
     // Consulta si en una celda hay efecto de recogida activo.
     // Devuelve el tipo de power-up y progreso normalizado [0..1].
     bool getPowerUpPickupFx(int row, int col, PowerUpType& outType, float& outNormalizedTime) const;
+
+    // Renderiza el inventario de un jugador en el HUD en una posición concreta.
+    // `direction` controla el avance horizontal de iconos: 1.0 (izq->der), -1.0 (der->izq).
+    void renderPlayerInventory(const Player* player, glm::vec2 startPos, float direction,
+                               GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor);
 
     // Carga las texturas de los power-ups.
     void loadPowerUpTextures();

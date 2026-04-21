@@ -4,6 +4,7 @@
 #include "entity.hpp"
 #include "power_up.hpp"
 #include <string>
+#include <vector>
 
 /*
  * player.hpp
@@ -78,6 +79,9 @@ class Player : public Entity {
         glm::vec2 winVelocity = glm::vec2(0.0f); // Para la dirección aleatoria diagonal
         void startWinning();
         void updateWinningAnimation();
+
+        // Inventario de ítems de puntuación recogidos
+        std::vector<PowerUpType> collectedItems;
 
         Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId = 0, const std::string& prefix = "jugadorblanco");
         ~Player() override;

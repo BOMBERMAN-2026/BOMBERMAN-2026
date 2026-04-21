@@ -5053,6 +5053,7 @@ void Game::render3D() {
         gameMap->renderHud(VAO,
                            uniformModel,
                            uniformUvRect,
+                           uniformTintColor,
                            gScoreboardAtlas,
                            scoreboardTexture,
                            &playerScores,
@@ -5140,31 +5141,12 @@ void Game::render3D() {
             const float pulse = 0.55f + 0.45f * std::sin(now * 8.0f);
             const float screenAlpha = 0.14f + 0.10f * pulse;
             drawOverlayRect(0.0f, 0.0f, aspect, 1.0f, glm::vec4(0.20f, 0.82f, 1.0f, screenAlpha));
-
-            const float invTotal = std::max(0.01f, overlayPlayer->invincibilityTotalSeconds);
-            const float invRatio = std::max(0.0f, std::min(1.0f, overlayPlayer->invincibilityTimer / invTotal));
-            const float barHalfW = aspect * 0.44f;
-            const float barY = 0.90f;
-            drawOverlayRect(0.0f, barY, barHalfW, 0.035f, glm::vec4(0.04f, 0.09f, 0.14f, 0.86f));
-            if (invRatio > 0.001f) {
-                const float fillHalfW = barHalfW * invRatio;
-                drawOverlayRect(-barHalfW + fillHalfW,
-                                barY,
-                                fillHalfW,
-                                0.023f,
-                                glm::vec4(0.40f, 0.96f, 1.0f, 0.98f));
-            }
         }
 
         if (speedBoostNorm > 0.001f) {
             const float speedAlpha = 0.10f + speedBoostNorm * 0.22f;
             drawOverlayRect(-aspect + 0.028f, 0.0f, 0.028f, 1.0f, glm::vec4(0.30f, 1.0f, 0.55f, speedAlpha));
             drawOverlayRect(aspect - 0.028f, 0.0f, 0.028f, 1.0f, glm::vec4(0.30f, 1.0f, 0.55f, speedAlpha));
-        }
-
-        if (overlayPlayer->hasRemoteControl) {
-            drawOverlayRect(0.0f, -0.90f, aspect * 0.26f, 0.032f, glm::vec4(0.18f, 0.11f, 0.03f, 0.82f));
-            drawOverlayRect(0.0f, -0.90f, aspect * 0.20f, 0.019f, glm::vec4(1.0f, 0.75f, 0.20f, 0.98f));
         }
 
         if (camera3DType == Camera3DType::FirstPerson && blockedHint > 0.001f) {
@@ -5178,22 +5160,16 @@ void Game::render3D() {
                             glm::vec4(0.95f, 0.22f, 0.08f, 0.24f + blockedHint * 0.24f));
         }
 
-        // Recuadros de estado (sin texto) para identificar efectos activos.
-        float badgeY = 0.80f;
-        auto drawBadge = [&](const glm::vec4& color) {
-            drawOverlayRect(-aspect + 0.17f, badgeY, 0.14f, 0.070f, glm::vec4(0.04f, 0.04f, 0.04f, 0.84f));
-            drawOverlayRect(-aspect + 0.17f, badgeY, 0.12f, 0.051f, color);
-            badgeY -= 0.13f;
-        };
-
-        if (overlayPlayer->invincible) {
-            drawBadge(glm::vec4(0.38f, 0.95f, 1.0f, 0.92f));
-        }
-        if (speedBoostNorm > 0.001f) {
-            drawBadge(glm::vec4(0.35f, 1.0f, 0.58f, 0.92f));
-        }
-        if (overlayPlayer->hasRemoteControl) {
-            drawBadge(glm::vec4(1.0f, 0.72f, 0.22f, 0.92f));
+        // En split first-person ocultamos el HUD clásico; dibujamos inventario con sprites 2D.
+        if (isSplitFirstPersonPass && gameMap != nullptr) {
+            const glm::vec2 invPos(-aspect + 0.16f, 0.82f);
+            gameMap->renderPlayerInventory(overlayPlayer,
+                                           invPos,
+                                           1.0f,
+                                           VAO,
+                                           uniformModel,
+                                           uniformUvRect,
+                                           uniformTintColor);
         }
 
         glBindVertexArray(0);
@@ -5230,7 +5206,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, uniformModel, uniformUvRect, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1 );
+    gameMap->renderHud(VAO, uniformModel, uniformUvRect, uniformTintColor, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1 );
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {

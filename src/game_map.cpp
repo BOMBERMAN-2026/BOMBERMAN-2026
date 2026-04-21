@@ -5,6 +5,9 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+extern GLuint uniformFlipX;
+extern GLuint uniformWhiteFlash;
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -43,6 +46,8 @@ namespace {
 static constexpr float scaleUsualHud = 0.0028f;
 static constexpr float scaleLives = 0.0040f;
 static constexpr float interSeparation = 0.015f;
+static constexpr glm::vec2 inventoryPosP1(-0.56f, 0.813f);
+static constexpr glm::vec2 inventoryPosP2(0.56f, 0.813f);
 
 // Convierte un string de nivel (p.ej. "flame", "bomba", "velocidad") a PowerUpType.
 // Se usa para la directiva: `powerup <type> <x> <y>` dentro de `levels/*.txt`.
@@ -882,8 +887,84 @@ void GameMap::renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, typ
 
 }
 
+void GameMap::renderPlayerInventory(const Player* player, glm::vec2 startPos, float direction,
+                                     GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor) {
+    if (!player || !powerUpTexturesLoaded) return;
 
-void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, 
+    // Cada icono es un quad unitario [-1,1], el scale en NDC da el tamaño real.
+    // iconScale de 0.055 → quad de 0.11 NDC ≈ 50-70 px dependiendo de resolución
+    const float iconScale = 0.055f;
+    const float spacing   = iconScale * 2.0f * 1.15f; // espaciado = ancho del icono + 15% margen
+
+    // Recopilar qué iconos mostrar
+    std::vector<PowerUpType> toShow;
+
+    // Power-ups activos basados en el estado del jugador
+    for (auto type : player->collectedItems) {
+        toShow.push_back(type);
+    }
+    // PowerUps funcionales que no son ítems de puntuación
+    if (player->maxBombs > 1) {
+        bool found = false;
+        for (auto t : toShow) if (t == PowerUpType::BombUp) { found = true; break; }
+        if (!found) toShow.push_back(PowerUpType::BombUp);
+    }
+    if (player->explosionPower > 2) {
+        bool found = false;
+        for (auto t : toShow) if (t == PowerUpType::FireUp) { found = true; break; }
+        if (!found) toShow.push_back(PowerUpType::FireUp);
+    }
+    if (player->speed > 0.31f) {
+        bool found = false;
+        for (auto t : toShow) if (t == PowerUpType::SpeedUp) { found = true; break; }
+        if (!found) toShow.push_back(PowerUpType::SpeedUp);
+    }
+    if (player->hasRemoteControl) {
+        bool found = false;
+        for (auto t : toShow) if (t == PowerUpType::RemoteControl) { found = true; break; }
+        if (!found) toShow.push_back(PowerUpType::RemoteControl);
+    }
+    if (player->invincible && player->invincibilityFromPowerUp) {
+        bool found = false;
+        for (auto t : toShow) if (t == PowerUpType::Invincibility) { found = true; break; }
+        if (!found) toShow.push_back(PowerUpType::Invincibility);
+    }
+
+    if (toShow.empty()) return;
+
+    glBindVertexArray(vao);
+    glUniform1f(uniformFlipX, 0.0f);
+    glUniform1f(uniformWhiteFlash, 0.0f);
+    const glm::vec4 whiteTint(1.0f, 1.0f, 1.0f, 1.0f);
+    const glm::vec4 uvFull(0.0f, 0.0f, 1.0f, 1.0f);
+
+    float currentX = startPos.x;
+    float currentY = startPos.y;
+
+    for (auto type : toShow) {
+        int texIdx = (int)type;
+        if (texIdx < 0 || texIdx >= POWER_UP_TYPE_COUNT || powerUpTextures[texIdx][0] == 0)
+            continue;
+
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx][0]);
+
+        glm::mat4 model(1.0f);
+        model = glm::translate(model, glm::vec3(currentX, currentY, 0.0f));
+        model = glm::scale(model, glm::vec3(iconScale, iconScale, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvFull));
+        glUniform4fv(uniformTintColor, 1, glm::value_ptr(whiteTint));
+
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        currentX += direction * spacing;
+    }
+}
+
+
+void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor,
                         SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture,
                         std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode) {
     float hudWidth = cols * tileSize;
@@ -947,6 +1028,12 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
 
         // TIMER
         renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // INVENTARIO (Power-Ups e ítems recogidos) arriba a la izquierda
+        if (gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
+            renderPlayerInventory(gPlayers->at(0), inventoryPosP1, 1.0f,
+                                  vao, uniformModel, uniformUvRect, uniformTintColor);
+        }
     }
     else if (gamemode == 1) { // Modo Versus
         // VIDAS
@@ -970,6 +1057,14 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
 
         // TIMER
         renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+
+        // INVENTARIO (Power-Ups e ítems recogidos) P1
+        if (gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
+            const glm::vec2 invPos = (gPlayers->at(0)->playerId == 1) ? inventoryPosP2 : inventoryPosP1;
+            const float invDir = (gPlayers->at(0)->playerId == 1) ? -1.0f : 1.0f;
+            renderPlayerInventory(gPlayers->at(0), invPos, invDir,
+                                  vao, uniformModel, uniformUvRect, uniformTintColor);
+        }
     }
 }
 // ============================== Power-Ups ==============================

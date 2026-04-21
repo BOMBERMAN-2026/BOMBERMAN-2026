@@ -499,6 +499,11 @@ void Player::applyPowerUp(PowerUpType type) {
             else if (type == PowerUpType::Battery) bomberman->playerScores[playerId] += 40000;
             else if (type == PowerUpType::Dragonfly) bomberman->playerScores[playerId] += 50000;
             else if (type == PowerUpType::HudsonBee) bomberman->playerScores[playerId] += 77000;
+
+            // Guardar en el inventario para mostrar en el HUD
+            if (std::find(collectedItems.begin(), collectedItems.end(), type) == collectedItems.end()) {
+                collectedItems.push_back(type);
+            }
         }
         return; // Los items no otorgan buffs jugables 
     }
