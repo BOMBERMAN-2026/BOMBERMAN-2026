@@ -46,8 +46,8 @@ namespace {
 static constexpr float scaleUsualHud = 0.0028f;
 static constexpr float scaleLives = 0.0040f;
 static constexpr float interSeparation = 0.015f;
-static constexpr glm::vec2 inventoryPosP1(-0.56f, 0.813f);
-static constexpr glm::vec2 inventoryPosP2(0.56f, 0.813f);
+static constexpr glm::vec2 inventoryPosP1(-1.65f, 0.65f);
+static constexpr glm::vec2 inventoryPosP2(1.65f, 0.65f);
 
 // Convierte un string de nivel (p.ej. "flame", "bomba", "velocidad") a PowerUpType.
 // Se usa para la directiva: `powerup <type> <x> <y>` dentro de `levels/*.txt`.
@@ -914,7 +914,7 @@ void GameMap::renderPlayerInventory(const Player* player, glm::vec2 startPos, fl
         for (auto t : toShow) if (t == PowerUpType::FireUp) { found = true; break; }
         if (!found) toShow.push_back(PowerUpType::FireUp);
     }
-    if (player->speed > 0.31f) {
+    if (player->speed > 0.41f) {
         bool found = false;
         for (auto t : toShow) if (t == PowerUpType::SpeedUp) { found = true; break; }
         if (!found) toShow.push_back(PowerUpType::SpeedUp);
@@ -966,7 +966,7 @@ void GameMap::renderPlayerInventory(const Player* player, glm::vec2 startPos, fl
 
 void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor,
                         SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture,
-                        std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode) {
+                        std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode, bool showInventory) {
     float hudWidth = cols * tileSize;
 
     glActiveTexture(GL_TEXTURE0);
@@ -1030,7 +1030,7 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, G
         renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // INVENTARIO (Power-Ups e ítems recogidos) arriba a la izquierda
-        if (gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
+        if (showInventory && gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
             renderPlayerInventory(gPlayers->at(0), inventoryPosP1, 1.0f,
                                   vao, uniformModel, uniformUvRect, uniformTintColor);
         }
@@ -1059,7 +1059,7 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, G
         renderHudUtils(levelTimeRemaining, timePos, scaleUsualHud, typeOfHud::Timer, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // INVENTARIO (Power-Ups e ítems recogidos) P1
-        if (gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
+        if (showInventory && gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
             const glm::vec2 invPos = (gPlayers->at(0)->playerId == 1) ? inventoryPosP2 : inventoryPosP1;
             const float invDir = (gPlayers->at(0)->playerId == 1) ? -1.0f : 1.0f;
             renderPlayerInventory(gPlayers->at(0), invPos, invDir,

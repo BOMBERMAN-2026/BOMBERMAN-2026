@@ -5061,7 +5061,8 @@ void Game::render3D() {
                            &gEnemies,
                            currentGameLevel,
                            levelTimeRemaining,
-                           (mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1);
+                           (mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1,
+                           true);
 
         glBindVertexArray(0);
         glUseProgram(0);
@@ -5206,7 +5207,7 @@ void Game::render2D() {
 
     // === 1.1 Renderizar power-ups revelados (encima del suelo, debajo de bombas) ===
     gameMap->renderPowerUps(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
-    gameMap->renderHud(VAO, uniformModel, uniformUvRect, uniformTintColor, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1 );
+    gameMap->renderHud(VAO, uniformModel, uniformUvRect, uniformTintColor, gScoreboardAtlas, scoreboardTexture, &playerScores, &gPlayers, &gEnemies, currentGameLevel, levelTimeRemaining,(mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1, false);
 
     // === 1.5. Renderizar bombas (entre mapa y jugadores) ===
     if (!gBombs.empty()) {

@@ -115,7 +115,7 @@ public:
                 GLuint uniformTintColor, GLuint uniformFlipX);
 
     void renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
-                   std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode);
+                   std::vector<int>* playerScores, std::vector<Player*>* gPlayers, std::vector<Enemy*>* gEnemies, std::string currentGameLevel, float levelTimeRemaining, uint8_t gamemode, bool showInventory = true);
     
     void renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, 
                         typeOfHud hudType, SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture, 
