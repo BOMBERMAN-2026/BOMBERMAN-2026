@@ -78,6 +78,20 @@ public:
                 GLuint uniformTintColor, GLuint uniformFlipX,
                 int WIDTH, int HEIGHT);
 
+    /// Renderiza el video + overlay "LEVEL X MATCH!" con letras del atlas naranja.
+    /// - levelNumber: número de nivel a mostrar (1-5, etc)
+    /// - vocabAtlas: atlas de vocabulario naranja con las letras
+    /// - vocabTexture: textura OpenGL del atlas naranja
+    /// El overlay se posiciona centrado arriba (ver parámetros en la función para ajustar posición/tamaño)
+    void renderWithLevelOverlay(GLuint VAO, GLuint shader,
+                                GLuint uniformModel, GLuint uniformProjection,
+                                GLuint uniformTexture, GLuint uniformUvRect,
+                                GLuint uniformTintColor, GLuint uniformFlipX,
+                                int WIDTH, int HEIGHT,
+                                int levelNumber,
+                                void* vocabAtlasPtr,
+                                GLuint vocabTexture);
+
     /// Salta la cinematica (marca como terminada).
     void skip();
 

@@ -1,4 +1,5 @@
 #include "cinematic_player.hpp"
+#include "sprite_atlas.hpp"
 
 extern "C" {
 #include <libavformat/avformat.h>
@@ -11,7 +12,84 @@ extern "C" {
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
+#include <cctype>
 #include <iostream>
+#include <string>
+#include <vector>
+
+namespace {
+constexpr float kOverlayCanvasWidth = 1920.0f;
+constexpr float kOverlayCanvasHeight = 1080.0f;
+
+glm::vec2 overlayPixelsToOrtho(float centerXpx, float centerYpx, float aspect) {
+    const float xNdc = (centerXpx / kOverlayCanvasWidth) * 2.0f - 1.0f;
+    const float yNdc = 1.0f - (centerYpx / kOverlayCanvasHeight) * 2.0f;
+    return glm::vec2(xNdc * aspect, yNdc);
+}
+
+glm::vec2 overlaySizeToOrthoHalfExtents(float widthPx, float heightPx, float aspect) {
+    const float halfWidth = (widthPx / kOverlayCanvasWidth) * aspect;
+    const float halfHeight = (heightPx / kOverlayCanvasHeight);
+    return glm::vec2(halfWidth, halfHeight);
+}
+
+bool resolveOrangeGlyphSpriteName(char glyph, std::string& spriteName) {
+    const char upperGlyph = static_cast<char>(std::toupper(static_cast<unsigned char>(glyph)));
+
+    if ((upperGlyph >= '0' && upperGlyph <= '9') ||
+        (upperGlyph >= 'A' && upperGlyph <= 'Z') ||
+        upperGlyph == '!') {
+        spriteName = std::string(1, upperGlyph) + "_Nar";
+        return true;
+    }
+
+    return false;
+}
+
+bool drawOrangeVocabGlyph(char glyph,
+                          const SpriteAtlas& vocabAtlas,
+                          GLuint vocabTexture,
+                          float centerXpx,
+                          float centerYpx,
+                          float glyphWidthPx,
+                          float glyphHeightPx,
+                          float aspect,
+                          GLuint uniformModel,
+                          GLuint uniformUvRect,
+                          GLuint uniformTintColor,
+                          GLuint uniformFlipX) {
+    if (vocabTexture == 0 || vocabAtlas.sprites.empty()) {
+        return false;
+    }
+
+    std::string spriteName;
+    if (!resolveOrangeGlyphSpriteName(glyph, spriteName)) {
+        return false;
+    }
+
+    glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    if (!getUvRectForSprite(vocabAtlas, spriteName, uvRect)) {
+        return false;
+    }
+
+    const glm::vec2 center = overlayPixelsToOrtho(centerXpx, centerYpx, aspect);
+    const glm::vec2 halfExtents = overlaySizeToOrthoHalfExtents(glyphWidthPx, glyphHeightPx, aspect);
+
+    glm::mat4 model(1.0f);
+    model = glm::translate(model, glm::vec3(center.x, center.y, 0.0f));
+    model = glm::scale(model, glm::vec3(halfExtents.x, halfExtents.y, 1.0f));
+
+    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+    glUniform4f(uniformTintColor, 1.0f, 1.0f, 1.0f, 1.0f);
+    glUniform1f(uniformFlipX, 0.0f);
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, vocabTexture);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    return true;
+}
+} // namespace
 
 // ============================== Ctor / Dtor ==============================
 
@@ -235,6 +313,103 @@ void CinematicPlayer::render(GLuint VAO, GLuint shader,
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     glBindVertexArray(0);
 
+    glUseProgram(0);
+}
+
+// ============================== Overlay (Level X Match) ==============================
+
+void CinematicPlayer::renderWithLevelOverlay(GLuint VAO, GLuint shader,
+                                             GLuint uniformModel, GLuint uniformProjection,
+                                             GLuint uniformTexture, GLuint uniformUvRect,
+                                             GLuint uniformTintColor, GLuint uniformFlipX,
+                                             int WIDTH, int HEIGHT,
+                                             int levelNumber,
+                                             void* vocabAtlasPtr,
+                                             GLuint vocabTexture) {
+    if (!opened || !videoTexture || !firstFrameDecoded) {
+        return;
+    }
+
+    // Renderizar video primero
+    render(VAO, shader, uniformModel, uniformProjection, uniformTexture, uniformUvRect,
+           uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+
+    // Si no tenemos el atlas o la textura, no renderizamos overlay
+    if (!vocabAtlasPtr || vocabTexture == 0 || VAO == 0) {
+        return;
+    }
+
+    const SpriteAtlas& vocabAtlas = *reinterpret_cast<const SpriteAtlas*>(vocabAtlasPtr);
+
+    // Parámetros ajustables para el overlay
+    const float glyphWidthPx = 60.0f;
+    const float glyphHeightPx = 67.0f;
+    const float spacingPx = 8.0f;
+    const float posYpx = 106.0f;
+    const float posXpx = 980.0f;
+
+    // Compilar el texto "LEVEL X MATCH!"
+    std::string text = "LEVEL ";
+    text += std::to_string(levelNumber);
+    text += " MATCH!";
+
+    glUseProgram(shader);
+
+    const float canvasAspect = kOverlayCanvasWidth / kOverlayCanvasHeight;
+
+    // Primero: calcular anchos de cada glifo para centrar el texto
+    std::vector<float> glyphWidths;
+    glyphWidths.reserve(text.length());
+    float totalWidthPx = 0.0f;
+
+    for (size_t i = 0; i < text.length(); ++i) {
+        const float widthPx = (text[i] == ' ') ? glyphWidthPx * 0.60f : glyphWidthPx;
+        glyphWidths.push_back(widthPx);
+        totalWidthPx += widthPx;
+        if (i + 1 < text.length()) totalWidthPx += spacingPx;
+    }
+
+    if (glyphWidths.empty()) {
+        glUseProgram(0);
+        return;
+    }
+
+    // Calcular posición X inicial (centrada)
+    float currentCenterXpx = posXpx - (totalWidthPx * 0.5f) + (glyphWidths.front() * 0.5f);
+
+    // Proyección ortho 2D (usando canvas dimensions como en custom_game_menu)
+    glm::mat4 projection = glm::ortho(-canvasAspect, canvasAspect, -1.0f, 1.0f, -1.0f, 1.0f);
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform1i(uniformTexture, 0);
+    glUniform1f(uniformFlipX, 0.0f);
+
+    glBindVertexArray(VAO);
+
+    // Renderizar cada carácter
+    for (size_t i = 0; i < text.length(); ++i) {
+        if (text[i] == ' ') {
+            currentCenterXpx += glyphWidths[i] * 0.5f + spacingPx + (i + 1 < text.length() ? glyphWidths[i + 1] * 0.5f : 0.0f);
+            continue;
+        }
+
+        drawOrangeVocabGlyph(text[i],
+                             vocabAtlas,
+                             vocabTexture,
+                             currentCenterXpx,
+                             posYpx,
+                             glyphWidths[i],
+                             glyphHeightPx,
+                             canvasAspect,
+                             uniformModel,
+                             uniformUvRect,
+                             uniformTintColor,
+                             uniformFlipX);
+
+        // Mover a la siguiente posición
+        currentCenterXpx += glyphWidths[i] * 0.5f + spacingPx + (i + 1 < text.length() ? glyphWidths[i + 1] * 0.5f : 0.0f);
+    }
+
+    glBindVertexArray(0);
     glUseProgram(0);
 }
 

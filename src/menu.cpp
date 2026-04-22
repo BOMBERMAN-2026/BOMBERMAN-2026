@@ -94,7 +94,6 @@ void MenuScreen::updateMenu(float deltaTime) {
             } else if (menuSelection == 4) {
                 shouldTransitionToCustomGame = true;
             }
-            // TODO: Las opciones VS del menú principal siguen pendientes de implementación.
         }
     } else {
         // Alternar entre explosion_0 y explosion_1 rápidamente

@@ -1471,6 +1471,10 @@ void Game::ensureRenderResources() {
     Compile3DShaders();
     Compile3DTexturedShaders();
     ensureOverlayWhiteTexture();
+    
+    // Cargar atlases y texturas de gameplay (vocabulario, etc.) que se reutilizan
+    // Esto debe hacerse aquí para que las cinemáticas con overlay tengan acceso a las texturas
+    ensureGameplayAssets();
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -1846,8 +1850,27 @@ void Game::startNewRun(GameMode newMode) {
 
     if (VersusMode::isVersusMode(mode)) {
         playerScores.assign(4, 0);
-        this->state = GAME_PLAYING;
-        loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+        //this->state = GAME_PLAYING;
+        //loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+
+        this->state = GAME_CINEMATIC;
+        this->currentCinematicType = CinematicType::LevelStart;
+        this->nextStateAfterCinematic = GAME_PLAYING;
+        this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+
+        // Abrir el video de la cinemática del primer nivel
+        std::string videoPath;
+        if (mode == GameMode::VsTwoPlayers) {
+            videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode2Player.mp4");
+        } else {
+            videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode1Player.mp4");
+        }
+        cinematicPlayer.open(videoPath);
+
+        // Reproducir jingle "Game Start" durante la cinemática del nivel
+        AudioManager::get().stopBgm();
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+
         menuScreen.resetTransition();
         return;
     }
@@ -1889,10 +1912,31 @@ void Game::advanceToNextLevel() {
         }
 
         // VS arcade: modo infinito -> ciclar rondas.
+        // TODO: Cambiar esto para que la pantalla y audio de carga salga al empezar cada nivel
         versusRoundNumber += 1;
         currentLevelIndex = VersusMode::nextLevelIndex(currentLevelIndex);
-        loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
-        this->state = GAME_PLAYING;
+        //loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+        //this->state = GAME_PLAYING;
+
+        // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar.
+        this->state = GAME_CINEMATIC;
+        this->currentCinematicType = CinematicType::LevelStart;
+        this->nextStateAfterCinematic = GAME_PLAYING;
+        this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+
+        // Abrir el video de la cinemática del nivel.
+        std::string videoPath;
+        if (mode == GameMode::VsTwoPlayers) {
+            videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode2Player.mp4");
+        } else {
+            videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode1Player.mp4");
+        }
+        cinematicPlayer.open(videoPath);
+
+        // Reproducir jingle "Game Start" durante la cinemática del nivel (siguiente nivel)
+        AudioManager::get().stopBgm();
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+
         return;
     }
 
@@ -3127,6 +3171,21 @@ void Game::update() {
                 // Reproducir música de intro de Historia antes de la cinemática
                 AudioManager::get().stopBgm();
                 AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+
+
+                menuScreen.resetTransition();
+            } else if (selectedMode == GameMode::VsTwoPlayers) {
+                // Reproducir cinematica antes de empezar la partida (solo para Versus 2P)
+                this->mode = selectedMode;
+                this->state = GAME_CINEMATIC;
+                this->currentCinematicType = CinematicType::HistoryStart;
+                this->nextStateAfterCinematic = GAME_PLAYING;
+                std::string videoPath = resolveAssetPath("resources/video/vsMode/IntroVsMode.mp4");
+                cinematicPlayer.open(videoPath);
+                
+                // Reproducir música de intro de Historia antes de la cinemática
+                AudioManager::get().stopBgm();
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/11 Vs. Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
 
 
                 menuScreen.resetTransition();
@@ -5131,8 +5190,20 @@ void Game::render() {
         glDisable(GL_SCISSOR_TEST);
         glDisable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        cinematicPlayer.render(VAO, shader, uniformModel, uniformProjection, uniformTexture,
-                               uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        
+        // Usar renderWithLevelOverlay solo para cinemáticas de inicio de nivel en modo VS
+        if (this->currentCinematicType == CinematicType::LevelStart &&
+            (this->mode == GameMode::VsTwoPlayers || this->mode == GameMode::VsOnePlayer)) {
+            cinematicPlayer.renderWithLevelOverlay(VAO, shader, uniformModel, uniformProjection, 
+                                                   uniformTexture, uniformUvRect, uniformTintColor, 
+                                                   uniformFlipX, WIDTH, HEIGHT,
+                                                   versusRoundNumber,
+                                                   &gVocabNaranjaAtlas,
+                                                   vocabNaranjaTexture);
+        } else {
+            cinematicPlayer.render(VAO, shader, uniformModel, uniformProjection, uniformTexture,
+                                   uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        }
         return;
     }
 
