@@ -17,6 +17,7 @@ extern GLuint uniformWhiteFlash;
 #include <random>
 #include <chrono>
 #include <cmath>
+#include <map>
 
 namespace {
     constexpr float kPowerUpPickupFxDuration = 0.26f;
@@ -888,49 +889,37 @@ void GameMap::renderHudUtils(uint32_t data, glm::vec2 startPos, float scale, typ
 }
 
 void GameMap::renderPlayerInventory(const Player* player, glm::vec2 startPos, float direction,
-                                     GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor) {
+                                     GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor,
+                                     SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture) {
     if (!player || !powerUpTexturesLoaded) return;
 
     // Cada icono es un quad unitario [-1,1], el scale en NDC da el tamaño real.
     // iconScale de 0.055 → quad de 0.11 NDC ≈ 50-70 px dependiendo de resolución
-    const float iconScale = 0.055f;
-    const float spacing   = iconScale * 2.0f * 1.15f; // espaciado = ancho del icono + 15% margen
+    const float iconScale   = 0.055f;
+    const float spacing     = iconScale * 2.0f * 1.35f; // espaciado = ancho del icono + margen para el contador
+    const float counterScale = 0.0022f;                  // escala del texto "xN" (igual a scaleUsualHud)
 
-    // Recopilar qué iconos mostrar
-    std::vector<PowerUpType> toShow;
+    // ── Recopilar qué iconos mostrar, en orden de inserción ──────────────────
+    // Usamos un vector para mantener el orden y un mapa para contar repeticiones.
+    std::vector<PowerUpType> orderedTypes;
+    std::map<PowerUpType, int> counts;
 
-    // Power-ups activos basados en el estado del jugador
+    auto addType = [&](PowerUpType t, int increment = 1) {
+        if (counts.find(t) == counts.end()) {
+            orderedTypes.push_back(t);
+            counts[t] = 0;
+        }
+        counts[t] += increment;
+    };
+
+    // Ítems recogidos explícitamente
     for (auto type : player->collectedItems) {
-        toShow.push_back(type);
+        addType(type);
     }
-    // PowerUps funcionales que no son ítems de puntuación
-    if (player->maxBombs > 1) {
-        bool found = false;
-        for (auto t : toShow) if (t == PowerUpType::BombUp) { found = true; break; }
-        if (!found) toShow.push_back(PowerUpType::BombUp);
-    }
-    if (player->explosionPower > 2) {
-        bool found = false;
-        for (auto t : toShow) if (t == PowerUpType::FireUp) { found = true; break; }
-        if (!found) toShow.push_back(PowerUpType::FireUp);
-    }
-    if (player->speed > 0.41f) {
-        bool found = false;
-        for (auto t : toShow) if (t == PowerUpType::SpeedUp) { found = true; break; }
-        if (!found) toShow.push_back(PowerUpType::SpeedUp);
-    }
-    if (player->hasRemoteControl) {
-        bool found = false;
-        for (auto t : toShow) if (t == PowerUpType::RemoteControl) { found = true; break; }
-        if (!found) toShow.push_back(PowerUpType::RemoteControl);
-    }
-    if (player->invincible && player->invincibilityFromPowerUp) {
-        bool found = false;
-        for (auto t : toShow) if (t == PowerUpType::Invincibility) { found = true; break; }
-        if (!found) toShow.push_back(PowerUpType::Invincibility);
-    }
+    // Importante: no duplicar conteos con estado derivado (maxBombs/explosionPower/speed/...)
+    // porque cada recogida ya se registra en collectedItems dentro de Player::applyPowerUp.
 
-    if (toShow.empty()) return;
+    if (orderedTypes.empty()) return;
 
     glBindVertexArray(vao);
     glUniform1f(uniformFlipX, 0.0f);
@@ -941,11 +930,12 @@ void GameMap::renderPlayerInventory(const Player* player, glm::vec2 startPos, fl
     float currentX = startPos.x;
     float currentY = startPos.y;
 
-    for (auto type : toShow) {
+    for (auto type : orderedTypes) {
         int texIdx = (int)type;
         if (texIdx < 0 || texIdx >= POWER_UP_TYPE_COUNT || powerUpTextures[texIdx][0] == 0)
             continue;
 
+        // ── Dibujar icono ─────────────────────────────────────────────────────
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx][0]);
 
@@ -958,6 +948,46 @@ void GameMap::renderPlayerInventory(const Player* player, glm::vec2 startPos, fl
         glUniform4fv(uniformTintColor, 1, glm::value_ptr(whiteTint));
 
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        // ── Dibujar contador "xN" al lado del icono ────────────────────────────
+        int cnt = counts[type];
+        if (cnt >= 1) {
+            std::string label = "x" + std::to_string(cnt);
+
+            // Cambiar textura al atlas del scoreboard
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, scoreboardTexture);
+
+            // Posición: justo a la derecha del icono, centrado verticalmente con él
+            float labelX = currentX + iconScale * 0.9f; 
+            float labelY = currentY - iconScale * 0.15f; 
+
+            for (char ch : label) {
+                std::string spriteName(1, ch);
+                glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+                if (!getUvRectForSprite(gScoreboardAtlas, spriteName, uvRect)) continue;
+
+                auto it = gScoreboardAtlas.sprites.find(spriteName);
+                float sw = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.w * counterScale : 20.0f * counterScale;
+                float sh = (it != gScoreboardAtlas.sprites.end()) ? (float)it->second.h * counterScale : 23.0f * counterScale;
+
+                glm::mat4 cmodel(1.0f);
+                cmodel = glm::translate(cmodel, glm::vec3(labelX + sw * 0.5f, labelY, 0.0f));
+                cmodel = glm::scale(cmodel, glm::vec3(sw * 0.5f, sh * 0.5f, 1.0f));
+
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(cmodel));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(whiteTint));
+
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+                labelX += sw + 0.004f; // avance letra a letra
+            }
+
+            // Restaurar textura del power-up para la siguiente iteración
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, powerUpTextures[texIdx][0]);
+        }
 
         currentX += direction * spacing;
     }
@@ -1032,7 +1062,8 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, G
         // INVENTARIO (Power-Ups e ítems recogidos) arriba a la izquierda
         if (showInventory && gPlayers && !gPlayers->empty() && gPlayers->at(0)) {
             renderPlayerInventory(gPlayers->at(0), inventoryPosP1, 1.0f,
-                                  vao, uniformModel, uniformUvRect, uniformTintColor);
+                                  vao, uniformModel, uniformUvRect, uniformTintColor,
+                                  gScoreboardAtlas, scoreboardTexture);
         }
     }
     else if (gamemode == 1) { // Modo Versus
@@ -1063,7 +1094,8 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, G
             const glm::vec2 invPos = (gPlayers->at(0)->playerId == 1) ? inventoryPosP2 : inventoryPosP1;
             const float invDir = (gPlayers->at(0)->playerId == 1) ? -1.0f : 1.0f;
             renderPlayerInventory(gPlayers->at(0), invPos, invDir,
-                                  vao, uniformModel, uniformUvRect, uniformTintColor);
+                                  vao, uniformModel, uniformUvRect, uniformTintColor,
+                                  gScoreboardAtlas, scoreboardTexture);
         }
     }
 }

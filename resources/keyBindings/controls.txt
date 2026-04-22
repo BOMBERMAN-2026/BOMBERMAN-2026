@@ -1,4 +1,4 @@
-bombKey_P1=345
+bombKey_P1=77
 detonateBombKey_P1=346
 upKey_P1=265
 leftKey_P1=263

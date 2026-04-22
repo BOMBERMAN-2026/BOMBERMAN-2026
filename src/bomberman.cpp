@@ -5170,7 +5170,9 @@ void Game::render3D() {
                                            VAO,
                                            uniformModel,
                                            uniformUvRect,
-                                           uniformTintColor);
+                                           uniformTintColor,
+                                           gScoreboardAtlas,
+                                           scoreboardTexture);
         }
 
         glBindVertexArray(0);

@@ -180,8 +180,10 @@ public:
 
     // Renderiza el inventario de un jugador en el HUD en una posición concreta.
     // `direction` controla el avance horizontal de iconos: 1.0 (izq->der), -1.0 (der->izq).
+    // Muestra un contador "xN" junto a cada icono cuando hay más de uno del mismo tipo.
     void renderPlayerInventory(const Player* player, glm::vec2 startPos, float direction,
-                               GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor);
+                               GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor,
+                               SpriteAtlas gScoreboardAtlas, GLuint scoreboardTexture);
 
     // Carga las texturas de los power-ups.
     void loadPowerUpTextures();
