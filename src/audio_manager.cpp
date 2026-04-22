@@ -278,6 +278,25 @@ bool AudioManager::isBgmFinished() const {
     return !ma_sound_is_playing(&impl->bgmSound);
 }
 
+float AudioManager::getBgmProgress01() const {
+    if (!impl || !impl->bgmActive) return -1.0f;
+
+    ma_uint64 lengthFrames = 0;
+    ma_uint64 cursorFrames = 0;
+
+    const ma_result lenRes = ma_sound_get_length_in_pcm_frames(&impl->bgmSound, &lengthFrames);
+    const ma_result cursorRes = ma_sound_get_cursor_in_pcm_frames(&impl->bgmSound, &cursorFrames);
+
+    if (lenRes != MA_SUCCESS || cursorRes != MA_SUCCESS || lengthFrames == 0) {
+        return -1.0f;
+    }
+
+    const double ratio = (double)cursorFrames / (double)lengthFrames;
+    if (ratio <= 0.0) return 0.0f;
+    if (ratio >= 1.0) return 1.0f;
+    return (float)ratio;
+}
+
 // ============================================================
 // Volúmenes
 // ============================================================
