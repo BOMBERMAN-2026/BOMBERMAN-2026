@@ -43,7 +43,11 @@ enum class CinematicType {
     Intro,              // Intro al abrir el juego -> GAME_MENU
     HistoryStart,       // Introduccion modo historia -> GAME_PLAYING (Historia 1 o 2 jugadores)
     HistoryEnd,         // Final modo historia -> GAME_MENU (Historia 1 o 2 jugadores)
-    LevelStart          // Pantalla de inicio de cada nivel -> GAME_PLAYING (nivel siguiente)
+    LevelStart,         // Pantalla de inicio de cada nivel -> GAME_PLAYING (nivel siguiente)
+    VsVictoryP1,        // Victoria en VS del jugador 1
+    VsVictoryP2,        // Victoria en VS del jugador 2
+    VsDraw,             // Empate en VS
+    VsDefeat            // Derrota en VS
 };
 
 enum class GameMode {
@@ -87,6 +91,8 @@ private:
     // Helpers de progresión.
     bool allPlayersOutOfLives() const;
     bool allEnemiesCleared() const;
+    void startVsRoundCinematic(CinematicType type, const std::string& videoPath, int winnerIndex);
+    void renderVsVictoryStatsOverlay();
     void startContinueSequence();
     void updateContinueSequence(float deltaTime);
     void enterRankingScreen();
@@ -141,6 +147,26 @@ private:
     int versusRoundNumber = 1;
     bool currentLevelHadEnemies = false;
 
+    // VS: resultado de cinemática y acción a ejecutar al terminar.
+    int vsCinematicWinnerIndex = -1;
+    enum class VsCinematicPostAction {
+        None,
+        RestartCurrentLevel,
+        AdvanceNextLevel,
+        ReturnToMenu
+    };
+    VsCinematicPostAction vsCinematicPostAction = VsCinematicPostAction::None;
+
+    // VS: overlay de victoria (texto naranja) configurable.
+    // Ajusta estos valores para mover/escalar el texto sobre el video.
+    float vsVictoryOverlayRightXpx = 1560.0f;
+    float vsVictoryOverlayTopYpx = 361.0f;
+    float vsVictoryOverlayLineGapPx = 108.0f;
+    float vsVictoryOverlayGlyphWidthPx = 60.0f;
+    float vsVictoryOverlayGlyphHeightPx = 67.0f;
+    float vsVictoryOverlaySpacingPx = 8.0f;
+    float vsVictoryOverlaySpaceWidthFactor = 0.60f;
+
 public:
     std::vector<int> playerScores;
 
@@ -185,6 +211,9 @@ private:
 
     // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
     bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel
+    float introCinematicElapsedSeconds = 0.0f;
+    bool introExplosionPlayed = false;
+    static constexpr float kIntroExplosionTriggerSeconds = 3.5f;
 
     // Progresión de niveles (uso interno).
     void loadLevel(int levelIndex, bool preserveLivesAndScore);

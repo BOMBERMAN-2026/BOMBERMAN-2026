@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -522,6 +522,15 @@ static bool isHostileEnemyForPlayers(const Enemy* enemy) {
     return !CpuBomberman::isAllyAgent(enemy);
 }
 
+static int countHostileEnemiesForPlayers() {
+    int count = 0;
+    for (auto* enemy : gEnemies) {
+        if (!isHostileEnemyForPlayers(enemy)) continue;
+        ++count;
+    }
+    return count;
+}
+
 // ============================== OpenGL: helpers ==============================
 
 static bool readTextFile(const std::string& filePath, std::string& out)
@@ -534,6 +543,89 @@ static bool readTextFile(const std::string& filePath, std::string& out)
     ss << file.rdbuf();
     out = ss.str();
     return true;
+}
+
+static bool resolveOrangeGlyphSpriteName(char rawChar, std::string& outSpriteName)
+{
+    if (rawChar == ' ') {
+        outSpriteName.clear();
+        return false;
+    }
+
+    const unsigned char uc = (unsigned char)rawChar;
+    const char glyph = (char)std::toupper(uc);
+
+    if ((glyph >= 'A' && glyph <= 'Z') ||
+        (glyph >= '0' && glyph <= '9') ||
+        glyph == '!' || glyph == ',' || glyph == ':') {
+        outSpriteName = std::string(1, glyph) + "_Nar";
+        return true;
+    }
+
+    outSpriteName.clear();
+    return false;
+}
+
+static void drawOrangeTextCenteredPx(const std::string& text,
+                                     float topRightXpx,
+                                     float topRightYpx,
+                                     float glyphWidthPx,
+                                     float glyphHeightPx,
+                                     float spacingPx,
+                                     float spaceWidthFactor,
+                                     const glm::vec4& tint)
+{
+    if (shader == 0 || VAO == 0 || vocabNaranjaTexture == 0 || text.empty()) {
+        return;
+    }
+
+    const float spaceWidthPx = glyphWidthPx * std::max(0.0f, spaceWidthFactor);
+    const float glyphCenterYpx = topRightYpx + glyphHeightPx * 0.5f;
+    float cursorRightX = topRightXpx;
+    bool hasToken = false;
+
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+    glUniform1f(uniformFlipX, 0.0f);
+    glUniform1f(uniformWhiteFlash, 0.0f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, vocabNaranjaTexture);
+
+    for (auto it = text.rbegin(); it != text.rend(); ++it) {
+        const char rawChar = *it;
+        float advance = 0.0f;
+        bool shouldDraw = false;
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+        if (rawChar == ' ') {
+            advance = spaceWidthPx;
+        } else {
+            std::string spriteName;
+            if (!resolveOrangeGlyphSpriteName(rawChar, spriteName) ||
+                !getUvRectForSprite(gVocabNaranjaAtlas, spriteName, uvRect)) {
+                continue;
+            }
+            advance = glyphWidthPx;
+            shouldDraw = true;
+        }
+
+        if (hasToken) {
+            cursorRightX -= spacingPx;
+        }
+        cursorRightX -= advance;
+        hasToken = true;
+
+        if (!shouldDraw) {
+            continue;
+        }
+
+        glm::mat4 model(1.0f);
+        model = glm::translate(model, glm::vec3(cursorRightX + glyphWidthPx * 0.5f, glyphCenterYpx, 0.0f));
+        model = glm::scale(model, glm::vec3(glyphWidthPx * 0.5f, -glyphHeightPx * 0.5f, 1.0f));
+
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
 }
 
 void AddShader(GLuint program, const char* shaderCode, GLenum shaderType);
@@ -1458,23 +1550,23 @@ void Game::ensureRenderResources() {
     CompileShaders();
     CreateCube();
     CreateSphere();
-    CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
-    CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
-    CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
-    CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
-    CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
-    CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
-    CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
-    CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
-    CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
-    CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
-    CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
-    CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
-    CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
-    CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
-    CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
-    CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
-    CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
+    //CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
+    //CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
+    //CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
+    //CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
+    //CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
+    //CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
+    //CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
+    //CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
+    //CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
+    //CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
+    //CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
+    //CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
+    //CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
+    //CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
+    //CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
+    //CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
+    //CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
     ensureOverlayWhiteTexture();
@@ -1620,6 +1712,111 @@ bool Game::allEnemiesCleared() const {
         return false;
     }
     return true;
+}
+
+void Game::startVsRoundCinematic(CinematicType type, const std::string& videoPath, int winnerIndex) {
+    state = GAME_CINEMATIC;
+    currentCinematicType = type;
+    nextStateAfterCinematic = GAME_PLAYING;
+    loadLevelPending = false;
+    pendingLevelAdvance = false;
+    levelAdvanceTimer = 0.0f;
+    vsCinematicWinnerIndex = winnerIndex;
+
+    if (!cinematicPlayer.open(videoPath)) {
+        std::cerr << "No se pudo abrir cinemática VS: " << videoPath << std::endl;
+    }
+
+    AudioManager::get().stopBgm();
+    if (type == CinematicType::VsVictoryP1 || type == CinematicType::VsVictoryP2) {
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/13 Vs. Game ~ Victory.mp3"), /*loop=*/false, 0.60f);
+    } else {
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/14 Vs. Game ~ Defeat.mp3"), /*loop=*/false, 0.60f);
+    }
+}
+
+void Game::renderVsVictoryStatsOverlay() {
+    if (state != GAME_CINEMATIC) {
+        return;
+    }
+    if (currentCinematicType != CinematicType::VsVictoryP1 &&
+        currentCinematicType != CinematicType::VsVictoryP2) {
+        return;
+    }
+    if (shader == 0 || VAO == 0 || vocabNaranjaTexture == 0) {
+        return;
+    }
+    if (vsCinematicWinnerIndex < 0 || vsCinematicWinnerIndex >= (int)playerScores.size()) {
+        return;
+    }
+
+    const bool winnerIsHuman =
+        (vsCinematicWinnerIndex == 0) ||
+        (mode == GameMode::VsTwoPlayers && vsCinematicWinnerIndex == 1);
+    if (!winnerIsHuman) {
+        return;
+    }
+
+    const int wins = std::max(0, playerScores[vsCinematicWinnerIndex]);
+    int losses = 0;
+    for (int i = 0; i < (int)playerScores.size(); ++i) {
+        if (i == vsCinematicWinnerIndex) continue;
+        losses += std::max(0, playerScores[i]);
+    }
+
+    std::string lineWins;
+    if(wins < 9) {
+        lineWins = "0" + std::to_string(wins);
+    } else {
+        lineWins = std::to_string(wins);
+    }
+    const std::string lineLosses = std::to_string(losses);
+
+    const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
+    if (!wasBlendEnabled) {
+        glEnable(GL_BLEND);
+    }
+
+    glDisable(GL_DEPTH_TEST);
+    glUseProgram(shader);
+
+    const glm::mat4 projection = glm::ortho(0.0f,
+                                            (float)std::max(1, WIDTH),
+                                            (float)std::max(1, HEIGHT),
+                                            0.0f,
+                                            -1.0f,
+                                            1.0f);
+    glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniform1i(uniformTexture, 0);
+    glUniform1f(uniformFlipX, 0.0f);
+    glUniform1f(uniformWhiteFlash, 0.0f);
+
+    glBindVertexArray(VAO);
+
+    drawOrangeTextCenteredPx(lineWins,
+                             vsVictoryOverlayRightXpx,
+                             vsVictoryOverlayTopYpx,
+                             vsVictoryOverlayGlyphWidthPx,
+                             vsVictoryOverlayGlyphHeightPx,
+                             vsVictoryOverlaySpacingPx,
+                             vsVictoryOverlaySpaceWidthFactor,
+                             glm::vec4(1.0f));
+
+    drawOrangeTextCenteredPx(lineLosses,
+                             vsVictoryOverlayRightXpx,
+                             vsVictoryOverlayTopYpx + vsVictoryOverlayLineGapPx,
+                             vsVictoryOverlayGlyphWidthPx,
+                             vsVictoryOverlayGlyphHeightPx,
+                             vsVictoryOverlaySpacingPx,
+                             vsVictoryOverlaySpaceWidthFactor,
+                             glm::vec4(1.0f));
+
+    glBindVertexArray(0);
+    glUseProgram(0);
+
+    if (!wasBlendEnabled) {
+        glDisable(GL_BLEND);
+    }
 }
 
 void Game::startContinueSequence() {
@@ -2376,6 +2573,8 @@ void Game::startNewRun(GameMode newMode) {
     continueProgress01 = 0.0f;
     continueCountdownValue = 9;
     rankingScreenTimer = 0.0f;
+    vsCinematicWinnerIndex = -1;
+    vsCinematicPostAction = VsCinematicPostAction::None;
 
     if (VersusMode::isVersusMode(mode)) {
         playerScores.assign(4, 0);
@@ -2514,6 +2713,8 @@ void Game::returnToMenuFromGame(bool resetRun) {
     continueProgress01 = 0.0f;
     continueCountdownValue = 9;
     rankingScreenTimer = 0.0f;
+    vsCinematicWinnerIndex = -1;
+    vsCinematicPostAction = VsCinematicPostAction::None;
 
     cleanupGameplayEntities();
     pendingLevelAdvance = false;
@@ -2933,6 +3134,8 @@ void Game::init() {
         this->state = GAME_CINEMATIC;
         this->currentCinematicType = CinematicType::Intro;
         this->nextStateAfterCinematic = GAME_MENU;
+        this->introCinematicElapsedSeconds = 0.0f;
+        this->introExplosionPlayed = false;
         std::string videoPath = resolveAssetPath("resources/video/Intro.mp4");
         cinematicPlayer.open(videoPath);
         return;
@@ -3906,8 +4109,34 @@ void Game::update() {
     if (this->state == GAME_CINEMATIC) {
         bool audioFinished = false;
 
+        auto playCurrentLevelBgm = [&]() {
+            std::string bgmFile = "";
+            if (mode == GameMode::VsTwoPlayers || mode == GameMode::VsOnePlayer) {
+                // En modo Versus siempre la misma música de fondo durante los niveles.
+                bgmFile = "resources/sounds/12 Vs. Game BGM.mp3";
+            } else if (currentLevelIndex == 0 || currentLevelIndex == 1) {
+                bgmFile = "resources/sounds/03 BGM 1.mp3";
+            } else if (currentLevelIndex == 2 || currentLevelIndex == 4) {
+                bgmFile = "resources/sounds/05 Boss BGM.mp3";
+            } else if (currentLevelIndex == 3) {
+                bgmFile = "resources/sounds/06 BGM 2.mp3";
+            }
+
+            if (!bgmFile.empty()) {
+                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+            }
+        };
+
         if (currentCinematicType == CinematicType::LevelStart) {
             audioFinished = AudioManager::get().isBgmFinished();
+        }
+
+        if (currentCinematicType == CinematicType::Intro && !introExplosionPlayed) {
+            introCinematicElapsedSeconds += deltaTime;
+            if (introCinematicElapsedSeconds >= kIntroExplosionTriggerSeconds) {
+                PlayExplosionSound();
+                introExplosionPlayed = true;
+            }
         }
 
 
@@ -3942,21 +4171,28 @@ void Game::update() {
                     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
                     loadLevelPending = false;
                     this->state = GAME_PLAYING;
-                    
-                    // Iniciar BGM del nivel con miniaudio
-                    std::string bgmFile = "";
-                    if (currentLevelIndex == 0 || currentLevelIndex == 1) {
-                        bgmFile = "resources/sounds/03 BGM 1.mp3";
-                    } else if (currentLevelIndex == 2 || currentLevelIndex == 4) {
-                        bgmFile = "resources/sounds/05 Boss BGM.mp3";
-                    } else if (currentLevelIndex == 3) {
-                        bgmFile = "resources/sounds/06 BGM 2.mp3";
-                    }
 
-                    if (!bgmFile.empty()) {
-                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
-                    }
+                    playCurrentLevelBgm();
+                }
+            } else if (currentCinematicType == CinematicType::VsVictoryP1 ||
+                       currentCinematicType == CinematicType::VsVictoryP2 ||
+                       currentCinematicType == CinematicType::VsDraw ||
+                       currentCinematicType == CinematicType::VsDefeat) {
+                const VsCinematicPostAction action = vsCinematicPostAction;
+                vsCinematicPostAction = VsCinematicPostAction::None;
+                vsCinematicWinnerIndex = -1;
 
+                if (action == VsCinematicPostAction::RestartCurrentLevel) {
+                    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+                    this->state = GAME_PLAYING;
+                    playCurrentLevelBgm();
+                } else if (action == VsCinematicPostAction::AdvanceNextLevel) {
+                    advanceToNextLevel();
+                } else if (action == VsCinematicPostAction::ReturnToMenu) {
+                    returnToMenuFromGame(/*resetRun=*/true);
+                } else {
+                    this->state = GAME_PLAYING;
+                    playCurrentLevelBgm();
                 }
             }
         }
@@ -4120,50 +4356,80 @@ void Game::update() {
     // ========== Transiciones: Game Over / Next Level ==========
     if (this->state == GAME_PLAYING) {
         if (VersusMode::isVersusMode(mode)) {
-            const int remaining = VersusMode::countPlayersStillInMatch(gPlayers);
+            const int survivingPlayers = VersusMode::countPlayersStillInMatch(gPlayers);
+            const int hostileEnemiesAlive = countHostileEnemiesForPlayers();
+            const bool noHostileEnemiesAlive = (hostileEnemiesAlive == 0);
+            const bool timeUp = (levelTimeRemaining <= 0.0f);
 
-            // Si todos los humanos están fuera y aún queda algún rival vivo, se pierde el encuentro.
-            // (Si no queda nadie vivo, es Draw y se pasa de ronda.)
-            if (VersusMode::humansOut(mode, gPlayers) && remaining > 0) {
-                returnToMenuFromGame(/*resetRun=*/true);
+            int survivingHumans = 0;
+            const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
+            for (int i = 0; i < humanSlots && i < (int)gPlayers.size(); ++i) {
+                Player* p = gPlayers[i];
+                if (!p) continue;
+                if (!p->isGameOver()) {
+                    ++survivingHumans;
+                }
+            }
+
+            // Victoria: queda un único jugador en pie y ya no quedan enemigos.
+            if (survivingPlayers == 1 && noHostileEnemiesAlive) {
+                const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
+                if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
+                    playerScores[winnerIndex] += 1;
+                }
+
+                const bool winnerIsHuman =
+                    (winnerIndex == 0) ||
+                    (mode == GameMode::VsTwoPlayers && winnerIndex == 1);
+
+                if (winnerIsHuman) {
+                    vsCinematicPostAction = VsCinematicPostAction::AdvanceNextLevel;
+
+                    const bool winnerIsP2 = (winnerIndex == 1);
+                    const std::string cinematicPath = winnerIsP2
+                        ? resolveAssetPath("resources/video/vsMode/VsModeVictoryP2.mp4")
+                        : resolveAssetPath("resources/video/vsMode/VsModeVictoryP1.mp4");
+
+                    startVsRoundCinematic(winnerIsP2 ? CinematicType::VsVictoryP2 : CinematicType::VsVictoryP1,
+                                          cinematicPath,
+                                          winnerIndex);
+                } else {
+                    // Si gana un CPU/rival, derrota para los humanos.
+                    vsCinematicPostAction = VsCinematicPostAction::ReturnToMenu;
+                    startVsRoundCinematic(CinematicType::VsDefeat,
+                                          resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
+                                          /*winnerIndex=*/-1);
+                }
                 return;
             }
 
-            // Draw (muerte simultánea) o Draw por tiempo.
-            const bool isDraw = VersusMode::isDraw(remaining, levelTimeRemaining);
+            // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
+            if (survivingPlayers == 0 && noHostileEnemiesAlive) {
+                vsCinematicPostAction = VsCinematicPostAction::RestartCurrentLevel;
 
-            if (remaining == 1) {
-                if (!pendingLevelAdvance) {
-                    // Registrar win del último jugador en pie (una sola vez por ronda).
-                    const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
-                    if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
-                        playerScores[winnerIndex] += 1;
-                    }
+                startVsRoundCinematic(CinematicType::VsDraw,
+                                      resolveAssetPath("resources/video/vsMode/VsModeDraw.mp4"),
+                                      /*winnerIndex=*/-1);
+                return;
+            }
 
-                    pendingLevelAdvance = true;
-                    levelAdvanceTimer = 0.0f;
-                } else {
-                    levelAdvanceTimer += deltaTime;
-                    if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
-                        pendingLevelAdvance = false;
-                        levelAdvanceTimer = 0.0f;
-                        advanceToNextLevel();
-                        return;
-                    }
-                }
-            } else if (isDraw) {
-                if (!pendingLevelAdvance) {
-                    pendingLevelAdvance = true;
-                    levelAdvanceTimer = 0.0f;
-                } else {
-                    levelAdvanceTimer += deltaTime;
-                    if (levelAdvanceTimer >= levelAdvanceDelaySeconds) {
-                        pendingLevelAdvance = false;
-                        levelAdvanceTimer = 0.0f;
-                        advanceToNextLevel();
-                        return;
-                    }
-                }
+            // Derrota: no quedan jugadores humanos y aún hay rivales/enemigos vivos.
+            if (survivingHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
+                vsCinematicPostAction = VsCinematicPostAction::ReturnToMenu;
+
+                startVsRoundCinematic(CinematicType::VsDefeat,
+                                      resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
+                                      /*winnerIndex=*/-1);
+                return;
+            }
+
+            // Time Up "solo tiempo": empate sin descuento de vidas.
+            if (timeUp) {
+                vsCinematicPostAction = VsCinematicPostAction::RestartCurrentLevel;
+                startVsRoundCinematic(CinematicType::VsDraw,
+                                      resolveAssetPath("resources/video/vsMode/VsModeDraw.mp4"),
+                                      /*winnerIndex=*/-1);
+                return;
             }
         } else {
             if (allPlayersOutOfLives()) {
@@ -5894,6 +6160,11 @@ void Game::render() {
         } else {
             cinematicPlayer.render(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                    uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+
+            if (currentCinematicType == CinematicType::VsVictoryP1 ||
+                currentCinematicType == CinematicType::VsVictoryP2) {
+                renderVsVictoryStatsOverlay();
+            }
         }
         return;
     }
