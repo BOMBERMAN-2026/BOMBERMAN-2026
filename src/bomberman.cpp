@@ -3658,7 +3658,15 @@ void Game::render3D() {
 
     glm::vec3 trackedPlayerCenter = mapCenter + glm::vec3(0.0f, 0.55f, 0.0f);
     if (trackedPlayer != nullptr) {
-        trackedPlayerCenter = ndcToWorld3D(gameMap, trackedPlayer->position, 0.55f);
+        const bool trackedIsWinning3D =
+            (trackedPlayer->lifeState == PlayerLifeState::Winning && trackedPlayer->winUse3DCelebration);
+        const glm::vec2 trackedBasePos = trackedIsWinning3D
+            ? trackedPlayer->winAnchorPosition
+            : trackedPlayer->position;
+        const float trackedHeight = trackedIsWinning3D
+            ? (0.55f + trackedPlayer->win3DHeight)
+            : 0.55f;
+        trackedPlayerCenter = ndcToWorld3D(gameMap, trackedBasePos, trackedHeight);
     }
 
     glm::vec3 cameraPos(mapRadius * 0.70f, mapRadius * 1.55f + 3.0f, mapRadius * 1.25f + 2.5f);
@@ -3955,10 +3963,23 @@ void Game::render3D() {
     // Jugadores: sombra en suelo (el sprite real se dibuja después como billboard 2.5D).
     for (std::size_t i = 0; i < gPlayers.size(); ++i) {
         Player* p = gPlayers[i];
-        if (!p || !p->isAlive()) continue;
+        if (!p) continue;
 
-        const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
-        drawMesh3D(sphereOrCubeVAO, sphereOrCubeIndexCount, glm::vec3(feet.x, 0.03f, feet.z), glm::vec3(0.46f, 0.02f, 0.46f), glm::vec3(0.05f, 0.05f, 0.05f));
+        const bool isWinning = (p->lifeState == PlayerLifeState::Winning);
+        const bool isWinning3D = (isWinning && p->winUse3DCelebration);
+        if (!p->isAlive() && !isWinning) continue;
+
+        const glm::vec2 shadowBasePos = isWinning3D ? p->winAnchorPosition : p->position;
+        const float shadowRadius = isWinning3D
+            ? std::max(0.16f, 0.46f - p->win3DHeight * 0.10f)
+            : 0.46f;
+
+        const glm::vec3 feet = ndcToWorld3D(gameMap, shadowBasePos, 0.02f);
+        drawMesh3D(sphereOrCubeVAO,
+                   sphereOrCubeIndexCount,
+                   glm::vec3(feet.x, 0.03f, feet.z),
+                   glm::vec3(shadowRadius, 0.02f, shadowRadius),
+                   glm::vec3(0.05f, 0.05f, 0.05f));
     }
 
     // Enemigos: sombra en suelo (el sprite real se dibuja después como billboard 2.5D).
@@ -4218,6 +4239,82 @@ void Game::render3D() {
                            glm::vec3(sparkleSize, sparkleSize, sparkleSize),
                            sparkleColor);
             }
+        }
+    }
+
+    // Celebración al superar nivel en modo 3D: burst de glitter rosa desde el bomberman.
+    for (std::size_t playerIndex = 0; playerIndex < gPlayers.size(); ++playerIndex) {
+        Player* p = gPlayers[playerIndex];
+        if (!p || p->lifeState != PlayerLifeState::Winning || !p->winUse3DCelebration) {
+            continue;
+        }
+        if (!p->win3DGlitterBurst || p->win3DGlitterTimer < 0.0f) {
+            continue;
+        }
+
+        const float glitterDuration = 0.95f;
+        const float tRaw = p->win3DGlitterTimer / glitterDuration;
+        const float t = std::max(0.0f, std::min(1.0f, tRaw));
+        const float inv = 1.0f - t;
+        const float easeOut = 1.0f - (inv * inv);
+        const float intensity = std::max(0.0f, 1.0f - t);
+        const float kTwoPi = 6.28318530718f;
+
+        const glm::vec3 center = ndcToWorld3D(gameMap,
+                                              p->winAnchorPosition,
+                                              0.78f + p->win3DHeight);
+
+        const float corePulse = 1.0f + 0.28f * std::sin((1.0f - t) * 30.0f);
+        const float coreRadius = (0.16f + 0.55f * easeOut) * corePulse;
+        const glm::vec3 coreColor(1.00f + 0.35f * intensity,
+                                  0.28f + 0.28f * intensity,
+                                  0.86f + 0.34f * intensity);
+        drawMesh3D(sphereOrCubeVAO,
+                   sphereOrCubeIndexCount,
+                   center,
+                   glm::vec3(coreRadius, coreRadius, coreRadius),
+                   coreColor);
+
+        const float ringRadius = 0.28f + 1.55f * easeOut;
+        const float ringThickness = std::max(0.008f, 0.08f * intensity);
+        const glm::vec3 ringColor(1.00f + 0.40f * intensity,
+                                  0.24f + 0.34f * intensity,
+                                  0.92f + 0.40f * intensity);
+        drawMesh3D(sphereOrCubeVAO,
+                   sphereOrCubeIndexCount,
+                   center + glm::vec3(0.0f, 0.02f, 0.0f),
+                   glm::vec3(ringRadius, ringThickness, ringRadius),
+                   ringColor);
+
+        const int sparkleCount = 36;
+        for (int i = 0; i < sparkleCount; ++i) {
+            const float seed = ((float)(p->playerId + 1) * 41.238f)
+                             + ((float)(i + 1) * 19.771f)
+                             + (p->winAnchorPosition.x * 13.417f)
+                             + (p->winAnchorPosition.y * 17.933f)
+                             + ((float)playerIndex * 11.147f);
+            const float hashBase = std::sin(seed) * 43758.5453f;
+            const float hash01 = hashBase - std::floor(hashBase);
+            const float angle = hash01 * kTwoPi + ((float)i * 0.31f) + ((1.0f - t) * 13.2f);
+
+            const float radial = (0.20f + 0.52f * hash01) * (0.18f + 1.85f * easeOut);
+            const float lift = 0.04f + 0.74f * easeOut
+                             + 0.10f * std::sin((1.0f - t) * 28.0f + ((float)i * 0.73f));
+            const float twinkle = 0.56f + 0.44f * std::sin((1.0f - t) * 50.0f + ((float)i * 1.91f));
+            const float sparkleIntensity = std::max(0.0f, twinkle * intensity);
+            const float sparkleSize = (0.018f + 0.040f * hash01) * (0.36f + 1.10f * sparkleIntensity);
+
+            const glm::vec3 sparklePos = center + glm::vec3(std::cos(angle) * radial,
+                                                            lift,
+                                                            std::sin(angle) * radial);
+            const glm::vec3 sparkleColor(1.00f + 0.55f * sparkleIntensity,
+                                         0.18f + 0.50f * sparkleIntensity,
+                                         0.74f + 0.86f * sparkleIntensity);
+            drawMesh3D(sphereOrCubeVAO,
+                       sphereOrCubeIndexCount,
+                       sparklePos,
+                       glm::vec3(sparkleSize, sparkleSize, sparkleSize),
+                       sparkleColor);
         }
     }
 
@@ -4591,7 +4688,11 @@ void Game::render3D() {
 
             for (std::size_t i = 0; i < gPlayers.size(); ++i) {
                 Player* p = gPlayers[i];
-                if (!p || !p->isAlive()) continue;
+                if (!p) continue;
+
+                const bool isWinning = (p->lifeState == PlayerLifeState::Winning);
+                const bool isWinning3D = (isWinning && p->winUse3DCelebration);
+                if (!p->isAlive() && !isWinning) continue;
 
                 if (camera3DType == Camera3DType::FirstPerson && (int)i == trackedPlayerIndex) {
                     continue;
@@ -4624,13 +4725,20 @@ void Game::render3D() {
                     modelFacingDirKey = remapDirectionFor3DCamera(this, modelFacingDirKey);
                 }
 
-                const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.08f);
-                const float yaw = facingKeyToYawRadians(modelFacingDirKey) + kPlayerModelYawOffset;
+                const glm::vec2 modelBasePos = isWinning3D ? p->winAnchorPosition : p->position;
+                const glm::vec3 feet = ndcToWorld3D(gameMap, modelBasePos, 0.08f);
+                float yaw = facingKeyToYawRadians(modelFacingDirKey) + kPlayerModelYawOffset;
+                if (isWinning3D) {
+                    yaw += p->win3DSpin;
+                }
+
+                const float modelLift = isWinning3D ? p->win3DHeight : 0.0f;
+                const float modelScale = isWinning3D ? std::max(1.0f, p->win3DScale) : 1.0f;
 
                 glm::mat4 model(1.0f);
-                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f, 0.0f));
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f + modelLift, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
-                model = glm::scale(model, glm::vec3(1.28f, 1.28f, 1.28f));
+                model = glm::scale(model, glm::vec3(1.28f * modelScale, 1.28f * modelScale, 1.28f * modelScale));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                 glBindVertexArray(playerVao);
@@ -4902,7 +5010,11 @@ void Game::render3D() {
 
     for (std::size_t i = 0; i < gPlayers.size(); ++i) {
         Player* p = gPlayers[i];
-        if (!p || !p->isAlive()) continue;
+        if (!p) continue;
+
+        const bool isWinning = (p->lifeState == PlayerLifeState::Winning);
+        const bool isWinning3D = (isWinning && p->winUse3DCelebration);
+        if (!p->isAlive() && !isWinning) continue;
 
         if (camera3DType == Camera3DType::FirstPerson && (int)i == trackedPlayerIndex) {
             continue;
@@ -4924,8 +5036,17 @@ void Game::render3D() {
         }
 
         if (hasUv) {
-            const glm::vec3 feet = ndcToWorld3D(gameMap, p->position, 0.02f);
-            drawSpriteBillboard3D(texture, uvRect, feet, 0.92f, 1.38f, p->flipX, glm::vec4(1.0f));
+            const glm::vec2 billboardBasePos = isWinning3D ? p->winAnchorPosition : p->position;
+            const float billboardLift = isWinning3D ? p->win3DHeight : 0.0f;
+            const float billboardScale = isWinning3D ? std::max(1.0f, p->win3DScale) : 1.0f;
+            const glm::vec3 feet = ndcToWorld3D(gameMap, billboardBasePos, 0.02f + billboardLift);
+            drawSpriteBillboard3D(texture,
+                                  uvRect,
+                                  feet,
+                                  0.92f * billboardScale,
+                                  1.38f * billboardScale,
+                                  p->flipX,
+                                  glm::vec4(1.0f));
         }
     }
 

@@ -216,6 +216,13 @@ void Player::startWinning() {
     winScale = 1.8f;
     hasFinishedWinning = false;
     invincible = true; // Para que no muera por explosiones tardías
+    winUse3DCelebration = (bomberman != nullptr && bomberman->viewMode == ViewMode::Mode3D);
+    winAnchorPosition = position;
+    win3DHeight = 0.0f;
+    win3DSpin = 0.0f;
+    win3DScale = 1.0f;
+    win3DGlitterTimer = -1.0f;
+    win3DGlitterBurst = false;
 
     // Aleatorizar dirección para huir (diagonal hacia cualquier lado, evitando rectas)
     float dx = (std::rand() % 100 / 100.0f) * 2.0f - 1.0f; // -1 a 1
@@ -227,6 +234,79 @@ void Player::startWinning() {
 
 void Player::updateWinningAnimation() {
     winTimer += deltaTime;
+
+    if (winUse3DCelebration) {
+        const float ascendDuration = 0.95f;
+        const float hardStopDuration = 0.16f;
+        const float glitterDuration = 0.95f;
+        const float kPi = 3.14159265359f;
+
+        // Fase 0 (3D): asciende y gira a toda velocidad.
+        if (winPhase == 0) {
+            const float tRaw = winTimer / ascendDuration;
+            const float t = std::max(0.0f, std::min(1.0f, tRaw));
+            const float inv = 1.0f - t;
+            const float easeOut = 1.0f - (inv * inv * inv);
+
+            currentSpriteName = spritePrefix + ".victoria.dedos.0";
+            flipX = 0.0f;
+
+            win3DHeight = 2.45f * easeOut;
+            win3DScale = 1.05f + 0.55f * easeOut;
+            winScale = 1.8f + 0.2f * easeOut;
+            win3DSpin += deltaTime * (42.0f + 24.0f * easeOut);
+
+            if (winTimer >= ascendDuration) {
+                winPhase = 1;
+                winTimer = 0.0f;
+            }
+            return;
+        }
+
+        // Fase 1 (3D): frenazo seco antes del burst.
+        if (winPhase == 1) {
+            const float tRaw = winTimer / hardStopDuration;
+            const float t = std::max(0.0f, std::min(1.0f, tRaw));
+            const float t2 = t * t;
+            const float t4 = t2 * t2;
+            const float brakeFactor = 1.0f - t4;
+
+            currentSpriteName = spritePrefix + ".victoria.recto.0";
+            flipX = 0.0f;
+
+            win3DHeight = 2.45f + 0.12f * std::sin(t * kPi);
+            win3DScale = 1.60f + 0.06f * (1.0f - t);
+            winScale = 2.0f;
+            win3DSpin += deltaTime * (46.0f * brakeFactor);
+
+            if (winTimer >= hardStopDuration) {
+                winPhase = 2;
+                winTimer = 0.0f;
+                win3DGlitterBurst = true;
+                win3DGlitterTimer = 0.0f;
+            }
+            return;
+        }
+
+        // Fase 2 (3D): explosión glitter rosa y fin de celebración.
+        win3DGlitterTimer = std::max(0.0f, win3DGlitterTimer + deltaTime);
+        const float tRaw = win3DGlitterTimer / glitterDuration;
+        const float t = std::max(0.0f, std::min(1.0f, tRaw));
+        const float pulse = 0.65f + 0.35f * std::sin((1.0f - t) * 18.0f);
+
+        currentSpriteName = spritePrefix + ".victoria.recto.0";
+        flipX = 0.0f;
+        win3DHeight = 2.45f + 0.07f * std::sin(win3DGlitterTimer * 5.0f);
+        win3DScale = 1.55f + 0.10f * pulse;
+        winScale = 1.95f;
+
+        // Frenazo total: mantiene el ángulo fijo durante el burst.
+        if (win3DGlitterTimer >= glitterDuration) {
+            hasFinishedWinning = true;
+            win3DGlitterBurst = false;
+        }
+        return;
+    }
 
     // Fase 0: Pose de victoria (agrandarse)
     if (winPhase == 0) {
@@ -482,6 +562,20 @@ void Player::respawn() {
     invincibilityTimer = kSpawnInvulnerabilitySeconds;
     invincibilityTotalSeconds = kSpawnInvulnerabilitySeconds;
     invincibilityFromPowerUp = false;
+
+    // Limpiar cualquier estado residual de celebración.
+    hasFinishedWinning = false;
+    winTimer = 0.0f;
+    winPhase = 0;
+    winScale = 1.8f;
+    winUse3DCelebration = false;
+    winAnchorPosition = position;
+    win3DHeight = 0.0f;
+    win3DSpin = 0.0f;
+    win3DScale = 1.0f;
+    win3DGlitterTimer = -1.0f;
+    win3DGlitterBurst = false;
+
     // activeBombs no se resetea: las bombas en el mapa siguen existiendo
     // y decrementarán activeBombs cuando exploten.
 }

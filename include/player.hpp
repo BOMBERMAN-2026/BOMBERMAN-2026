@@ -74,9 +74,16 @@ class Player : public Entity {
         // Vida y animaciones de victoria
         bool hasFinishedWinning = false;
         float winTimer = 0.0f;
-        int winPhase = 0; // 0 = Creciendo/Pose V, 1 = Girando y saliendo
+        int winPhase = 0; // 2D: 0 = Pose/crece, 1 = gira y sale. 3D: 0 = asciende y gira, 1 = frenazo, 2 = glitter
         float winScale = 1.8f; // Escala dinámica durante la victoria
         glm::vec2 winVelocity = glm::vec2(0.0f); // Para la dirección aleatoria diagonal
+        bool winUse3DCelebration = false;
+        glm::vec2 winAnchorPosition = glm::vec2(0.0f); // Posición base en NDC para celebración 3D
+        float win3DHeight = 0.0f;      // Elevación vertical del modelo en 3D
+        float win3DSpin = 0.0f;        // Rotación acumulada en radianes
+        float win3DScale = 1.0f;       // Escala dinámica del modelo 3D
+        float win3DGlitterTimer = -1.0f; // <0: sin burst. >=0: tiempo activo del burst glitter
+        bool win3DGlitterBurst = false;
         void startWinning();
         void updateWinningAnimation();
 
