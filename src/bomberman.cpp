@@ -531,6 +531,13 @@ static int countHostileEnemiesForPlayers() {
     return count;
 }
 
+static bool isVsResolutionCinematic(CinematicType type) {
+    return type == CinematicType::VsVictoryP1
+        || type == CinematicType::VsVictoryP2
+        || type == CinematicType::VsDraw
+        || type == CinematicType::VsDefeat;
+}
+
 // ============================== OpenGL: helpers ==============================
 
 static bool readTextFile(const std::string& filePath, std::string& out)
@@ -1718,6 +1725,7 @@ void Game::startVsRoundCinematic(CinematicType type, const std::string& videoPat
     state = GAME_CINEMATIC;
     currentCinematicType = type;
     nextStateAfterCinematic = GAME_PLAYING;
+    vsCinematicSkipRequested = false;
     loadLevelPending = false;
     pendingLevelAdvance = false;
     levelAdvanceTimer = 0.0f;
@@ -3227,7 +3235,12 @@ void Game::processInput() {
         }
         if (this->keys[GLFW_KEY_SPACE] == GLFW_PRESS) {
             this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;
-            cinematicPlayer.skip();
+            if (isVsResolutionCinematic(this->currentCinematicType)) {
+                // Para VS, forzamos fin controlado y dejamos que se aplique su post-acción.
+                vsCinematicSkipRequested = true;
+            } else {
+                cinematicPlayer.skip();
+            }
         }
         return;
     }
@@ -4157,7 +4170,12 @@ void Game::update() {
             isDone = isDone && audioFinished;
         }
 
+        if (isVsResolutionCinematic(currentCinematicType) && vsCinematicSkipRequested) {
+            isDone = true;
+        }
+
         if (isDone) {
+            vsCinematicSkipRequested = false;
             cinematicPlayer.close();
             
             // Parar BGM de cinematica si hay una en curso

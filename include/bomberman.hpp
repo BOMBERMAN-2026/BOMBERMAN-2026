@@ -156,6 +156,7 @@ private:
         ReturnToMenu
     };
     VsCinematicPostAction vsCinematicPostAction = VsCinematicPostAction::None;
+    bool vsCinematicSkipRequested = false;
 
     // VS: overlay de victoria (texto naranja) configurable.
     // Ajusta estos valores para mover/escalar el texto sobre el video.
