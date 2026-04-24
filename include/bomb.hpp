@@ -32,6 +32,7 @@ struct ExplosionSegment {
     glm::vec2 pos;          // Centro del tile en NDC
     std::string baseName;   // "explosion", "explosion_mid", "explosion_end"
     float rotation;         // Ángulo en radianes (0 para derecha, 90 arriba, etc.)
+    int dirIndex;           // 0=RIGHT, 1=UP, 2=LEFT, 3=DOWN, -1=CENTER
 };
 
 class Bomb {
