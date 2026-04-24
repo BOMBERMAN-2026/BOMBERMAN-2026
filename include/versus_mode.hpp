@@ -20,10 +20,10 @@ const std::vector<int>& levelToStage();
 // Primero que llegue a este número de wins gana el encuentro VS.
 int winsToEndMatch();
 
-// Cuenta cuántos jugadores siguen en ronda (no están en Game Over).
+// Cuenta cuántos jugadores siguen en pie en la ronda (estado Alive).
 int countPlayersStillInMatch(const std::vector<Player*>& players);
 
-// Devuelve el índice del último jugador que sigue en la ronda. Si no hay, -1.
+// Devuelve el índice del último jugador vivo en la ronda. Si no hay, -1.
 int findLastPlayerStillInMatchIndex(const std::vector<Player*>& players);
 
 // Devuelve true si todos los jugadores humanos están fuera del encuentro.

@@ -11,6 +11,7 @@
 #include "sprite_atlas.hpp"
 #include "bomb.hpp"
 #include "bomberman.hpp"
+#include "versus_mode.hpp"
 #include <iostream>
 
 extern class Game* bomberman;
@@ -183,7 +184,9 @@ void Player::updateDeathAnimation() {
         // Si no quedan vidas, nunca se respawnea.
         // Importante: fijar el sprite al último frame de muerte para no caer en el
         // sprite anterior (p.ej. mirando abajo) si el deltaTime hace saltar frames.
-        if (lives <= 0) {
+        const bool disableRespawnForVs =
+            (bomberman != nullptr) && VersusMode::isVersusMode(bomberman->mode);
+        if (lives <= 0 || disableRespawnForVs) {
             pendingRespawn = false;
             deathFrame = lastFrame;
             if (prefix) {

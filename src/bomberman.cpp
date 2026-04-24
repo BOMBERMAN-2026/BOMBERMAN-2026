@@ -1550,23 +1550,23 @@ void Game::ensureRenderResources() {
     CompileShaders();
     CreateCube();
     CreateSphere();
-    //CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
-    //CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
-    //CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
-    //CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
-    //CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
-    //CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
-    //CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
-    //CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
-    //CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
-    //CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
-    //CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
-    //CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
-    //CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
-    //CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
-    //CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
-    //CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
-    //CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
+    CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
+    CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
+    CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
+    CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
+    CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
+    CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
+    CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
+    CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
+    CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
+    CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
+    CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
+    CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
+    CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
+    CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
+    CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
+    CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
+    CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
     ensureOverlayWhiteTexture();
@@ -2150,21 +2150,18 @@ void Game::updateTimeUpSequence(float deltaTime) {
             }
         }
 
-        // Recargar el nivel CONSERVANDO las vidas (ya decrementadas arriba).
+        // Repetir el nivel con cinemática de carga y conservando vidas.
         AudioManager::get().stopBgm();
-        loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/true);
-        this->state = GAME_PLAYING;
-        std::string bgmFile;
-        if (currentLevelIndex == 0 || currentLevelIndex == 1) {
-            bgmFile = "resources/sounds/03 BGM 1.mp3";
-        } else if (currentLevelIndex == 2 || currentLevelIndex == 4) {
-            bgmFile = "resources/sounds/05 Boss BGM.mp3";
-        } else if (currentLevelIndex == 3) {
-            bgmFile = "resources/sounds/06 BGM 2.mp3";
-        }
-        if (!bgmFile.empty()) {
-            AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
-        }
+        this->state = GAME_CINEMATIC;
+        this->currentCinematicType = CinematicType::LevelStart;
+        this->nextStateAfterCinematic = GAME_PLAYING;
+        this->loadLevelPending = true;
+        this->pendingLoadPreserveLivesAndScore = true;
+
+        std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
+        cinematicPlayer.open(videoPath);
+
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
     }
 }
 
@@ -2332,9 +2329,9 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     lastDirKey = GLFW_KEY_UNKNOWN;
     lastDirKeyP2 = GLFW_KEY_UNKNOWN;
 
-    // Guardar progreso a preservar (solo Historia).
+    // Guardar progreso a preservar (Historia y VS; en Custom se reinicia siempre).
     std::vector<int> savedLives;
-    if (preserveLivesAndScore && !versus && !custom) {
+    if (preserveLivesAndScore && !custom) {
         savedLives.reserve(gPlayers.size());
         for (auto* p : gPlayers) {
             savedLives.push_back(p ? p->lives : 0);
@@ -2440,12 +2437,19 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         const std::string prefix = (i >= 0 && i < 4) ? kPlayerPrefixes[i] : "jugadorblanco";
         Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/i, prefix);
 
-        if (versus) {
-            // VS arcade: sin respawn/vidas acumuladas; morir = fuera de la ronda.
-            // Usamos `lives = 1` como flag simple "sigue en ronda".
-            p->lives = 1;
-        } else if (preserveLivesAndScore && i < (int)savedLives.size()) {
+        if (preserveLivesAndScore && i < (int)savedLives.size()) {
             p->lives = savedLives[i];
+            
+            // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente
+            if (versus && p->lives <= 0) {
+                p->lifeState = PlayerLifeState::DyingByEnemy;
+                p->deathFrame = 7; // Último frame de animación de muerte
+                p->currentSpriteName = p->spritePrefix + ".muerto.7";
+                p->isWalking = false;
+            }
+        } else if (versus) {
+            // En VS, los jugadores inician con 4 vidas (vs historia con 3)
+            p->lives = 4;
         }
 
         gPlayers.push_back(p);
@@ -2585,6 +2589,7 @@ void Game::startNewRun(GameMode newMode) {
         this->currentCinematicType = CinematicType::LevelStart;
         this->nextStateAfterCinematic = GAME_PLAYING;
         this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+        this->pendingLoadPreserveLivesAndScore = false;
 
         // Abrir el video de la cinemática del primer nivel
         std::string videoPath;
@@ -2608,6 +2613,7 @@ void Game::startNewRun(GameMode newMode) {
     this->currentCinematicType = CinematicType::LevelStart;
     this->nextStateAfterCinematic = GAME_PLAYING;
     this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+    this->pendingLoadPreserveLivesAndScore = false;
 
     // Abrir el video de la cinemática del primer nivel
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
@@ -2651,6 +2657,7 @@ void Game::advanceToNextLevel() {
         this->currentCinematicType = CinematicType::LevelStart;
         this->nextStateAfterCinematic = GAME_PLAYING;
         this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+        this->pendingLoadPreserveLivesAndScore = true;
 
         // Abrir el video de la cinemática del nivel.
         std::string videoPath;
@@ -2691,6 +2698,7 @@ void Game::advanceToNextLevel() {
     this->currentCinematicType = CinematicType::LevelStart;
     this->nextStateAfterCinematic = GAME_PLAYING;
     this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+    this->pendingLoadPreserveLivesAndScore = true;
 
     // Abrir el video de la cinemática del nivel.
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
@@ -4167,9 +4175,10 @@ void Game::update() {
             } else if (currentCinematicType == CinematicType::LevelStart) {
                 // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
                 if (loadLevelPending) {
-                    bool preserve = (currentLevelIndex > 0); // Solo preservar vidas/puntuación a partir del nivel 2
+                    const bool preserve = pendingLoadPreserveLivesAndScore;
                     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
                     loadLevelPending = false;
+                    pendingLoadPreserveLivesAndScore = false;
                     this->state = GAME_PLAYING;
 
                     playCurrentLevelBgm();
@@ -4183,9 +4192,21 @@ void Game::update() {
                 vsCinematicWinnerIndex = -1;
 
                 if (action == VsCinematicPostAction::RestartCurrentLevel) {
-                    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
-                    this->state = GAME_PLAYING;
-                    playCurrentLevelBgm();
+                    this->state = GAME_CINEMATIC;
+                    this->currentCinematicType = CinematicType::LevelStart;
+                    this->nextStateAfterCinematic = GAME_PLAYING;
+                    this->loadLevelPending = true;
+                    this->pendingLoadPreserveLivesAndScore = true;
+
+                    std::string videoPath;
+                    if (mode == GameMode::VsTwoPlayers) {
+                        videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode2Player.mp4");
+                    } else {
+                        videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode1Player.mp4");
+                    }
+                    cinematicPlayer.open(videoPath);
+
+                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
                 } else if (action == VsCinematicPostAction::AdvanceNextLevel) {
                     advanceToNextLevel();
                 } else if (action == VsCinematicPostAction::ReturnToMenu) {
@@ -4361,11 +4382,15 @@ void Game::update() {
             const bool noHostileEnemiesAlive = (hostileEnemiesAlive == 0);
             const bool timeUp = (levelTimeRemaining <= 0.0f);
 
+            int aliveHumans = 0;
             int survivingHumans = 0;
             const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
             for (int i = 0; i < humanSlots && i < (int)gPlayers.size(); ++i) {
                 Player* p = gPlayers[i];
                 if (!p) continue;
+                if (p->isAlive()) {
+                    ++aliveHumans;
+                }
                 if (!p->isGameOver()) {
                     ++survivingHumans;
                 }
@@ -4394,8 +4419,11 @@ void Game::update() {
                                           cinematicPath,
                                           winnerIndex);
                 } else {
-                    // Si gana un CPU/rival, derrota para los humanos.
-                    vsCinematicPostAction = VsCinematicPostAction::ReturnToMenu;
+                    // Si gana un CPU/rival: derrota de ronda.
+                    // Solo termina la partida si ya no queda ningún humano con vidas.
+                    vsCinematicPostAction = (survivingHumans == 0)
+                        ? VsCinematicPostAction::ReturnToMenu
+                        : VsCinematicPostAction::RestartCurrentLevel;
                     startVsRoundCinematic(CinematicType::VsDefeat,
                                           resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
                                           /*winnerIndex=*/-1);
@@ -4405,17 +4433,26 @@ void Game::update() {
 
             // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
             if (survivingPlayers == 0 && noHostileEnemiesAlive) {
-                vsCinematicPostAction = VsCinematicPostAction::RestartCurrentLevel;
+                vsCinematicPostAction = (survivingHumans == 0)
+                    ? VsCinematicPostAction::ReturnToMenu
+                    : VsCinematicPostAction::RestartCurrentLevel;
 
+                // Muerte simultánea total siempre se considera empate visualmente,
+                // aunque la post-acción pueda cerrar partida si no quedan vidas.
                 startVsRoundCinematic(CinematicType::VsDraw,
                                       resolveAssetPath("resources/video/vsMode/VsModeDraw.mp4"),
                                       /*winnerIndex=*/-1);
                 return;
             }
 
-            // Derrota: no quedan jugadores humanos y aún hay rivales/enemigos vivos.
-            if (survivingHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
-                vsCinematicPostAction = VsCinematicPostAction::ReturnToMenu;
+            // Sin humanos vivos durante la ronda:
+            // - Si aún les quedan vidas, se reinicia el nivel.
+            // - Si ya no quedan vidas, termina la partida y vuelve al menú.
+            // En ambos casos, la resolución visual de la ronda es derrota.
+            if (aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
+                vsCinematicPostAction = (survivingHumans == 0)
+                    ? VsCinematicPostAction::ReturnToMenu
+                    : VsCinematicPostAction::RestartCurrentLevel;
 
                 startVsRoundCinematic(CinematicType::VsDefeat,
                                       resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
@@ -4425,9 +4462,13 @@ void Game::update() {
 
             // Time Up "solo tiempo": empate sin descuento de vidas.
             if (timeUp) {
-                vsCinematicPostAction = VsCinematicPostAction::RestartCurrentLevel;
-                startVsRoundCinematic(CinematicType::VsDraw,
-                                      resolveAssetPath("resources/video/vsMode/VsModeDraw.mp4"),
+                vsCinematicPostAction = (survivingHumans == 0)
+                    ? VsCinematicPostAction::ReturnToMenu
+                    : VsCinematicPostAction::RestartCurrentLevel;
+                startVsRoundCinematic((survivingHumans == 0) ? CinematicType::VsDefeat : CinematicType::VsDraw,
+                                      resolveAssetPath((survivingHumans == 0)
+                                          ? "resources/video/vsMode/VsModeDefeat.mp4"
+                                          : "resources/video/vsMode/VsModeDraw.mp4"),
                                       /*winnerIndex=*/-1);
                 return;
             }

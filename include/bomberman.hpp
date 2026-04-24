@@ -211,6 +211,7 @@ private:
 
     // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
     bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel
+    bool pendingLoadPreserveLivesAndScore = false;
     float introCinematicElapsedSeconds = 0.0f;
     bool introExplosionPlayed = false;
     static constexpr float kIntroExplosionTriggerSeconds = 3.5f;
