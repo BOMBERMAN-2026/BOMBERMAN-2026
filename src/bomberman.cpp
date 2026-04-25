@@ -1557,23 +1557,23 @@ void Game::ensureRenderResources() {
     CompileShaders();
     CreateCube();
     CreateSphere();
-    CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
-    CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
-    CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
-    CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
-    CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
-    CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
-    CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
-    CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
-    CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
-    CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
-    CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
-    CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
-    CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
-    CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
-    CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
-    CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
-    CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
+    // CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
+    // CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
+    // CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
+    // CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
+    // CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
+    // CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
+    // CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
+    // CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
+    // CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
+    // CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
+    // CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
+    // CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
+    // CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
+    // CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
+    // CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
+    // CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
+    // CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
     Compile3DShaders();
     Compile3DTexturedShaders();
     ensureOverlayWhiteTexture();
@@ -3782,12 +3782,12 @@ const bool isFreeCamera3D =
 
     // ======================= Bombas (Jugador 1) =======================
     const bool p1BombByKeyboard =
-        (!shouldCaptureFirstPersonMouse && this->keys[GLFW_KEY_RIGHT_CONTROL] == GLFW_PRESS);
+        (!shouldCaptureFirstPersonMouse && this->keys[inGameMenu.controlsMenu.bombKey_P1] == GLFW_PRESS);
     const bool p1BombByMouse = (firstPersonLeftClick || firstPersonRightClick);
 
     if (p1->isAlive() && !p1->isGameOver() && (p1BombByKeyboard || p1BombByMouse)) {
         if (p1BombByKeyboard) {
-            this->keys[GLFW_KEY_RIGHT_CONTROL] = GLFW_REPEAT;
+            this->keys[inGameMenu.controlsMenu.bombKey_P1] = GLFW_REPEAT;
         }
 
         if (p1->canPlaceBomb()) {
