@@ -309,8 +309,6 @@ void ControlsMenu::readFromFile() {
     std::ifstream file(resolveAssetPath(path));
     std::string line;
 
-    std::cout << "########### READING FROM FILE ###########\n\n";
-
     if (file.is_open()) {
         while (std::getline(file, line)) {
             // Buscamos la posición del '='
@@ -345,26 +343,6 @@ void ControlsMenu::readFromFile() {
     } else {
         std::cout << "No se encontró archivo de config. Se usarán valores por defecto." << std::endl;
     }
-
-    std::cout << "bombKey_P1=" << bombKey_P1 << "\n";
-    std::cout << "detonateBombKey_P1=" << detonateBombKey_P1 << "\n";
-    std::cout << "upKey_P1=" << upKey_P1 << "\n";
-    std::cout << "leftKey_P1=" << leftKey_P1 << "\n";
-    std::cout << "downKey_P1=" << downKey_P1 << "\n";
-    std::cout << "rightKey_P1=" << rightKey_P1 << "\n";
-    
-    std::cout << "bombKey_P2=" << bombKey_P2 << "\n";
-    std::cout << "detonateBombKey_P2=" << detonateBombKey_P2 << "\n";
-    std::cout << "upKey_P2=" << upKey_P2 << "\n";
-    std::cout << "leftKey_P2=" << leftKey_P2 << "\n";
-    std::cout << "downKey_P2=" << downKey_P2 << "\n";
-    std::cout << "rightKey_P2=" << rightKey_P2 << "\n";
-
-
-    std::cout << "swap2D_3DKey=" << swap2D_3DKey << "\n";
-    std::cout << "swap3DCamenraKey=" << swap3DCameraKey << "\n";
-    std::cout << "swapWindowModeKey=" << swapWindowModeKey << "\n";
-    std::cout << "selectKey=" << selectKey << "\n";
 }
 
 void ControlsMenu::saveToNonTemps() {
@@ -438,28 +416,6 @@ void ControlsMenu::saveToFile() {
         file << "swap3DCamenraKey=" << swap3DCameraKey << "\n";
         file << "swapWindowModeKey=" << swapWindowModeKey << "\n";
         file << "selectKey=" << selectKey << "\n";
-
-        std::cout << "############# SAVING TO FILE ##############\n\n";
-
-        std::cout << "bombKey_P1=" << bombKey_P1 << "\n";
-        std::cout << "detonateBombKey_P1=" << detonateBombKey_P1 << "\n";
-        std::cout << "upKey_P1=" << upKey_P1 << "\n";
-        std::cout << "leftKey_P1=" << leftKey_P1 << "\n";
-        std::cout << "downKey_P1=" << downKey_P1 << "\n";
-        std::cout << "rightKey_P1=" << rightKey_P1 << "\n";
-        
-        std::cout << "bombKey_P2=" << bombKey_P2 << "\n";
-        std::cout << "detonateBombKey_P2=" << detonateBombKey_P2 << "\n";
-        std::cout << "upKey_P2=" << upKey_P2 << "\n";
-        std::cout << "leftKey_P2=" << leftKey_P2 << "\n";
-        std::cout << "downKey_P2=" << downKey_P2 << "\n";
-        std::cout << "rightKey_P2=" << rightKey_P2 << "\n";
-
-
-        std::cout << "swap2D_3DKey=" << swap2D_3DKey << "\n";
-        std::cout << "swap3DCamenraKey=" << swap3DCameraKey << "\n";
-        std::cout << "swapWindowModeKey=" << swapWindowModeKey << "\n";
-        std::cout << "selectKey=" << selectKey << "\n";
 
         file.close();
         std::cout << "Cambios de controles registrados con exito" << std::endl;
