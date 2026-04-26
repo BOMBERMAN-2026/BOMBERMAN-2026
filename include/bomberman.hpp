@@ -158,15 +158,17 @@ private:
     VsCinematicPostAction vsCinematicPostAction = VsCinematicPostAction::None;
     bool vsCinematicSkipRequested = false;
 
-    // VS: overlay de victoria (texto naranja) configurable.
-    // Ajusta estos valores para mover/escalar el texto sobre el video.
-    float vsVictoryOverlayRightXpx = 1560.0f;
-    float vsVictoryOverlayTopYpx = 361.0f;
-    float vsVictoryOverlayLineGapPx = 108.0f;
-    float vsVictoryOverlayGlyphWidthPx = 60.0f;
-    float vsVictoryOverlayGlyphHeightPx = 67.0f;
-    float vsVictoryOverlaySpacingPx = 8.0f;
+    // VS: overlay de victoria (texto naranja) — valores en proporcion a la resolucion de referencia 1920x1080.
+    float vsVictoryOverlayRightXRatio  = 1560.0f / 1920.0f;
+    float vsVictoryOverlayTopYRatio    = 361.0f  / 1080.0f;
+    float vsVictoryOverlayLineGapRatio = 108.0f  / 1080.0f;
+    float vsVictoryOverlayGlyphWRatio  = 60.0f   / 1920.0f;
+    float vsVictoryOverlayGlyphHRatio  = 67.0f   / 1080.0f;
+    float vsVictoryOverlaySpacingRatio = 8.0f    / 1920.0f;
     float vsVictoryOverlaySpaceWidthFactor = 0.60f;
+
+    // VS: tiempo vivo acumulado (segundos) para la partida actual.
+    float vsAliveSeconds = 0.0f;
 
 public:
     std::vector<int> playerScores;
@@ -209,6 +211,13 @@ private:
     // Ranking tras Game Over.
     float rankingScreenTimer = 0.0f;
     float rankingAutoExitSeconds = 5.0f;
+    bool isEnteringRankingName = false;
+    int rankingEntryIndex = -1;
+    std::string rankingPlayerName = "";
+    int rankingCurrentVocabIndex = 0;
+    int rankingPlayerOwner = 1;
+    float rankingInputTimer = 0.0f;
+    bool isRankingVs = false;
 
     // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
     bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel

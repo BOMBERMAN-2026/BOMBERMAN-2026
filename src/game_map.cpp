@@ -15,6 +15,8 @@
 #include <chrono>
 #include <cmath>
 
+extern uint32_t getHistoryRankingHighScore();
+
 namespace {
     constexpr float kPowerUpPickupFxDuration = 0.26f;
     constexpr float kPowerUpPickupFxStartScale = 0.32f;
@@ -936,7 +938,7 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
         renderHudUtils( playerScores->size() > 1 ? (*playerScores)[1] : 0, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
             // centro (highest score)
-        renderHudUtils(5050, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils(getHistoryRankingHighScore(), scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // VIDAS
             // esquina superior izquierda del HUD (1er player)

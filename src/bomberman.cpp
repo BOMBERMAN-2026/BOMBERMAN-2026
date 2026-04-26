@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -80,6 +80,7 @@ void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, 
 #include <utility>
 #include <fstream>
 #include <sstream>
+#include <iomanip>
 
 GameMap* gameMap;
 
@@ -101,6 +102,31 @@ GLuint overlayWhiteTexture = 0; // Textura blanca 1x1 para overlays/filtros en 3
 GLuint rankingHistoryTexture = 0;
 GLuint rankingVsTexture = 0;
 GLuint timeUpTexture = 0;      // Textura exclusiva de TimeUP.png
+
+struct HistoryRankingEntry {
+    std::string name;
+    int score = 0;
+    std::string stage;
+};
+
+struct VsRankingEntry {
+    std::string name;
+    int wins = 0;
+    int aliveSeconds = 0; // tiempo vivo total en segundos
+};
+
+static const std::vector<std::string> kRankingVocab = {
+    "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+    "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+    "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+    "<-", "End"
+};
+
+static constexpr int kRankingMaxEntries = 7;
+static const char* kHistoryRankingRelativePath = "resources/rankings/history_ranking.txt";
+static const char* kVsRankingRelativePath = "resources/rankings/vs_ranking.txt";
+static std::vector<HistoryRankingEntry> gHistoryRankingEntries;
+static std::vector<VsRankingEntry> gVsRankingEntries;
 
 // Estado de asistencia visual en primera persona (P1, P2).
 static float gFirstPersonBlockedHintTimer[2] = {0.0f, 0.0f};
@@ -550,6 +576,498 @@ static bool readTextFile(const std::string& filePath, std::string& out)
     ss << file.rdbuf();
     out = ss.str();
     return true;
+}
+
+static std::string trimAscii(const std::string& value)
+{
+    std::size_t begin = 0;
+    while (begin < value.size() && std::isspace((unsigned char)value[begin])) {
+        ++begin;
+    }
+
+    std::size_t end = value.size();
+    while (end > begin && std::isspace((unsigned char)value[end - 1])) {
+        --end;
+    }
+
+    return value.substr(begin, end - begin);
+}
+
+static std::string sanitizeRankingName(const std::string& rawName)
+{
+    std::string sanitized;
+    sanitized.reserve(6);
+
+    for (char rawChar : rawName) {
+        if (sanitized.size() >= 6) {
+            break;
+        }
+
+        const char c = (char)std::toupper((unsigned char)rawChar);
+        if ((c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-') {
+            sanitized.push_back(c);
+        }
+    }
+
+    if (sanitized.empty()) {
+        sanitized = "PLAYER";
+    }
+
+    return sanitized;
+}
+
+static void ensureSampleRankingFilesExist()
+{
+    const std::string historyPath = resolveAssetPath(kHistoryRankingRelativePath);
+    std::ifstream historyIn(historyPath.c_str(), std::ios::binary);
+    if (!historyIn.good()) {
+        std::ofstream historyOut(historyPath.c_str(), std::ios::trunc);
+        if (historyOut.is_open()) {
+            historyOut
+                << "ALFA;17500;6-6\n"
+                << "BETA;16200;4-2\n"
+                << "GAMMA;14950;3-6\n"
+                << "DELTA;13200;3-2\n"
+                << "EPSIL;12100;1-2\n"
+                << "ZETA;9800;1-2\n"
+                << "THETA;8300;1-2\n";
+        }
+    }
+
+    const std::string vsPath = resolveAssetPath(kVsRankingRelativePath);
+    std::ifstream vsIn(vsPath.c_str(), std::ios::binary);
+    if (!vsIn.good()) {
+        std::ofstream vsOut(vsPath.c_str(), std::ios::trunc);
+        if (vsOut.is_open()) {
+            vsOut
+                << "NOVA;7;365\n"
+                << "RAY;6;341\n"
+                << "LUX;6;319\n"
+                << "ARGO;5;287\n"
+                << "KIRA;4;244\n"
+                << "ORBIT;3;208\n"
+                << "ION;3;193\n";
+        }
+    }
+}
+
+static std::pair<int, int> parseStageKey(const std::string& stage)
+{
+    const std::string cleaned = trimAscii(stage);
+    const std::size_t dashPos = cleaned.find('-');
+    if (dashPos == std::string::npos) {
+        return std::make_pair(0, 0);
+    }
+
+    try {
+        const int major = std::max(0, std::stoi(cleaned.substr(0, dashPos)));
+        const int minor = std::max(0, std::stoi(cleaned.substr(dashPos + 1)));
+        return std::make_pair(major, minor);
+    } catch (...) {
+        return std::make_pair(0, 0);
+    }
+}
+
+static void loadHistoryRankingEntries()
+{
+    gHistoryRankingEntries.clear();
+
+    const std::string path = resolveAssetPath(kHistoryRankingRelativePath);
+    std::ifstream file(path.c_str(), std::ios::binary);
+    if (!file.is_open()) {
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::string trimmed = trimAscii(line);
+        if (trimmed.empty()) {
+            continue;
+        }
+
+        std::stringstream ss(trimmed);
+        std::string namePart;
+        std::string scorePart;
+        std::string stagePart;
+
+        if (!std::getline(ss, namePart, ';') ||
+            !std::getline(ss, scorePart, ';') ||
+            !std::getline(ss, stagePart, ';')) {
+            continue;
+        }
+
+        HistoryRankingEntry entry;
+        entry.name = sanitizeRankingName(trimAscii(namePart));
+        entry.stage = trimAscii(stagePart);
+
+        if (entry.stage.empty()) {
+            entry.stage = "0-0";
+        }
+
+        try {
+            entry.score = std::max(0, std::stoi(trimAscii(scorePart)));
+        } catch (...) {
+            continue;
+        }
+
+        gHistoryRankingEntries.push_back(entry);
+        if ((int)gHistoryRankingEntries.size() >= kRankingMaxEntries) {
+            break;
+        }
+    }
+
+    std::sort(gHistoryRankingEntries.begin(), gHistoryRankingEntries.end(),
+              [](const HistoryRankingEntry& a, const HistoryRankingEntry& b) {
+                  if (a.score != b.score) {
+                      return a.score > b.score;
+                  }
+                  const std::pair<int, int> stageA = parseStageKey(a.stage);
+                  const std::pair<int, int> stageB = parseStageKey(b.stage);
+                  if (stageA.first != stageB.first) {
+                      return stageA.first > stageB.first;
+                  }
+                  return stageA.second > stageB.second;
+              });
+}
+
+static void loadVsRankingEntries()
+{
+    gVsRankingEntries.clear();
+
+    const std::string path = resolveAssetPath(kVsRankingRelativePath);
+    std::ifstream file(path.c_str(), std::ios::binary);
+    if (!file.is_open()) {
+        return;
+    }
+
+    std::string line;
+    while (std::getline(file, line)) {
+        const std::string trimmed = trimAscii(line);
+        if (trimmed.empty()) {
+            continue;
+        }
+
+        std::stringstream ss(trimmed);
+        std::string namePart;
+        std::string winsPart;
+        std::string aliveMsPart;
+
+        if (!std::getline(ss, namePart, ';') ||
+            !std::getline(ss, winsPart, ';') ||
+            !std::getline(ss, aliveMsPart, ';')) {
+            continue;
+        }
+
+        VsRankingEntry entry;
+        entry.name = sanitizeRankingName(trimAscii(namePart));
+
+        try {
+            entry.wins = std::max(0, std::stoi(trimAscii(winsPart)));
+            entry.aliveSeconds = std::max(0, std::stoi(trimAscii(aliveMsPart)));
+        } catch (...) {
+            continue;
+        }
+
+        gVsRankingEntries.push_back(entry);
+        if ((int)gVsRankingEntries.size() >= kRankingMaxEntries) {
+            break;
+        }
+    }
+}
+
+static bool saveHistoryRankingEntries()
+{
+    const std::string path = resolveAssetPath(kHistoryRankingRelativePath);
+    std::ofstream file(path.c_str(), std::ios::trunc);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    for (const auto& entry : gHistoryRankingEntries) {
+        file << entry.name << ';'
+             << std::max(0, entry.score) << ';'
+             << entry.stage << '\n';
+    }
+
+    return true;
+}
+
+static bool saveVsRankingEntries()
+{
+    const std::string path = resolveAssetPath(kVsRankingRelativePath);
+    std::ofstream file(path.c_str(), std::ios::trunc);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    for (const auto& entry : gVsRankingEntries) {
+        file << entry.name << ';'
+             << std::max(0, entry.wins) << ';'
+             << std::max(0, entry.aliveSeconds) << '\n';
+    }
+
+    return true;
+}
+
+// Devuelve el indice de la entrada nueva en el ranking VS, o -1 si no entra en la tabla.
+static int updateVsRankingForCurrentRun(const std::vector<int>& playerScores, int aliveSeconds)
+{
+    if (playerScores.empty()) return -1;
+
+    // El ganador es quien tiene mas victorias (scores[i] = wins en VS)
+    int bestWins = -1;
+    int bestIndex = 0;
+    for (int i = 0; i < (int)playerScores.size(); ++i) {
+        if (playerScores[i] > bestWins) {
+            bestWins = playerScores[i];
+            bestIndex = i;
+        }
+    }
+    if (bestWins <= 0) return -1;  // nadie ha ganado nada
+
+    // Comprobar si entra en el ranking
+    if ((int)gVsRankingEntries.size() >= kRankingMaxEntries) {
+        const VsRankingEntry& last = gVsRankingEntries.back();
+        if (bestWins < last.wins) return -1;
+        if (bestWins == last.wins && aliveSeconds <= last.aliveSeconds) return -1;
+    }
+
+    VsRankingEntry entry;
+    entry.name = "";
+    entry.wins = bestWins;
+    entry.aliveSeconds = aliveSeconds;
+
+    gVsRankingEntries.push_back(entry);
+    std::sort(gVsRankingEntries.begin(), gVsRankingEntries.end(),
+              [](const VsRankingEntry& a, const VsRankingEntry& b) {
+                  if (a.wins != b.wins) return a.wins > b.wins;
+                  return a.aliveSeconds > b.aliveSeconds;
+              });
+
+    if ((int)gVsRankingEntries.size() > kRankingMaxEntries) {
+        gVsRankingEntries.resize(kRankingMaxEntries);
+    }
+
+    int insertedIndex = -1;
+    for (int i = 0; i < (int)gVsRankingEntries.size(); ++i) {
+        if (gVsRankingEntries[i].name == "" && gVsRankingEntries[i].wins == bestWins
+            && gVsRankingEntries[i].aliveSeconds == aliveSeconds) {
+            insertedIndex = i;
+            break;
+        }
+    }
+
+    saveVsRankingEntries();
+    return insertedIndex;
+}
+
+static int updateHistoryRankingForCurrentRun(GameMode mode, const std::vector<int>& scores, const std::string& stageLabel, int& outPlayerOwner)
+{
+    const bool historyMode = (mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers);
+    if (!historyMode || scores.empty()) {
+        return -1;
+    }
+
+    int finalScore = std::max(0, scores[0]);
+    outPlayerOwner = 1;
+    if (scores.size() > 1 && scores[1] > finalScore) {
+        finalScore = scores[1];
+        outPlayerOwner = 2;
+    }
+
+    if (gHistoryRankingEntries.size() >= kRankingMaxEntries) {
+        const int lowestScore = gHistoryRankingEntries.back().score;
+        if (finalScore <= lowestScore) {
+            return -1;
+        }
+    }
+
+    HistoryRankingEntry entry;
+    entry.name = "";
+    entry.score = finalScore;
+    entry.stage = stageLabel.empty() ? "0-0" : stageLabel;
+
+    gHistoryRankingEntries.push_back(entry);
+    std::sort(gHistoryRankingEntries.begin(), gHistoryRankingEntries.end(),
+              [](const HistoryRankingEntry& a, const HistoryRankingEntry& b) {
+                  if (a.score != b.score) {
+                      return a.score > b.score;
+                  }
+                  const std::pair<int, int> stageA = parseStageKey(a.stage);
+                  const std::pair<int, int> stageB = parseStageKey(b.stage);
+                  if (stageA.first != stageB.first) {
+                      return stageA.first > stageB.first;
+                  }
+                  return stageA.second > stageB.second;
+              });
+
+    if ((int)gHistoryRankingEntries.size() > kRankingMaxEntries) {
+        gHistoryRankingEntries.resize(kRankingMaxEntries);
+    }
+
+    int insertedIndex = -1;
+    for (int i = 0; i < (int)gHistoryRankingEntries.size(); ++i) {
+        if (gHistoryRankingEntries[i].name == "" && gHistoryRankingEntries[i].score == finalScore && gHistoryRankingEntries[i].stage == entry.stage) {
+            insertedIndex = i;
+            break;
+        }
+    }
+
+    saveHistoryRankingEntries();
+    return insertedIndex;
+}
+
+static void refreshRankingData()
+{
+    ensureSampleRankingFilesExist();
+    loadHistoryRankingEntries();
+    loadVsRankingEntries();
+}
+
+uint32_t getHistoryRankingHighScore()
+{
+    uint32_t highScore = 0;
+    for (const auto& entry : gHistoryRankingEntries) {
+        highScore = std::max<uint32_t>(highScore, (uint32_t)std::max(0, entry.score));
+    }
+    return highScore;
+}
+
+static bool resolveYellowGlyphSpriteName(char rawChar, std::string& outSpriteName)
+{
+    if (rawChar == ' ') {
+        outSpriteName.clear();
+        return false;
+    }
+
+    const char glyph = (char)std::toupper((unsigned char)rawChar);
+    if ((glyph >= 'A' && glyph <= 'Z') || (glyph >= '0' && glyph <= '9')) {
+        outSpriteName = std::string(1, glyph) + "_Ama";
+        return true;
+    }
+
+    if (glyph == '-' || glyph == '!' || glyph == '.' || glyph == ':') {
+        outSpriteName = std::string(1, glyph) + "_Ama";
+        return true;
+    }
+
+    outSpriteName.clear();
+    return false;
+}
+
+static void drawYellowTextLeftPx(const std::string& text,
+                                 float leftXpx,
+                                 float topYpx,
+                                 float glyphWidthPx,
+                                 float glyphHeightPx,
+                                 float spacingPx,
+                                 float spaceWidthFactor,
+                                 const glm::vec4& tint)
+{
+    if (shader == 0 || VAO == 0 || vocabAmarilloTexture == 0 || text.empty()) {
+        return;
+    }
+
+    const float spaceWidthPx = glyphWidthPx * std::max(0.0f, spaceWidthFactor);
+    const float glyphCenterYpx = topYpx + glyphHeightPx * 0.5f;
+    float cursorX = leftXpx;
+    bool hasToken = false;
+
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+    glUniform1f(uniformFlipX, 0.0f);
+    glUniform1f(uniformWhiteFlash, 0.0f);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, vocabAmarilloTexture);
+
+    for (char rawChar : text) {
+        float advance = 0.0f;
+        bool shouldDraw = false;
+        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+
+        if (rawChar == ' ') {
+            advance = spaceWidthPx;
+        } else {
+            std::string spriteName;
+            if (!resolveYellowGlyphSpriteName(rawChar, spriteName) ||
+                !getUvRectForSprite(gVocabAmarilloAtlas, spriteName, uvRect)) {
+                continue;
+            }
+            advance = glyphWidthPx;
+            shouldDraw = true;
+        }
+
+        if (hasToken) {
+            cursorX += spacingPx;
+        }
+
+        if (shouldDraw) {
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, glm::vec3(cursorX + glyphWidthPx * 0.5f, glyphCenterYpx, 0.0f));
+            model = glm::scale(model, glm::vec3(glyphWidthPx * 0.5f, -glyphHeightPx * 0.5f, 1.0f));
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        }
+
+        cursorX += advance;
+        hasToken = true;
+    }
+}
+
+static float measureYellowTextWidthPx(const std::string& text,
+                                      float glyphWidthPx,
+                                      float spacingPx,
+                                      float spaceWidthFactor)
+{
+    if (text.empty()) {
+        return 0.0f;
+    }
+
+    const float spaceWidthPx = glyphWidthPx * std::max(0.0f, spaceWidthFactor);
+    float width = 0.0f;
+    bool hasToken = false;
+
+    for (char rawChar : text) {
+        float advance = 0.0f;
+        if (rawChar == ' ') {
+            advance = spaceWidthPx;
+        } else {
+            std::string spriteName;
+            if (!resolveYellowGlyphSpriteName(rawChar, spriteName)) {
+                continue;
+            }
+            advance = glyphWidthPx;
+        }
+
+        if (hasToken) {
+            width += spacingPx;
+        }
+        width += advance;
+        hasToken = true;
+    }
+
+    return width;
+}
+
+static void drawYellowTextRightPx(const std::string& text,
+                                  float rightXpx,
+                                  float topYpx,
+                                  float glyphWidthPx,
+                                  float glyphHeightPx,
+                                  float spacingPx,
+                                  float spaceWidthFactor,
+                                  const glm::vec4& tint)
+{
+    const float width = measureYellowTextWidthPx(text, glyphWidthPx, spacingPx, spaceWidthFactor);
+    const float leftX = rightXpx - width;
+    drawYellowTextLeftPx(text,
+                         leftX,
+                         topYpx,
+                         glyphWidthPx,
+                         glyphHeightPx,
+                         spacingPx,
+                         spaceWidthFactor,
+                         tint);
 }
 
 static bool resolveOrangeGlyphSpriteName(char rawChar, std::string& outSpriteName)
@@ -1788,12 +2306,9 @@ void Game::renderVsVictoryStatsOverlay() {
     glDisable(GL_DEPTH_TEST);
     glUseProgram(shader);
 
-    const glm::mat4 projection = glm::ortho(0.0f,
-                                            (float)std::max(1, WIDTH),
-                                            (float)std::max(1, HEIGHT),
-                                            0.0f,
-                                            -1.0f,
-                                            1.0f);
+    const float W = (float)std::max(1, WIDTH);
+    const float H = (float)std::max(1, HEIGHT);
+    const glm::mat4 projection = glm::ortho(0.0f, W, H, 0.0f, -1.0f, 1.0f);
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
     glUniform1i(uniformTexture, 0);
     glUniform1f(uniformFlipX, 0.0f);
@@ -1801,21 +2316,29 @@ void Game::renderVsVictoryStatsOverlay() {
 
     glBindVertexArray(VAO);
 
+    // Escalar coordenadas desde proporciones relativas
+    const float rightX  = vsVictoryOverlayRightXRatio  * W;
+    const float topY    = vsVictoryOverlayTopYRatio    * H;
+    const float lineGap = vsVictoryOverlayLineGapRatio * H;
+    const float glyphW  = vsVictoryOverlayGlyphWRatio  * W;
+    const float glyphH  = vsVictoryOverlayGlyphHRatio  * H;
+    const float spacing = vsVictoryOverlaySpacingRatio * W;
+
     drawOrangeTextCenteredPx(lineWins,
-                             vsVictoryOverlayRightXpx,
-                             vsVictoryOverlayTopYpx,
-                             vsVictoryOverlayGlyphWidthPx,
-                             vsVictoryOverlayGlyphHeightPx,
-                             vsVictoryOverlaySpacingPx,
+                             rightX,
+                             topY,
+                             glyphW,
+                             glyphH,
+                             spacing,
                              vsVictoryOverlaySpaceWidthFactor,
                              glm::vec4(1.0f));
 
     drawOrangeTextCenteredPx(lineLosses,
-                             vsVictoryOverlayRightXpx,
-                             vsVictoryOverlayTopYpx + vsVictoryOverlayLineGapPx,
-                             vsVictoryOverlayGlyphWidthPx,
-                             vsVictoryOverlayGlyphHeightPx,
-                             vsVictoryOverlaySpacingPx,
+                             rightX,
+                             topY + lineGap,
+                             glyphW,
+                             glyphH,
+                             spacing,
                              vsVictoryOverlaySpaceWidthFactor,
                              glm::vec4(1.0f));
 
@@ -1913,6 +2436,34 @@ void Game::enterRankingScreen() {
         const std::string rankingVsPath = resolveAssetPath("resources/sprites/rankings/FondoRankingVs.jpg");
         rankingVsTexture = LoadTexture(rankingVsPath.c_str());
     }
+
+    refreshRankingData();
+    isEnteringRankingName = false;
+    rankingPlayerName = "";
+    rankingCurrentVocabIndex = 0;
+    rankingEntryIndex = -1;
+
+    const bool vsMode = VersusMode::isVersusMode(mode);
+    if (vsMode) {
+        // Ranking VS: actualizar con victorias + tiempo vivo acumulado
+        int idx = updateVsRankingForCurrentRun(playerScores, (int)vsAliveSeconds);
+        if (idx != -1) {
+            isEnteringRankingName = true;
+            rankingEntryIndex = idx;
+            rankingPlayerOwner = 1; // en VS siempre controla P1 (o el humano ganador)
+        }
+    } else {
+        // Ranking Historia
+        int owner = 1;
+        int idx = updateHistoryRankingForCurrentRun(mode, playerScores, currentGameLevel, owner);
+        if (idx != -1) {
+            isEnteringRankingName = true;
+            rankingEntryIndex = idx;
+            rankingPlayerOwner = owner;
+        }
+    }
+
+    rankingAutoExitSeconds = 15.0f; // NEW timeout 15 seconds
 
     AudioManager::get().stopBgm();
     AudioManager::get().playBgm(resolveAssetPath("resources/sounds/10 High Scores.mp3"), /*loop=*/true, 0.35f);
@@ -2327,6 +2878,7 @@ void Game::renderTimeUpOverlay(float aspect) {
 // Carga completa de un nivel.
 void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     ensureGameplayAssets();
+    refreshRankingData();
 
     const bool custom = customGameMode.isActive();
     const bool versus = (!custom && VersusMode::isVersusMode(mode));
@@ -2579,6 +3131,7 @@ void Game::startNewRun(GameMode newMode) {
     versusRoundNumber = 1;
     currentLevelHadEnemies = false;
     playerScores.clear();
+    vsAliveSeconds = 0.0f;
     continueSequenceActive = false;
     continueShowingGameOver = false;
     continueTimerSeconds = 0.0f;
@@ -2685,16 +3238,17 @@ void Game::advanceToNextLevel() {
 
     const int nextIndex = currentLevelIndex + 1;
     if (nextIndex >= (int)levelSequence.size()) {
-        // No hay ranking ni pantalla de victoria: volver al menú.
-        if (mode == GameMode::HistoryTwoPlayers) {
-            // Reproducir cinematica fin de historia antes de volver a menu.
+        // Ultimo nivel completado: ir al ranking.
+        if (mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) {
+            // Reproducir cinematica fin de historia y despues ir a ranking.
             this->state = GAME_CINEMATIC;
             this->currentCinematicType = CinematicType::HistoryEnd;
-            this->nextStateAfterCinematic = GAME_MENU;
+            this->nextStateAfterCinematic = GAME_RANKING;
             std::string videoPath = resolveAssetPath("resources/video/HistoryEnd.mp4");
             cinematicPlayer.open(videoPath);
         } else {
-            returnToMenuFromGame(/*resetRun=*/true);
+            // Sin cinematica: ir directamente al ranking.
+            enterRankingScreen();
         }
         return;
     }
@@ -2741,7 +3295,10 @@ void Game::returnToMenuFromGame(bool resetRun) {
         versusRoundNumber = 1;
         currentLevelHadEnemies = false;
         playerScores.clear();
+        vsAliveSeconds = 0.0f;
     }
+    rankingEntryIndex = -1;
+    isEnteringRankingName = false;
 
     state = GAME_MENU;
     init();
@@ -3264,11 +3821,7 @@ void Game::processInput() {
             this->firstPersonMouseInitialized = false;
         }
 
-        if (this->keys[GLFW_KEY_ENTER] == GLFW_PRESS ||
-            this->keys[GLFW_KEY_SPACE] == GLFW_PRESS ||
-            this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
-            this->keys[GLFW_KEY_ENTER] = GLFW_REPEAT;
-            this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;
+        if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
             this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
             returnToMenuFromGame(/*resetRun=*/true);
         }
@@ -4003,7 +4556,7 @@ void Game::update() {
         if (menuScreen.shouldStartGame()) {
             GameMode selectedMode = menuScreen.getSelectedMode();
             // TODO: Cambiar esto para que cada modo tenga su propia cinemática.
-            if (selectedMode == GameMode::HistoryTwoPlayers) {
+            if (selectedMode == GameMode::HistoryOnePlayer || selectedMode == GameMode::HistoryTwoPlayers) {
                 // Reproducir cinematica antes de empezar la partida (solo para Historia 2P)
                 this->mode = selectedMode;
                 this->state = GAME_CINEMATIC;
@@ -4018,7 +4571,7 @@ void Game::update() {
 
 
                 menuScreen.resetTransition();
-            } else if (selectedMode == GameMode::VsTwoPlayers) {
+            } else if (selectedMode == GameMode::VsOnePlayer || selectedMode == GameMode::VsTwoPlayers) {
                 // Reproducir cinematica antes de empezar la partida (solo para Versus 2P)
                 this->mode = selectedMode;
                 this->state = GAME_CINEMATIC;
@@ -4119,8 +4672,125 @@ void Game::update() {
 
     // ========== RANKING ==========
     if (this->state == GAME_RANKING) {
+        if (isEnteringRankingName) {
+            rankingInputTimer += deltaTime;
+
+            GLint btnUp    = (rankingPlayerOwner == 2) ? GLFW_KEY_W   : GLFW_KEY_UP;
+            GLint btnDown  = (rankingPlayerOwner == 2) ? GLFW_KEY_S   : GLFW_KEY_DOWN;
+            GLint btnEnter = (rankingPlayerOwner == 2) ? GLFW_KEY_R   : GLFW_KEY_ENTER;
+            GLint btnSpace = (rankingPlayerOwner == 2) ? GLFW_KEY_X   : GLFW_KEY_SPACE;
+
+            bool movedUp     = false;
+            bool movedDown   = false;
+            bool pressedEnter = false;
+
+            if (this->keys[btnUp] == GLFW_PRESS) {
+                movedUp = true;
+                this->keys[btnUp] = GLFW_REPEAT;
+            }
+            if (this->keys[btnDown] == GLFW_PRESS) {
+                movedDown = true;
+                this->keys[btnDown] = GLFW_REPEAT;
+            }
+            if (this->keys[btnEnter] == GLFW_PRESS || this->keys[btnSpace] == GLFW_PRESS) {
+                pressedEnter = true;
+                this->keys[btnEnter] = GLFW_REPEAT;
+                this->keys[btnSpace] = GLFW_REPEAT;
+            }
+
+            if (movedUp) {
+                // UP = letra anterior (ciclo: A -> End)
+                rankingCurrentVocabIndex--;
+                if (rankingCurrentVocabIndex < 0) {
+                    rankingCurrentVocabIndex = (int)kRankingVocab.size() - 1;
+                }
+            } else if (movedDown) {
+                // DOWN = letra siguiente (ciclo: End -> A)
+                rankingCurrentVocabIndex++;
+                if (rankingCurrentVocabIndex >= (int)kRankingVocab.size()) {
+                    rankingCurrentVocabIndex = 0;
+                }
+            } else if (pressedEnter) {
+                std::string sel = kRankingVocab[rankingCurrentVocabIndex];
+                if (sel == "End") {
+                    // Confirmar nombre y esperar 5s antes de salir
+                    isEnteringRankingName = false;
+                    if (rankingEntryIndex >= 0) {
+                        std::string finalName = rankingPlayerName.empty() ? "PLAYER" : rankingPlayerName;
+                        if (VersusMode::isVersusMode(mode)) {
+                            if (rankingEntryIndex < (int)gVsRankingEntries.size()) {
+                                gVsRankingEntries[rankingEntryIndex].name = finalName;
+                                saveVsRankingEntries();
+                            }
+                        } else {
+                            if (rankingEntryIndex < (int)gHistoryRankingEntries.size()) {
+                                gHistoryRankingEntries[rankingEntryIndex].name = finalName;
+                                saveHistoryRankingEntries();
+                            }
+                        }
+                    }
+                    rankingScreenTimer = 0.0f;
+                    rankingAutoExitSeconds = 5.0f; // Esperar 5s tras confirmar nombre
+                } else if (sel == "<-") {
+                    // Borrar último carácter
+                    if (!rankingPlayerName.empty()) {
+                        rankingPlayerName.pop_back();
+                    }
+                    // Mantener posición en <-
+                } else {
+                    // Añadir carácter al nombre (máx 6) y, si llega a 6, terminar edición
+                    if ((int)rankingPlayerName.size() < 6) {
+                        rankingPlayerName += sel;
+                    }
+                    if ((int)rankingPlayerName.size() >= 6) {
+                        // Nombre completo: confirmar automaticamente
+                        isEnteringRankingName = false;
+                        if (rankingEntryIndex >= 0) {
+                            std::string finalName = rankingPlayerName;
+                            if (VersusMode::isVersusMode(mode)) {
+                                if (rankingEntryIndex < (int)gVsRankingEntries.size()) {
+                                    gVsRankingEntries[rankingEntryIndex].name = finalName;
+                                    saveVsRankingEntries();
+                                }
+                            } else {
+                                if (rankingEntryIndex < (int)gHistoryRankingEntries.size()) {
+                                    gHistoryRankingEntries[rankingEntryIndex].name = finalName;
+                                    saveHistoryRankingEntries();
+                                }
+                            }
+                        }
+                        rankingScreenTimer = 0.0f;
+                        rankingAutoExitSeconds = 5.0f;
+                    } else {
+                        // Volver a A para el siguiente carácter
+                        rankingCurrentVocabIndex = 0;
+                    }
+                }
+            }
+            return;
+        }
+
+        // Temporizador de pantalla (sale automaticamente o tras 5s confirmando nombre)
         rankingScreenTimer += deltaTime;
         if (rankingScreenTimer >= rankingAutoExitSeconds) {
+            // Si se acabo el tiempo sin confirmar nombre, guardar lo que haya
+            if (isEnteringRankingName) {
+                isEnteringRankingName = false;
+                if (rankingEntryIndex >= 0) {
+                    std::string finalName = rankingPlayerName.empty() ? "PLAYER" : rankingPlayerName;
+                    if (VersusMode::isVersusMode(mode)) {
+                        if (rankingEntryIndex < (int)gVsRankingEntries.size()) {
+                            gVsRankingEntries[rankingEntryIndex].name = finalName;
+                            saveVsRankingEntries();
+                        }
+                    } else {
+                        if (rankingEntryIndex < (int)gHistoryRankingEntries.size()) {
+                            gHistoryRankingEntries[rankingEntryIndex].name = finalName;
+                            saveHistoryRankingEntries();
+                        }
+                    }
+                }
+            }
             returnToMenuFromGame(/*resetRun=*/true);
         }
         return;
@@ -4188,8 +4858,8 @@ void Game::update() {
             } else if (currentCinematicType == CinematicType::HistoryStart) {
                 startNewRun(mode); // Actualiza el state a GAME_PLAYING e inicia la partida con el modo seleccionado previamente.
             } else if (currentCinematicType == CinematicType::HistoryEnd) {
-                // No hay rankings ni nada, así que simplemente volvemos al menú.
-                returnToMenuFromGame(/*resetRun=*/true);
+                // Ultima cinematica de historia: ir al ranking.
+                enterRankingScreen();
             } else if (currentCinematicType == CinematicType::LevelStart) {
                 // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
                 if (loadLevelPending) {
@@ -4228,7 +4898,8 @@ void Game::update() {
                 } else if (action == VsCinematicPostAction::AdvanceNextLevel) {
                     advanceToNextLevel();
                 } else if (action == VsCinematicPostAction::ReturnToMenu) {
-                    returnToMenuFromGame(/*resetRun=*/true);
+                    // Al final de la partida VS mostrar el ranking antes de volver al menu
+                    enterRankingScreen();
                 } else {
                     this->state = GAME_PLAYING;
                     playCurrentLevelBgm();
@@ -4243,6 +4914,11 @@ void Game::update() {
         if (this->state != GAME_PLAYING) {
             return;
         }
+    }
+
+    // Acumular tiempo vivo en modo VS
+    if (VersusMode::isVersusMode(mode) && !this->inGameMenu.showInGameMenu) {
+        vsAliveSeconds += deltaTime;
     }
 
     // ========== RESTO DEL JUEGO ==========
@@ -6180,6 +6856,204 @@ void Game::render() {
         glBindTexture(GL_TEXTURE_2D, rankingTexture);
         glBindVertexArray(VAO);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        if (vocabAmarilloTexture != 0) {
+            const glm::mat4 pxProjection = glm::ortho(0.0f,
+                                                      (float)std::max(1, WIDTH),
+                                                      (float)std::max(1, HEIGHT),
+                                                      0.0f,
+                                                      -1.0f,
+                                                      1.0f);
+            glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(pxProjection));
+            glUniform1i(uniformTexture, 0);
+            glUniform1f(uniformFlipX, 0.0f);
+            glUniform1f(uniformWhiteFlash, 0.0f);
+
+            const bool versus = VersusMode::isVersusMode(mode);
+            // Coordenadas relativas a la resolución de referencia 1920x1080
+            const float refW = 1920.0f;
+            const float refH = 1080.0f;
+            const float scaleX = (float)std::max(1, WIDTH)  / refW;
+            const float scaleY = (float)std::max(1, HEIGHT) / refH;
+            const float titleX        = 250.0f  * scaleX;
+            const float titleY        = 214.0f  * scaleY;
+            const float lineStartY    = 316.0f  * scaleY;
+            const float lineGap       = 108.5f  * scaleY;
+            const float glyphW        = 36.0f   * scaleX;
+            const float glyphH        = 36.0f   * scaleY;
+            const float spacing       = 1.0f    * scaleX;
+            const float stageColumnX  = 666.0f  * scaleX;
+            const float scoreColumnX  = 890.0f  * scaleX;
+            const float nameColumnLeftX = 1210.0f * scaleX;
+
+            if (versus) {
+                const float winsColumnX     = 680.0f  * scaleX;
+                const float timeColumnX     = 930.0f  * scaleX;
+                const float vsNameColumnX   = 1210.0f  * scaleX;
+
+                for (int i = 0; i < (int)gVsRankingEntries.size() && i < kRankingMaxEntries; ++i) {
+                    const VsRankingEntry& entry = gVsRankingEntries[i];
+                    const float lineY = lineStartY + lineGap * (float)i;
+
+                    // Nombre (o buffer de edicion)
+                    const bool isCurrentVsEntry = (rankingEntryIndex >= 0 && i == rankingEntryIndex);
+                    const std::string& vsDisplayName = isCurrentVsEntry ? rankingPlayerName : entry.name;
+
+                    drawYellowTextLeftPx(vsDisplayName,
+                                         vsNameColumnX,
+                                         lineY,
+                                         glyphW, glyphH, spacing, 0.80f,
+                                         glm::vec4(1.0f));
+
+                    // Cursor AmaBla si se esta editando esta entrada
+                    if (isCurrentVsEntry && isEnteringRankingName) {
+                        float nameWidth = 0.0f;
+                        for (char c : rankingPlayerName) nameWidth += glyphW + spacing;
+                        std::string selSprite = kRankingVocab[rankingCurrentVocabIndex] + "_AmaBla";
+                        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+                        if (getUvRectForSprite(gVocabAmarilloAtlas, selSprite, uvRect)) {
+                            float cursorX = vsNameColumnX + nameWidth;
+                            float glyphCenterY = lineY + glyphH * 0.5f;
+                            glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                            glUniform1f(uniformFlipX, 0.0f);
+                            glUniform1f(uniformWhiteFlash, 0.0f);
+                            glActiveTexture(GL_TEXTURE0);
+                            glBindTexture(GL_TEXTURE_2D, vocabAmarilloTexture);
+                            glm::mat4 modelMat(1.0f);
+                            modelMat = glm::translate(modelMat, glm::vec3(cursorX + glyphW * 0.5f, glyphCenterY, 0.0f));
+                            modelMat = glm::scale(modelMat, glm::vec3(glyphW * 0.5f, -glyphH * 0.5f, 1.0f));
+                            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(modelMat));
+                            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                        }
+                    }
+
+                    // 1P label para la entrada actual
+                    //if (isCurrentVsEntry && rankingEntryIndex >= 0) {
+                    //    float pX = winsColumnX + (6.0f * (glyphW + spacing)) + 40.0f * scaleX;
+                    //    drawYellowTextLeftPx("1P",
+                    //                         pX, lineY,
+                    //                         glyphW, glyphH, spacing, 0.80f,
+                    //                         glm::vec4(1.0f));
+                    //}
+
+                    // 1P/2P: se muestra siempre mientras la pantalla de ranking sea de la partida actual
+                    if (isCurrentVsEntry && rankingEntryIndex >= 0) {
+                        float pX = nameColumnLeftX + (6.0f * (glyphW + spacing)) + 40.0f * scaleX;
+                        std::string pText = (rankingPlayerOwner == 2) ? "2P" : "1P";
+                        drawYellowTextLeftPx(pText,
+                                             pX,
+                                             lineY,
+                                             glyphW,
+                                             glyphH,
+                                             spacing,
+                                             0.80f,
+                                             glm::vec4(1.0f));
+                    }
+
+                    // Victorias
+                    drawYellowTextLeftPx(std::to_string(entry.wins),
+                                         winsColumnX,
+                                         lineY,
+                                         glyphW, glyphH, spacing, 0.80f,
+                                         glm::vec4(1.0f));
+
+                    // Tiempo vivo mm:ss
+                    const int totalSec = std::max(0, entry.aliveSeconds);
+                    const int minutes = totalSec / 60;
+                    const int seconds = totalSec % 60;
+                    std::string timeText = std::to_string(minutes) + ":" + (seconds < 10 ? "0" : "") + std::to_string(seconds);
+                    drawYellowTextLeftPx(timeText,
+                                         timeColumnX,
+                                         lineY,
+                                         glyphW, glyphH, spacing, 0.80f,
+                                         glm::vec4(1.0f));
+                }
+            } else {
+                for (int i = 0; i < (int)gHistoryRankingEntries.size() && i < kRankingMaxEntries; ++i) {
+                    const HistoryRankingEntry& entry = gHistoryRankingEntries[i];
+                    std::ostringstream scoreBuilder;
+                    scoreBuilder << std::setw(7) << std::setfill('0') << std::max(0, entry.score);
+                    const std::string scoreText = scoreBuilder.str();
+                    const float lineY = lineStartY + lineGap * (float)i;
+
+                    drawYellowTextLeftPx(entry.stage,
+                                         stageColumnX,
+                                         lineY,
+                                         glyphW,
+                                         glyphH,
+                                         spacing,
+                                         0.80f,
+                                         glm::vec4(1.0f));
+
+                    drawYellowTextLeftPx(scoreText,
+                                         scoreColumnX,
+                                         lineY,
+                                         glyphW,
+                                         glyphH,
+                                         spacing,
+                                         0.80f,
+                                         glm::vec4(1.0f));
+
+                    // Esta es la fila de la partida actual (rankingEntryIndex)
+                    const bool isCurrentEntry = (rankingEntryIndex >= 0 && i == rankingEntryIndex);
+
+                    // Nombre a mostrar: mientras se edita usar el buffer, si ya acabó usar entry.name
+                    const std::string& displayName = isCurrentEntry ? rankingPlayerName : entry.name;
+
+                    drawYellowTextLeftPx(displayName,
+                                         nameColumnLeftX,
+                                         lineY,
+                                         glyphW,
+                                         glyphH,
+                                         spacing,
+                                         0.80f,
+                                         glm::vec4(1.0f));
+
+                    if (isCurrentEntry && isEnteringRankingName) {
+                        // Dibujar carácter AmaBla (cursor de selección)
+                        float nameWidth = 0.0f;
+                        for (char c : rankingPlayerName) {
+                            nameWidth += glyphW + spacing;
+                        }
+
+                        std::string selSprite = kRankingVocab[rankingCurrentVocabIndex] + "_AmaBla";
+                        glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+                        if (getUvRectForSprite(gVocabAmarilloAtlas, selSprite, uvRect)) {
+                            float cursorX = nameColumnLeftX + nameWidth;
+                            float glyphCenterY = lineY + glyphH * 0.5f;
+
+                            glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                            glUniform1f(uniformFlipX, 0.0f);
+                            glUniform1f(uniformWhiteFlash, 0.0f);
+                            glActiveTexture(GL_TEXTURE0);
+                            glBindTexture(GL_TEXTURE_2D, vocabAmarilloTexture);
+
+                            glm::mat4 modelMat(1.0f);
+                            modelMat = glm::translate(modelMat, glm::vec3(cursorX + glyphW * 0.5f, glyphCenterY, 0.0f));
+                            modelMat = glm::scale(modelMat, glm::vec3(glyphW * 0.5f, -glyphH * 0.5f, 1.0f));
+                            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(modelMat));
+                            glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+                            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                        }
+                    }
+
+                    // 1P/2P: se muestra siempre mientras la pantalla de ranking sea de la partida actual
+                    if (isCurrentEntry && rankingEntryIndex >= 0) {
+                        float pX = nameColumnLeftX + (6.0f * (glyphW + spacing)) + 40.0f * scaleX;
+                        std::string pText = (rankingPlayerOwner == 2) ? "2P" : "1P";
+                        drawYellowTextLeftPx(pText,
+                                             pX,
+                                             lineY,
+                                             glyphW,
+                                             glyphH,
+                                             spacing,
+                                             0.80f,
+                                             glm::vec4(1.0f));
+                    }
+                }
+            }
+        }
 
         glBindVertexArray(0);
         glUseProgram(0);
