@@ -473,7 +473,7 @@
       "nombre": "exp_mid3_r"
     },
     "explosion_mid_down.0": {
-      "x": 1024,
+      "x": 1020,
       "y": 484,
       "w": 48,
       "h": 48,
@@ -530,7 +530,7 @@
     },
     "explosion_end_up.0": {
       "x": 1020,
-      "y": 355,
+      "y": 354,
       "w": 48,
       "h": 48,
       "nombre": "exp_end0"
