@@ -55,6 +55,7 @@ public:
     std::string currentSpriteName; // Sprite actual en el atlas
 
     int ownerIndex;         // Índice del jugador que la colocó (0 o 1)
+    int enemiesKilled;      // Contador de enemigos muertos por esta bomba para los multiplicadores
 
     // Bloqueo de paso (tile-based).
     bool ownerLeftTile; // true cuando el dueño ya abandonó el tile (si es true, bloquea también para él).

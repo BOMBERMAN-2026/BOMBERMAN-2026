@@ -16,6 +16,7 @@
 #include "enemies/dragon_joven.hpp"
 #include "versus_mode.hpp"
 #include "cpu_bomberman.hpp"
+#include "score_popup.hpp"
 
 
 
@@ -2158,6 +2159,10 @@ void Game::ensureGameplayAssets() {
         }
     }
 
+    if (!ScorePopup::loadAssets()) {
+        std::exit(EXIT_FAILURE);
+    }
+
     // Texturas del vocabulario en amarillo pequeño
     {
         const std::string vocabAmarilloAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasVocAmarilloPeq.json");
@@ -2218,6 +2223,8 @@ void Game::cleanupGameplayEntities() {
 
     for (auto* p : gPlayers) delete p;
     gPlayers.clear();
+
+    ScorePopup::clear();
 }
 
 // Condici├│n de Game Over: todos los jugadores est├ín sin vidas.
@@ -3520,6 +3527,7 @@ Game::~Game() {
         delete p;
     }
     gPlayers.clear();
+    ScorePopup::clear();
 
     if (gameMap != nullptr) {
         delete gameMap;
@@ -3619,6 +3627,7 @@ Game::~Game() {
         glDeleteTextures(1, &rankingVsTexture);
         rankingVsTexture = 0;
     }
+    ScorePopup::shutdown();
 
     ResourceManager::clear();
 
@@ -4930,6 +4939,8 @@ void Game::update() {
     // No actualizamos a los enemigos ni jugador en caso de que el menu este desplegado
     if (this->inGameMenu.showInGameMenu) return;
 
+    ScorePopup::update(deltaTime);
+
     // Actualizar enemigos (l├│gica o animaci├│n de muerte)
     const std::size_t enemiesToUpdate = gEnemies.size();
     for (std::size_t enemyIndex = 0; enemyIndex < enemiesToUpdate; ++enemyIndex) {
@@ -5032,7 +5043,12 @@ void Game::update() {
                         // Puntuaci├│n: s├│lo suma una vez cuando el enemigo pasa de Alive -> Dying.
                         // `takeDamage` devuelve true justo en ese cambio de estado.
                         if (hostileEnemy && b && b->ownerIndex >= 0 && b->ownerIndex < (int)playerScores.size()) {
-                            playerScores[b->ownerIndex] += enemy->scoreValue;
+                            int multiplier = 1 << b->enemiesKilled; // 1, 2, 4, 8...
+                            int pointsEarned = enemy->scoreValue * multiplier;
+                            b->enemiesKilled++;
+
+                            playerScores[b->ownerIndex] += pointsEarned;
+                            ScorePopup::spawn(enemy->position, enemy->scoreValue, multiplier);
                         }
                     }
                 }
@@ -6548,6 +6564,17 @@ void Game::render3D() {
         }
     }
 
+    ScorePopup::render3D(gameMap,
+                         spriteProjection3D,
+                         cameraPos,
+                         VAO,
+                         uniformProjection,
+                         uniformModel,
+                         uniformUvRect,
+                         uniformTintColor,
+                         uniformFlipX,
+                         uniformWhiteFlash);
+
     if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
     
     glBindVertexArray(0);
@@ -6797,6 +6824,14 @@ void Game::render2D() {
 
         glBindVertexArray(0);
     }
+
+    ScorePopup::render2D(gameMap,
+                         VAO,
+                         uniformModel,
+                         uniformUvRect,
+                         uniformTintColor,
+                         uniformFlipX,
+                         uniformWhiteFlash);
 
     if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
 
