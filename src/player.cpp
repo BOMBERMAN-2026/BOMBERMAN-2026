@@ -395,10 +395,10 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
             map->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
             if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitRight = true;
 
-            if (hitLeft && hitRight) { std::cout << "Pum, NO te muevo\n"; } // No hacemos nada
-            else if (hitLeft && !hitRight) { newPos.x += step * 0.75f; std::cout << "Pum, te muevo izquierda \n"; }
-            else if (!hitLeft && hitRight) { newPos.x -= step * 0.75f; std::cout << "Pum, te muevo derecha \n"; }
-            else { newPos.y += step; std::cout << "Pum, me muevo pa arriba \n"; }
+            if (hitLeft && hitRight) {} // No hacemos nada
+            else if (hitLeft && !hitRight) newPos.x += step * 0.75f;
+            else if (!hitLeft && hitRight) newPos.x -= step * 0.75f;
+            else newPos.y += step;
 
         }
         if (mov == MOVE_DOWN) {
@@ -409,10 +409,10 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
             map->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
             if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitRight = true;
 
-            if (hitLeft && hitRight) { std::cout << "Pum, NO te muevo\n"; } // No hacemos nada
-            else if (hitLeft && !hitRight) { newPos.x += step * 0.75f; std::cout << "Pum, te muevo derecha \n"; }
-            else if (!hitLeft && hitRight) { newPos.x -= step * 0.75f; std::cout << "Pum, te muevo izquierda \n"; }
-            else { newPos.y -= step; std::cout << "Pum, me muevo pa abajo \n"; }
+            if (hitLeft && hitRight) {} // No hacemos nada
+            else if (hitLeft && !hitRight) newPos.x += step * 0.75f;
+            else if (!hitLeft && hitRight) newPos.x -= step * 0.75f;
+            else newPos.y -= step;
         }
         if (mov == MOVE_LEFT) {
             bool hitDown = false;
@@ -423,9 +423,9 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
             if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitUp = true;
 
             if (hitDown && hitUp) {} // No hacemos nada
-            else if (hitDown && !hitUp) { newPos.y += step * 0.75f; std::cout << "Pum, te muevo arriba \n"; }
-            else if (!hitDown && hitUp) { newPos.y -= step * 0.75f; std::cout << "Pum, te muevo abajo \n"; }
-            else { newPos.x -= step; std::cout << "Pum, me muevo pa izquierda \n"; }
+            else if (hitDown && !hitUp) newPos.y += step * 0.75f;
+            else if (!hitDown && hitUp) newPos.y -= step * 0.75f;
+            else newPos.x -= step;
         }
         if (mov == MOVE_RIGHT) {
             bool hitDown = false;
@@ -436,9 +436,9 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
             if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitUp = true;
 
             if (hitDown && hitUp) {} // No hacemos nada
-            else if (hitDown && !hitUp) { newPos.y += step * 0.75f; std::cout << "Pum, te muevo arriba \n"; }
-            else if (!hitDown && hitUp) { newPos.y -= step * 0.75f; std::cout << "Pum, te muevo abajo \n"; }
-            else { newPos.x += step; std::cout << "Pum, me muevo pa derecha \n"; }
+            else if (hitDown && !hitUp) newPos.y += step * 0.75f;
+            else if (!hitDown && hitUp) newPos.y -= step * 0.75f;
+            else newPos.x += step;
         }
     }
 
