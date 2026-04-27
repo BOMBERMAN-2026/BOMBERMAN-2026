@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -3275,6 +3275,7 @@ void Game::advanceToNextLevel() {
 // Sale a menú desde gameplay (Game Over / fin de campaña / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
+    AudioManager::get().resetPlaceBombSpecialSound();
 
     customGameMode.deactivate();
     continueSequenceActive = false;
@@ -6547,7 +6548,7 @@ void Game::render3D() {
         }
     }
 
-    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
     
     glBindVertexArray(0);
     glUseProgram(0);
@@ -6797,7 +6798,7 @@ void Game::render2D() {
         glBindVertexArray(0);
     }
 
-    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
 
     glUseProgram(0);
 }

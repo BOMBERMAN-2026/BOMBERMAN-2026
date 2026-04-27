@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "bomberman.hpp"
+#include "audio_manager.hpp"
 
 /*
  * main.cpp
@@ -147,6 +148,10 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
             // ========== JUEGO NORMAL ==========
             if (bomberman->state == GAME_PLAYING) {
+                if (key == GLFW_KEY_4 || key == GLFW_KEY_KP_4) {
+                    AudioManager::get().registerPlaceBombSpecialTap();
+                }
+
                 if (key == GLFW_KEY_F1) {
                     bomberman->toggleViewMode();
                 }

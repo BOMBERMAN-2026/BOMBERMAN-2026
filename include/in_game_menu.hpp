@@ -56,7 +56,7 @@ class InGameMenu {
                               const SpriteAtlas& atlas, GLuint atlasTexture, GLuint vao,
                               GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, int colorUse);
 
-        void renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect,
+        void renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, GLuint uniformFlipX,
                               SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture, 
                               SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture);
 
