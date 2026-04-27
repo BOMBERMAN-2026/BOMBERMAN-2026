@@ -3275,6 +3275,7 @@ void Game::advanceToNextLevel() {
 // Sale a menú desde gameplay (Game Over / fin de campaña / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
+    AudioManager::get().resetPlaceBombSpecialSound();
 
     customGameMode.deactivate();
     continueSequenceActive = false;
