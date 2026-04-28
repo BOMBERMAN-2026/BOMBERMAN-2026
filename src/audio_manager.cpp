@@ -117,6 +117,8 @@ static void fireFromPool(ma_engine* engine,
 bool AudioManager::init(const std::string& basePath) {
     if (impl) return true;  // Ya inicializado
 
+    musicDisabled = false; VFXDisabled = false;
+
     impl = new Impl();
     impl->basePath = normalizePath(basePath);
 
@@ -209,6 +211,7 @@ void AudioManager::shutdown() {
 // ============================================================
 void AudioManager::playVfx(VfxSound sfx) {
     if (!impl || !impl->engineReady || !impl->sfxReady) return;
+    if (VFXDisabled) return;
 
     std::lock_guard<std::mutex> lock(impl->poolMutex);
 
@@ -233,6 +236,8 @@ void AudioManager::playVfx(VfxSound sfx) {
 // ============================================================
 void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) {
     if (!impl || !impl->engineReady) return;
+
+    if (musicDisabled) {stopBgm(); return;}
 
     // Parar la BGM anterior si existe
     stopBgm();
@@ -312,3 +317,12 @@ void AudioManager::setBgmVolume(float v) {
         ma_sound_set_volume(&impl->bgmSound, v);
     }
 }
+
+void AudioManager::toggleMusicDisabled() { musicDisabled = !musicDisabled; stopBgm(); }
+
+void AudioManager::toggleVFXDisable() { VFXDisabled = !VFXDisabled; }
+
+bool AudioManager::isMusicDisabled() {return musicDisabled; }
+
+bool AudioManager::isVFXDisabled() { return VFXDisabled; }
+
