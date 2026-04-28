@@ -3959,37 +3959,24 @@ void Game::processInput() {
 
         // Mirar processInputInGameMenu para saber que devuelve
         switch (result) {
-            case 1: break;
-            case 2: break;
-            case 3: toggleViewMode(); break;
-            case 4: cycleCamera3DType(); break;
-            case 6: returnToMenuFromGame(/*resetRun=*/true); break;
-            default: break;
-        }
+            case 1: 
+                AudioManager::get().toggleMusicDisabled(); 
+                if (!AudioManager::get().isMusicDisabled()) {
+                    std::string bgmFile = "";
+                    if (currentLevelIndex == 0 || currentLevelIndex == 1) {
+                        bgmFile = "resources/sounds/03 BGM 1.mp3";
+                    } else if (currentLevelIndex == 2 || currentLevelIndex == 4) {
+                        bgmFile = "resources/sounds/05 Boss BGM.mp3";
+                    } else if (currentLevelIndex == 3) {
+                        bgmFile = "resources/sounds/06 BGM 2.mp3";
+                    }
 
-        return; 
-    }
-
-    // ========== IN_GAME_MENU ==========
-    if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
-        this->inGameMenu.showInGameMenu = true;
-    }
-    // Salimos para no recibir más inputs en caso de haber desplegado el menu
-    if (this->inGameMenu.showInGameMenu) { 
-        // ========== CONTROLS_MENU ==========
-        if (this->inGameMenu.controlsMenu.showControlsMenu) {
-            // TODO, cambiar el lastkey
-            this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
-            return;
-        }
-
-        int result = this->inGameMenu.processInputInGameMenu(this->keys);
-
-        // Mirar processInputInGameMenu para saber que devuelve
-        switch (result) {
-            case 1: break;
-            case 2: break;
+                    if (!bgmFile.empty()) {
+                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                    }
+                }
+                break;
+            case 2: AudioManager::get().toggleVFXDisable(); break;
             case 3: toggleViewMode(); break;
             case 4: cycleCamera3DType(); break;
             case 6: returnToMenuFromGame(/*resetRun=*/true); break;

@@ -49,6 +49,12 @@ public:
     void setVfxVolume(float v);
     void setBgmVolume(float v);
 
+    void toggleMusicDisabled();
+    void toggleVFXDisable();
+
+    bool isMusicDisabled();
+    bool isVFXDisabled();
+
 private:
     AudioManager() = default;
     ~AudioManager() { shutdown(); }
@@ -58,4 +64,8 @@ private:
     // Implementación interna oculta (Pimpl — definida en audio_manager.cpp)
     struct Impl;
     Impl* impl = nullptr;
+
+    // Para implementar el muteo de la musisca y vfx
+    bool musicDisabled;
+    bool VFXDisabled;
 };
