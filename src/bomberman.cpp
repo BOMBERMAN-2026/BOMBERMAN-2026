@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -3780,10 +3780,20 @@ void Game::init() {
 // Lee teclas y aplica acciones (movimiento, animaci├│n y colocar bombas).
 void Game::processInput() {
     // Atajos globales de ventana (también disponibles en intro/menu).
-    if (this->keys[GLFW_KEY_TAB] == GLFW_PRESS || this->keys[GLFW_KEY_F11] == GLFW_PRESS) {
-        this->keys[GLFW_KEY_TAB] = GLFW_REPEAT;
+    if (this->keys[inGameMenu.controlsMenu.swapWindowModeKey] == GLFW_PRESS || this->keys[GLFW_KEY_F11] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.swapWindowModeKey] = GLFW_REPEAT;
         this->keys[GLFW_KEY_F11] = GLFW_REPEAT;
         toggleFullscreen(this->window);
+    }
+
+    if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
+        toggleViewMode();
+    }
+
+    if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
+        cycleCamera3DType(); 
     }
 
     if (this->keys[GLFW_KEY_F10] == GLFW_PRESS && this->window != nullptr) {
@@ -3993,7 +4003,7 @@ void Game::processInput() {
         return; 
     }
 
-const bool isFreeCamera3D =
+    const bool isFreeCamera3D =
         (this->viewMode == ViewMode::Mode3D && this->camera3DType == Camera3DType::FreeCamera);
 
     if (this->viewMode != ViewMode::Mode3D) {
@@ -6602,7 +6612,7 @@ void Game::render3D() {
                            &gEnemies,
                            currentGameLevel,
                            levelTimeRemaining,
-                           (mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1);
+                           (mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1);
 
         glBindVertexArray(0);
         glUseProgram(0);
