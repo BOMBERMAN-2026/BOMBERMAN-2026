@@ -4000,6 +4000,9 @@ void Game::processInput() {
             default: break;
         }
 
+        lastDirKey = GLFW_KEY_UNKNOWN;
+        lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+
         return; 
     }
 
