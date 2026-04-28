@@ -23,7 +23,9 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern GLuint uniformWhiteFlash;
 extern SpriteAtlas gPlayerAtlas;
+extern SpriteAtlas gNextLevelAtlas;
 extern GLuint texture;
+extern GLuint gNextLevelTexture;
 extern GameMap* gameMap;
 
 /*
@@ -213,6 +215,7 @@ void Player::updateDeathAnimation() {
 
 void Player::startWinning() {
     lifeState = PlayerLifeState::Winning;
+    winStartPosition = position;
     isWalking = false;
     winTimer = 0.0f;
     winPhase = 0;
@@ -237,7 +240,7 @@ void Player::updateWinningAnimation() {
             // Pose inicial de paz normal
             currentSpriteName = spritePrefix + ".victoria.recto.0";
             winScale = 1.8f;
-        } else if (winTimer < 1.5f) {
+        } else if (winTimer < 2.7f) {
             // Pose gigante
             currentSpriteName = spritePrefix + ".victoria.dedos.0"; 
             winScale = 2.8f; // Crecimiento
@@ -339,6 +342,42 @@ void Player::Draw() {
     glUniform1f(uniformWhiteFlash, whiteFlash);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    // --- 3. DIBUJAR LA BOMBA/EFECTO (LO NUEVO) ENCIMA ---
+    if (lifeState == PlayerLifeState::Winning) {
+        int bombFrame = 0;
+        bool drawBomb = true;
+
+        if (winPhase == 0) {
+            bombFrame = ((int)(winTimer / 0.3f)) % 2; // Misma velocidad que la mecha de una bomba colocada (0.3f)
+        } else {
+            bombFrame = 2 + (int)(winTimer / 0.05f);
+            if (bombFrame > 7) {
+                drawBomb = false; // Desaparecer cuando acaben los sprites
+            }
+        }
+
+        if (drawBomb) {
+            std::string bombSprite = "next_lvl_bomb." + std::to_string(bombFrame);
+            glm::vec4 bombUv(0.0f);
+            if (getUvRectForSprite(gNextLevelAtlas, bombSprite, bombUv)) {
+                glm::mat4 bombModel = glm::mat4(1.0f);
+                // Usar winStartPosition para que se quede fijo, con un ligero ajuste de 10px a la derecha (5px originales + 5px nuevos)
+                bombModel = glm::translate(bombModel, glm::vec3(winStartPosition.x + (10.0f/24.0f)*halfTile, winStartPosition.y - 2.0f * halfTile, 0.0f));
+                // Escala 3.465f (+5% de 3.3f)
+                bombModel = glm::scale(bombModel, glm::vec3(halfTile * 3.465f, halfTile * 3.465f, 1.0f));
+
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, gNextLevelTexture);
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(bombModel));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(bombUv));
+                glUniform1f(uniformFlipX, 0.0f);
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glUniform1f(uniformWhiteFlash, 0.0f);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+        }
+    }
 }
 
 // Aplica un paso de movimiento con colisión (mapa + bombas) y “snap” al centro del tile.

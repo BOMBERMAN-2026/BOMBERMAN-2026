@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -94,7 +94,8 @@ SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
 SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
-
+SpriteAtlas gNextLevelAtlas;
+GLuint gNextLevelTexture = 0;
 GLuint mapTexture;
 GLuint horizonTexture;
 GLuint enemyTexture = 0;
@@ -2098,6 +2099,12 @@ void Game::ensureRenderResources() {
     ensureOverlayWhiteTexture();
     
     // Cargar atlases y texturas de gameplay (vocabulario, etc.) que se reutilizan
+    std::string nextLevelAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasNextLevel.json");
+    if (!loadSpriteAtlasMinimal(nextLevelAtlasPath, gNextLevelAtlas)) {
+        std::cerr << "Error cargando atlas NextLevel: " << nextLevelAtlasPath << std::endl;
+    }
+    gNextLevelTexture = LoadTexture(resolveAssetPath("resources/sprites/bomba_next_lvl.png").c_str());
+
     // Esto debe hacerse aquí para que las cinemáticas con overlay tengan acceso a las texturas
     ensureGameplayAssets();
 

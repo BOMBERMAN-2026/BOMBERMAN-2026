@@ -76,6 +76,7 @@ class Player : public Entity {
         int winPhase = 0; // 0 = Creciendo/Pose V, 1 = Girando y saliendo
         float winScale = 1.8f; // Escala dinámica durante la victoria
         glm::vec2 winVelocity = glm::vec2(0.0f); // Para la dirección aleatoria diagonal
+        glm::vec2 winStartPosition = glm::vec2(0.0f); // Posición inicial al ganar para fijar sprites
         void startWinning();
         void updateWinningAnimation();
 
