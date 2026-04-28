@@ -1,0 +1,17 @@
+{
+  "ruta_imagen": "resources/sprites/bomba_next_lvl.png",
+  "tamano_imagen": {
+    "ancho": 897,
+    "alto": 527
+  },
+  "sprites": {
+    "next_lvl_bomb.0": { "x": 99,  "y": 241, "w": 160, "h": 160 },
+    "next_lvl_bomb.1": { "x": 267, "y": 241, "w": 160, "h": 160 },
+    "next_lvl_bomb.2": { "x": 435, "y": 241, "w": 160, "h": 160 },
+    "next_lvl_bomb.3": { "x": 603, "y": 241, "w": 160, "h": 160 },
+    "next_lvl_bomb.4": { "x": 99,  "y": 73,  "w": 160, "h": 160 },
+    "next_lvl_bomb.5": { "x": 267, "y": 73,  "w": 160, "h": 160 },
+    "next_lvl_bomb.6": { "x": 435, "y": 73,  "w": 160, "h": 160 },
+    "next_lvl_bomb.7": { "x": 603, "y": 73,  "w": 160, "h": 160 }
+  }
+}
