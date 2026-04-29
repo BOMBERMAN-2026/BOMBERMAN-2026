@@ -12,7 +12,7 @@ namespace ScorePopup {
 bool loadAssets();
 void shutdown();
 void clear();
-void spawn(const glm::vec2& position, int value, int multiplier = 1);
+void spawn(const glm::vec2& position, int value, int multiplier = 1, bool boss = false);
 void update(float deltaTime);
 
 void render2D(const GameMap* map,

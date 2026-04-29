@@ -21,6 +21,7 @@ struct Popup {
     glm::vec2 position;
     int value = 0;
     int multiplier = 1;
+    bool boss = false;
     float age = 0.0f;
     float duration = 1.15f;
 };
@@ -32,6 +33,7 @@ std::vector<Popup> gPopups;
 static constexpr float kDurationSeconds = 1.15f;
 static constexpr float kFadeSeconds = 0.22f;
 static constexpr float kDigitSpacingPx = 1.0f;
+static constexpr float kBlinkIntervalSeconds = 0.12f;
 
 float alphaFor(const Popup& popup) {
     const float fadeStart = std::max(0.0f, popup.duration - kFadeSeconds);
@@ -48,11 +50,17 @@ bool collectDigits(const Popup& popup,
     out.clear();
     totalWidthPx = 0.0f;
 
+    const bool useRed = (static_cast<int>(popup.age / kBlinkIntervalSeconds) % 2) != 0;
+    const std::string colorSuffix = useRed ? "Rojo" : "Negro";
+    const std::string valueSuffix = popup.boss
+        ? "_Tocho_" + colorSuffix
+        : "_" + colorSuffix;
+
     const std::string text = std::to_string(std::max(0, popup.value));
     for (char ch : text) {
         if (ch < '0' || ch > '9') continue;
 
-        const std::string spriteName = std::string(1, ch) + "_Tocho_Rojo";
+        const std::string spriteName = std::string(1, ch) + valueSuffix;
         auto it = gAtlas.sprites.find(spriteName);
         if (it == gAtlas.sprites.end()) {
             continue;
@@ -66,21 +74,24 @@ bool collectDigits(const Popup& popup,
     }
 
     if (popup.multiplier > 1) {
+        const std::string bonusSuffix = "_Bonus_" + colorSuffix;
+
         // Add "x"
-        auto itX = gAtlas.sprites.find("x_Bonus_Negro");
+        const std::string xSprite = "x" + bonusSuffix;
+        auto itX = gAtlas.sprites.find(xSprite);
         if (itX != gAtlas.sprites.end()) {
             // Space before "x"
             if (!out.empty()) {
                 totalWidthPx += kDigitSpacingPx * 3.0f; 
             }
             totalWidthPx += (float)itX->second.w;
-            out.push_back(std::make_pair("x_Bonus_Negro", itX->second));
+            out.push_back(std::make_pair(xSprite, itX->second));
 
             // Add digits for multiplier
             const std::string multText = std::to_string(popup.multiplier);
             for (char ch : multText) {
                 if (ch < '0' || ch > '9') continue;
-                const std::string multSprite = std::string(1, ch) + "_Bonus_Negro";
+                const std::string multSprite = std::string(1, ch) + bonusSuffix;
                 auto itM = gAtlas.sprites.find(multSprite);
                 if (itM != gAtlas.sprites.end()) {
                     totalWidthPx += kDigitSpacingPx;
@@ -205,7 +216,7 @@ void clear()
     gPopups.clear();
 }
 
-void spawn(const glm::vec2& position, int value, int multiplier)
+void spawn(const glm::vec2& position, int value, int multiplier, bool boss)
 {
     if (value <= 0) return;
 
@@ -213,6 +224,7 @@ void spawn(const glm::vec2& position, int value, int multiplier)
     popup.position = position;
     popup.value = value;
     popup.multiplier = multiplier;
+    popup.boss = boss;
     popup.age = 0.0f;
     popup.duration = kDurationSeconds;
     gPopups.push_back(popup);

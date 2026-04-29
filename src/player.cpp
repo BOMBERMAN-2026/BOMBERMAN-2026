@@ -12,6 +12,7 @@
 #include "bomb.hpp"
 #include "bomberman.hpp"
 #include "versus_mode.hpp"
+#include "score_popup.hpp"
 #include <iostream>
 
 extern class Game* bomberman;
@@ -27,6 +28,22 @@ extern SpriteAtlas gNextLevelAtlas;
 extern GLuint texture;
 extern GLuint gNextLevelTexture;
 extern GameMap* gameMap;
+
+namespace {
+
+int scoreValueForItem(PowerUpType type) {
+    switch (type) {
+        case PowerUpType::Matches: return 5000;
+        case PowerUpType::Can: return 10000;
+        case PowerUpType::Lighter: return 30000;
+        case PowerUpType::Battery: return 40000;
+        case PowerUpType::Dragonfly: return 50000;
+        case PowerUpType::HudsonBee: return 77000;
+        default: return 0;
+    }
+}
+
+}
 
 /*
  * player.cpp
@@ -556,13 +573,12 @@ void Player::applyPowerUp(PowerUpType type) {
         type == PowerUpType::Battery || type == PowerUpType::Dragonfly || type == PowerUpType::HudsonBee) {
         
         // Sumar al score por items
+        const int itemScore = scoreValueForItem(type);
         if (bomberman && playerId >= 0 && playerId < (int)bomberman->playerScores.size()) {
-            if (type == PowerUpType::Matches) bomberman->playerScores[playerId] += 5000;
-            else if (type == PowerUpType::Can) bomberman->playerScores[playerId] += 10000;
-            else if (type == PowerUpType::Lighter) bomberman->playerScores[playerId] += 30000;
-            else if (type == PowerUpType::Battery) bomberman->playerScores[playerId] += 40000;
-            else if (type == PowerUpType::Dragonfly) bomberman->playerScores[playerId] += 50000;
-            else if (type == PowerUpType::HudsonBee) bomberman->playerScores[playerId] += 77000;
+            bomberman->playerScores[playerId] += itemScore;
+        }
+        if (itemScore > 0) {
+            ScorePopup::spawn(position, itemScore, 1, true);
         }
         return; // Los items no otorgan buffs jugables 
     }

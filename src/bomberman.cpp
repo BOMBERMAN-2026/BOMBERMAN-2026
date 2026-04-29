@@ -5055,7 +5055,7 @@ void Game::update() {
                             b->enemiesKilled++;
 
                             playerScores[b->ownerIndex] += pointsEarned;
-                            ScorePopup::spawn(enemy->position, enemy->scoreValue, multiplier);
+                            ScorePopup::spawn(enemy->position, enemy->scoreValue, multiplier, enemy->isBoss);
                         }
                     }
                 }
