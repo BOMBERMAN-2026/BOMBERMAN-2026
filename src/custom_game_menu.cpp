@@ -20,7 +20,7 @@ constexpr float kCanvasWidth = 1920.0f;
 constexpr float kCanvasHeight = 1080.0f;
 
 constexpr int kMenu1Rows = 5;
-constexpr int kEnemyTypeCount = 9;
+constexpr int kEnemyTypeCount = 11;
 constexpr int kEnemyTotalMax = 12;
 
 const std::array<float, kMenu1Rows> kMenu1ArrowXPixels = {
@@ -43,14 +43,16 @@ const std::array<float, kMenu1Rows> kMenu1ArrowYPixels = {
 constexpr float kMenuBombSizePixels = 108.0f;
 
 const std::array<glm::vec2, kEnemyTypeCount> kEnemyCounterCenters = {
-    glm::vec2(560.0f, 340.0f),
-    glm::vec2(1010.0f, 340.0f),
-    glm::vec2(1450.0f, 340.0f),
-    glm::vec2(560.0f, 555.0f),
-    glm::vec2(1010.0f, 555.0f),
-    glm::vec2(1450.0f, 555.0f),
-    glm::vec2(560.0f, 765.0f),
-    glm::vec2(1010.0f, 765.0f),
+    glm::vec2(370.0f, 340.0f),
+    glm::vec2(830.0f, 340.0f),
+    glm::vec2(1350.0f, 340.0f),
+    glm::vec2(1700.0f, 340.0f),
+    glm::vec2(375.0f, 555.0f),
+    glm::vec2(835.0f, 555.0f),
+    glm::vec2(1400.0f, 555.0f),
+    glm::vec2(1700.0f, 555.0f),
+    glm::vec2(380.0f, 765.0f),
+    glm::vec2(840.0f, 765.0f),
     glm::vec2(1450.0f, 765.0f)
 };
 
@@ -107,7 +109,7 @@ CustomGameMenu::CustomGameMenu()
     menu2ArrowAnimTimer(0.0f),
     menu2SelectedWaitTimer(0.0f),
       enemyTypeSelection(0),
-      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0}),
+      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       shouldGoToMenu2(false),
       shouldReturnToMainMenu(false),
       shouldStartCustomGame(false),
@@ -156,7 +158,7 @@ void CustomGameMenu::resetToDefaults() {
     menu2ArrowAnimTimer = 0.0f;
     menu2SelectedWaitTimer = 0.0f;
     enemyTypeSelection = 0;
-    enemyCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    enemyCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     resetFlowFlags();
 }
@@ -219,9 +221,9 @@ void CustomGameMenu::initMenu2() {
     resetFlowFlags();
 
     if (menu2BackgroundTexture == 0) {
-        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame.jpg").c_str());
+        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGamev2.jpg").c_str());
         if (menu2BackgroundTexture == 0) {
-            std::cerr << "Error cargando Menu2CustomGame.jpg\n";
+            std::cerr << "Error cargando Menu2CustomGamev2.jpg\n";
         }
     }
 

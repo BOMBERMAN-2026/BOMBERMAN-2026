@@ -18,7 +18,7 @@ public:
     CustomGameMode();
 
     void activate(const CustomGameSettings& settings,
-                  const std::array<int, 9>& enemyCounts);
+                  const std::array<int, 11>& enemyCounts);
     void deactivate();
 
     bool isActive() const { return active; }
@@ -57,7 +57,7 @@ private:
 
     bool active;
     CustomGameSettings settings;
-    std::array<int, 9> enemyCounts;
+    std::array<int, 11> enemyCounts;
     int playerCount;
     int mapIndex;
     int stageNumber;

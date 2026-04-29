@@ -76,7 +76,7 @@ private:
 
     // Pantalla 2 (configuracion enemigos).
     int enemyTypeSelection;
-    std::array<int, 9> enemyCounts;
+    std::array<int, 11> enemyCounts;
 
     // Flujo entre pantallas/estados.
     bool shouldGoToMenu2;
@@ -188,7 +188,7 @@ public:
     bool shouldBackToMenu1() const { return shouldReturnToMenu1; }
 
     const CustomGameSettings& getSettings() const { return settings; }
-    const std::array<int, 9>& getEnemyCounts() const { return enemyCounts; }
+    const std::array<int, 11>& getEnemyCounts() const { return enemyCounts; }
 };
 
 #endif // CUSTOM_GAME_MENU_HPP

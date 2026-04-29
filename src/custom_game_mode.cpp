@@ -52,7 +52,7 @@ int clampMapIndex(int index) {
 CustomGameMode::CustomGameMode()
     : active(false),
       settings(),
-      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0}),
+      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       playerCount(1),
       mapIndex(0),
       stageNumber(1),
@@ -63,7 +63,7 @@ CustomGameMode::CustomGameMode()
 }
 
 void CustomGameMode::activate(const CustomGameSettings& inSettings,
-                              const std::array<int, 9>& inEnemyCounts) {
+                              const std::array<int, 11>& inEnemyCounts) {
     settings = inSettings;
     enemyCounts = inEnemyCounts;
 
@@ -188,7 +188,9 @@ std::vector<CustomGameMode::CustomEnemyKind> CustomGameMode::buildEnemyQueue() c
     // 7) Dragon
     // 8) Drones
     // 9) KingBomberman
-    const std::array<CustomEnemyKind, 9> indexToKind = {
+    const std::array<CustomEnemyKind, 11> indexToKind = {
+        CustomEnemyKind::BombermanEnemy,
+        CustomEnemyKind::BombermanEnemy,
         CustomEnemyKind::BombermanEnemy,
         CustomEnemyKind::Leon,
         CustomEnemyKind::BebeLloron,
