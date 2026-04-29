@@ -6127,7 +6127,7 @@ void Game::render3D() {
                    glm::vec3(ringRadius, ringThickness, ringRadius),
                    ringColor);
 
-        const int sparkleCount = 36;
+        const int sparkleCount = 218;
         for (int i = 0; i < sparkleCount; ++i) {
             const float seed = ((float)(p->playerId + 1) * 41.238f)
                              + ((float)(i + 1) * 19.771f)
@@ -6135,22 +6135,40 @@ void Game::render3D() {
                              + (p->winAnchorPosition.y * 17.933f)
                              + ((float)playerIndex * 11.147f);
             const float hashBase = std::sin(seed) * 43758.5453f;
-            const float hash01 = hashBase - std::floor(hashBase);
-            const float angle = hash01 * kTwoPi + ((float)i * 0.31f) + ((1.0f - t) * 13.2f);
+            const float hash01 = glm::fract(hashBase);
+            const float hash02 = glm::fract(hashBase * 1.5432f);
+            
+            // Simulación física de "lluvia de glitter"
+            // Explosión inicial hacia todas direcciones + caída por gravedad
+            const float initialSpeed = 1.35f + 0.85f * hash02;
+            const float verticalBoost = 1.80f + 1.20f * hash01;
+            
+            // Ángulo horizontal aleatorio
+            const float angle = hash01 * kTwoPi + ((float)i * (kTwoPi / (float)sparkleCount));
+            
+            // Tiempo de vida normalizado de la partícula (con pequeño desfase por semilla para que no todas caigan igual)
+            const float particleT = std::min(1.0f, t * (1.1f + 0.2f * hash02));
+            
+            // Posición horizontal (avanza a velocidad constante hacia fuera)
+            const float radial = initialSpeed * particleT;
+            
+            // Ecuación de caída libre: y = y0 + v0*t - 0.5 * g * t^2
+            const float gravity = 8.50f; // Aumentada para que caigan con más fuerza hasta el suelo
+            const float verticalPos = (verticalBoost * particleT) - (0.5f * gravity * particleT * particleT);
 
-            const float radial = (0.20f + 0.52f * hash01) * (0.18f + 1.85f * easeOut);
-            const float lift = 0.04f + 0.74f * easeOut
-                             + 0.10f * std::sin((1.0f - t) * 28.0f + ((float)i * 0.73f));
-            const float twinkle = 0.56f + 0.44f * std::sin((1.0f - t) * 50.0f + ((float)i * 1.91f));
+            const float twinkle = 0.50f + 0.50f * std::sin((1.0f - t) * 45.0f + ((float)i * 2.1f));
             const float sparkleIntensity = std::max(0.0f, twinkle * intensity);
-            const float sparkleSize = (0.018f + 0.040f * hash01) * (0.36f + 1.10f * sparkleIntensity);
+            const float sparkleSize = (0.024f + 0.038f * hash01) * (0.45f + 1.35f * sparkleIntensity);
 
             const glm::vec3 sparklePos = center + glm::vec3(std::cos(angle) * radial,
-                                                            lift,
+                                                            verticalPos,
                                                             std::sin(angle) * radial);
-            const glm::vec3 sparkleColor(1.00f + 0.55f * sparkleIntensity,
-                                         0.18f + 0.50f * sparkleIntensity,
-                                         0.74f + 0.86f * sparkleIntensity);
+            
+            // Colores rosas/fucsias vibrantes con algo de variación
+            const glm::vec3 sparkleColor(1.00f + 0.45f * sparkleIntensity,
+                                         0.10f + 0.25f * hash02 + 0.20f * sparkleIntensity,
+                                         0.80f + 0.60f * sparkleIntensity);
+            
             drawMesh3D(sphereOrCubeVAO,
                        sphereOrCubeIndexCount,
                        sparklePos,
@@ -6989,6 +7007,7 @@ void Game::render3D() {
         }
     }
 
+    glDisable(GL_DEPTH_TEST);
     ScorePopup::render3D(gameMap,
                          spriteProjection3D,
                          cameraPos,
@@ -6999,6 +7018,7 @@ void Game::render3D() {
                          uniformTintColor,
                          uniformFlipX,
                          uniformWhiteFlash);
+    glEnable(GL_DEPTH_TEST);
 
     if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
     

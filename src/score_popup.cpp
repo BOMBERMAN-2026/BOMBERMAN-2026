@@ -315,7 +315,7 @@ void render3D(const GameMap* map,
 
     std::vector<std::pair<std::string, SpriteFrame>> digits;
     const glm::vec3 worldUp(0.0f, 1.0f, 0.0f);
-    const float digitWorldScale = 0.0105f;
+    const float digitWorldScale = 0.0245f;
 
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(viewProjection));
     glUniform1f(uniformWhiteFlash, 0.0f);
