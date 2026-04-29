@@ -221,9 +221,9 @@ void CustomGameMenu::initMenu2() {
     resetFlowFlags();
 
     if (menu2BackgroundTexture == 0) {
-        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGamev2.jpg").c_str());
+        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame.jpg").c_str());
         if (menu2BackgroundTexture == 0) {
-            std::cerr << "Error cargando Menu2CustomGamev2.jpg\n";
+            std::cerr << "Error cargando Menu2CustomGame.jpg\n";
         }
     }
 
