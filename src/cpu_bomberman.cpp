@@ -54,7 +54,7 @@ static int firstCpuIndex(GameMode mode)
 
 static Difficulty difficultyFor(const Settings& settings, int playerId)
 {
-    if (playerId < 0 || playerId >= 4) return Difficulty::RandomNoSuicide;
+    if (playerId < 0 || playerId >= 4) return Difficulty::Medium;
     return settings.difficultyByPlayerId[(size_t)playerId];
 }
 
@@ -128,16 +128,20 @@ static void markBlastArea(const GameMap& map,
     }
 }
 
-static std::vector<uint8_t> buildDangerMask(const GameMap& map)
+static std::vector<uint8_t> buildDangerMask(const GameMap& map, Difficulty awareness)
 {
     const int rows = map.getRows();
     const int cols = map.getCols();
     std::vector<uint8_t> danger((size_t)rows * (size_t)cols, 0);
 
+    if (awareness == Difficulty::Easy) {
+        return danger;
+    }
+
     // Peligro “pronto”:
     // - Bombas EXPLODING: siempre.
     // - Bombas FUSE a punto de explotar: ventana para que la CPU pueda reaccionar.
-    //   (si es demasiado corta, la CPU se come muchas explosiones por "reacción tardía")
+    // - Bombas remotas: se consideran peligrosas mientras existan.
     static constexpr float kImminentSeconds = 1.25f;
 
     for (auto* b : gBombs) {
@@ -148,10 +152,15 @@ static std::vector<uint8_t> buildDangerMask(const GameMap& map)
         const bool imminentFuse =
             (b->state == BombState::FUSE && !b->remoteControlled &&
              (b->fuseTime - b->fuseTimer) <= kImminentSeconds);
+        const bool remoteBomb = b->remoteControlled;
 
-        if (!exploding && !imminentFuse) continue;
+        if (!exploding && !imminentFuse && !remoteBomb) continue;
 
-        markBlastArea(map, b->gridRow, b->gridCol, b->power, danger, rows, cols);
+        const int effectivePower = (awareness == Difficulty::Hard)
+            ? b->power
+            : std::min(2, b->power);
+
+        markBlastArea(map, b->gridRow, b->gridCol, effectivePower, danger, rows, cols);
     }
 
     return danger;
@@ -803,68 +812,9 @@ void updateCpuPlayers(GameMode mode,
 
     const int rows = map->getRows();
     const int cols = map->getCols();
-    const std::vector<uint8_t> danger = buildDangerMask(*map);
-
-    // Dificultad por ronda (progresión de dificultad en modo VS):
-    // 1) todos RandomAndBombs
-    // 2) todos RandomNoSuicide
-    // 3) 1 PowerUpHunter, resto RandomNoSuicide
-    // 4) 1 Omniscient + 1 PowerUpHunter, resto RandomNoSuicide
-    // 5) todos PowerUpHunter + 1 Omniscient
-    // 6+) +1 Omniscient por ronda hasta que todos sean Omniscient
-    Difficulty roundDiffByPlayerId[4] = {
-        settings.difficultyByPlayerId[0],
-        settings.difficultyByPlayerId[1],
-        settings.difficultyByPlayerId[2],
-        settings.difficultyByPlayerId[3]
-    };
-
-    std::vector<int> cpuIds;
-    cpuIds.reserve(4);
-    for (int idx = start; idx < (int)players.size(); ++idx) {
-        Player* p = players[idx];
-        if (!p) continue;
-        if (p->playerId < 0 || p->playerId >= 4) continue;
-        cpuIds.push_back(p->playerId);
-    }
-
-    std::vector<int> promoteOrder = cpuIds;
-    std::reverse(promoteOrder.begin(), promoteOrder.end()); // mayor playerId = más "pro"
-
-    auto setAllCpu = [&](Difficulty d) {
-        for (int pid : cpuIds) {
-            roundDiffByPlayerId[pid] = d;
-        }
-    };
-
-    const int round = std::max(1, context.versusRoundNumber);
-
-    if (round == 1) {
-        setAllCpu(Difficulty::RandomAndBombs);
-    } else if (round == 2) {
-        setAllCpu(Difficulty::RandomNoSuicide);
-    } else if (round == 3) {
-        setAllCpu(Difficulty::RandomNoSuicide);
-        if (!promoteOrder.empty()) {
-            roundDiffByPlayerId[promoteOrder[0]] = Difficulty::PowerUpHunter;
-        }
-    } else if (round == 4) {
-        setAllCpu(Difficulty::RandomNoSuicide);
-        if (!promoteOrder.empty()) {
-            roundDiffByPlayerId[promoteOrder[0]] = Difficulty::Omniscient;
-        }
-        if (promoteOrder.size() >= 2) {
-            roundDiffByPlayerId[promoteOrder[1]] = Difficulty::PowerUpHunter;
-        }
-    } else {
-        setAllCpu(Difficulty::PowerUpHunter);
-
-        const int numCpu = (int)promoteOrder.size();
-        const int omniCount = std::min(numCpu, 1 + (round - 5));
-        for (int k = 0; k < omniCount; ++k) {
-            roundDiffByPlayerId[promoteOrder[(size_t)k]] = Difficulty::Omniscient;
-        }
-    }
+    const std::vector<uint8_t> dangerEasy = buildDangerMask(*map, Difficulty::Easy);
+    const std::vector<uint8_t> dangerMedium = buildDangerMask(*map, Difficulty::Medium);
+    const std::vector<uint8_t> dangerHard = buildDangerMask(*map, Difficulty::Hard);
 
     for (int i = start; i < (int)players.size(); ++i) {
         Player* p = players[i];
@@ -882,9 +832,11 @@ void updateCpuPlayers(GameMode mode,
         st.bombCooldownSeconds = std::max(0.0f, st.bombCooldownSeconds - deltaTime);
 
         Difficulty diff = difficultyFor(settings, pid);
-        if (pid >= 0 && pid < 4) {
-            diff = roundDiffByPlayerId[pid];
-        }
+
+        const std::vector<uint8_t>& danger =
+            (diff == Difficulty::Easy) ? dangerEasy :
+            (diff == Difficulty::Medium) ? dangerMedium :
+            dangerHard;
 
         // Movimiento por tiles (como los enemigos): mientras tenga target, seguirlo.
         if (p->movingToTarget) {
@@ -892,7 +844,7 @@ void updateCpuPlayers(GameMode mode,
             continue;
         }
 
-        const bool avoidDanger = (diff != Difficulty::RandomAndBombs);
+        const bool avoidDanger = (diff != Difficulty::Easy);
         std::vector<Move> moves = validMoves(*map, danger, *p, /*avoidDanger=*/avoidDanger);
 
         // Si está encerrado por seguridad, relaja y permite cualquier movimiento válido.
@@ -921,6 +873,7 @@ void updateCpuPlayers(GameMode mode,
             if (!other) continue;
             if (other == p) continue;
             if (!other->isAlive() || other->isGameOver()) continue;
+            if (diff == Difficulty::Hard && other->invincible) continue;
 
             int orow = 0, ocol = 0;
             map->ndcToGrid(other->position, orow, ocol);
@@ -934,12 +887,12 @@ void updateCpuPlayers(GameMode mode,
         }
 
         const bool adjDestr = hasAdjacentDestructible(*map, *p);
-        const bool adjHidden = (diff == Difficulty::Omniscient) ? hasAdjacentHiddenPowerUp(*map, *p) : false;
+        const bool adjHidden = (diff == Difficulty::Hard) ? hasAdjacentHiddenPowerUp(*map, *p) : false;
 
         PowerUpType tmp;
         const bool standingOnVisiblePowerUp = map->getVisiblePowerUpType(sr, sc, tmp);
 
-        if (diff == Difficulty::PowerUpHunter) {
+        if (diff == Difficulty::Medium) {
             // Inteligente "honesto": busca power-ups visibles; si no hay, rompe destructibles para descubrir.
             desired = bfsNextStepToNearestPowerUp(*map, danger, *p);
             if (desired == MOVE_NONE) {
@@ -956,7 +909,7 @@ void updateCpuPlayers(GameMode mode,
             if (desired == MOVE_NONE && !holdPosition && target != nullptr) {
                 desired = bfsNextStepToTargetCell(*map, danger, *p, tr, tc);
             }
-        } else if (diff == Difficulty::Omniscient) {
+        } else if (diff == Difficulty::Hard) {
             // "Tramposo": además de visibles, conoce los power-ups ocultos.
             desired = bfsNextStepToNearestPowerUp(*map, danger, *p);
             if (desired == MOVE_NONE) {
@@ -974,7 +927,7 @@ void updateCpuPlayers(GameMode mode,
                 }
             }
 
-            // Omniscient: usar info del oponente (rango de explosión, etc.) para no quedarse alineado.
+            // Hard: usar info del oponente (rango de explosión, etc.) para no quedarse alineado.
             if (target != nullptr && opponentCouldHitCellWithBombNow(*map, *target, tr, tc, sr, sc)) {
                 // Preferir romper línea de visión (fila/columna) con un movimiento perpendicular.
                 Move breakLine = MOVE_NONE;
@@ -1014,9 +967,14 @@ void updateCpuPlayers(GameMode mode,
         // Bombas: probabilidades por segundo (FPS independiente).
         bool wantBomb = false;
 
+        if (diff == Difficulty::Easy && st.bombCooldownSeconds <= 0.0f && p->canPlaceBomb()) {
+            const float perSecond = 0.20f;
+            wantBomb = (rand01() < perSecond * deltaTime);
+        }
+
         if (st.bombCooldownSeconds <= 0.0f && p->canPlaceBomb()) {
             // Combate: si puedo matar a alguien con una bomba en mi tile ahora mismo, priorizarlo.
-            if ((diff == Difficulty::PowerUpHunter || diff == Difficulty::Omniscient) &&
+            if ((diff == Difficulty::Medium || diff == Difficulty::Hard) &&
                 target != nullptr &&
                 !target->invincible &&
                 canHitTargetWithBomb(*map, *p, sr, sc, tr, tc))
@@ -1025,23 +983,16 @@ void updateCpuPlayers(GameMode mode,
             }
 
             if (!wantBomb) {
-                if (diff == Difficulty::RandomAndBombs) {
+                if (diff == Difficulty::Easy) {
                     const float perSecond = 0.20f;
                     wantBomb = (rand01() < perSecond * deltaTime);
-                } else if (diff == Difficulty::RandomNoSuicide) {
+                } else if (diff == Difficulty::Medium) {
                     const float perSecond = 0.16f;
                     wantBomb = (rand01() < perSecond * deltaTime);
                     if (wantBomb) {
                         wantBomb = canEscapeOwnBomb(*map, *p);
                     }
-                } else if (diff == Difficulty::PowerUpHunter) {
-                    // No sabe dónde están ocultos: rompe destructibles "a ciegas", pero solo si está adyacente.
-                    const float perSecond = adjDestr ? 0.24f : 0.0f;
-                    wantBomb = (rand01() < perSecond * deltaTime);
-                    if (wantBomb) {
-                        wantBomb = canEscapeOwnBomb(*map, *p);
-                    }
-                } else if (diff == Difficulty::Omniscient) {
+                } else if (diff == Difficulty::Hard) {
                     // Sabe dónde están ocultos: solo rompe si está pegado a un oculto.
                     const float perSecond = adjHidden ? 0.30f : 0.0f;
                     wantBomb = (rand01() < perSecond * deltaTime);
@@ -1061,8 +1012,8 @@ void updateCpuPlayers(GameMode mode,
         // Remote Control: si tiene bombas "remotas", detonarlas cuando sea seguro.
         {
             const float perSecond =
-                (diff == Difficulty::Omniscient) ? 1.20f :
-                (diff == Difficulty::PowerUpHunter) ? 0.95f :
+                (diff == Difficulty::Hard) ? 1.20f :
+                (diff == Difficulty::Medium) ? 0.95f :
                 0.45f;
             (void)tryDetonateRemoteBombIfSafe(*p, *map, deltaTime, perSecond);
         }
@@ -1317,55 +1268,60 @@ static bool canHitTargetWithBombForAgent(const GameMap& map,
     return clearLineWalkable(map, selfRow, selfCol, targetRow, targetCol);
 }
 
-static bool findNearestPlayerTarget(const Agent& bot,
-                                    int selfRow,
-                                    int selfCol,
-                                    int& outTargetRow,
-                                    int& outTargetCol)
+static bool isHostileToAgent(const Agent& bot, const Player* player)
 {
-    if (!bot.playersList || !bot.gameMap) return false;
+    if (!player) return false;
+    if (!player->isAlive() || player->isGameOver()) return false;
+    if (player->invincible) return false;
 
-    float bestDist = 1e9f;
-    bool found = false;
-
-    for (Player* p : *bot.playersList) {
-        if (!p) continue;
-        if (!p->isAlive() || p->isGameOver()) continue;
-
-        int pr = 0, pc = 0;
-        bot.gameMap->ndcToGrid(p->position, pr, pc);
-        const float manhattan = (float)std::abs(pr - selfRow) + (float)std::abs(pc - selfCol);
-        if (manhattan < bestDist) {
-            bestDist = manhattan;
-            outTargetRow = pr;
-            outTargetCol = pc;
-            found = true;
-        }
-    }
-
-    return found;
+    // En custom, los humanos son aliados solo para el compañero CPU.
+    return bot.isEnemy();
 }
 
-static bool findNearestHostileEnemyTarget(const Agent& bot,
-                                          int selfRow,
-                                          int selfCol,
-                                          int& outTargetRow,
-                                          int& outTargetCol)
+static bool isHostileToAgent(const Agent& bot, const Enemy* enemy)
+{
+    if (!enemy) return false;
+    if (enemy == &bot) return false;
+    if (enemy->lifeState != EnemyLifeState::Alive) return false;
+
+    const Agent* otherBot = dynamic_cast<const Agent*>(enemy);
+    if (otherBot) {
+        return otherBot->getAffiliation() != bot.getAffiliation();
+    }
+
+    // Los monstruos son hostiles para cualquier Bomberman CPU.
+    return true;
+}
+
+static bool findNearestHostileTarget(const Agent& bot,
+                                     int selfRow,
+                                     int selfCol,
+                                     int& outTargetRow,
+                                     int& outTargetCol)
 {
     if (!bot.gameMap) return false;
 
     float bestDist = 1e9f;
     bool found = false;
 
-    for (Enemy* enemy : gEnemies) {
-        if (!enemy) continue;
-        if (enemy == &bot) continue;
-        if (enemy->lifeState != EnemyLifeState::Alive) continue;
+    if (bot.playersList) {
+        for (Player* p : *bot.playersList) {
+            if (!isHostileToAgent(bot, p)) continue;
 
-        const Agent* otherBot = dynamic_cast<const Agent*>(enemy);
-        if (otherBot && otherBot->getAffiliation() == bot.getAffiliation()) {
-            continue;
+            int pr = 0, pc = 0;
+            bot.gameMap->ndcToGrid(p->position, pr, pc);
+            const float manhattan = (float)std::abs(pr - selfRow) + (float)std::abs(pc - selfCol);
+            if (manhattan < bestDist) {
+                bestDist = manhattan;
+                outTargetRow = pr;
+                outTargetCol = pc;
+                found = true;
+            }
         }
+    }
+
+    for (Enemy* enemy : gEnemies) {
+        if (!isHostileToAgent(bot, enemy)) continue;
 
         int er = 0, ec = 0;
         bot.gameMap->ndcToGrid(enemy->position, er, ec);
@@ -1385,9 +1341,11 @@ Agent::Agent(glm::vec2 pos,
              glm::vec2 size,
              float speed,
              TeamAffiliation inAffiliation,
+             Difficulty inDifficulty,
              const std::string& spritePrefix)
     : Enemy(pos, size, speed, /*hp=*/1, /*score=*/1300, /*passSoftBlocks=*/false, /*boss=*/false),
       affiliation(inAffiliation),
+      difficulty(inDifficulty),
       botSpritePrefix(spritePrefix)
 {
     spriteBaseId = botSpritePrefix;
@@ -1429,23 +1387,18 @@ void Agent::Update()
     int sr = 0, sc = 0;
     gameMap->ndcToGrid(position, sr, sc);
 
-    const std::vector<uint8_t> danger = buildDangerMask(*gameMap);
+    const std::vector<uint8_t> danger = buildDangerMask(*gameMap, difficulty);
     const int cols = gameMap->getCols();
     const bool selfDanger = isDangerousCell(danger, sr, sc, cols);
 
-    std::vector<Move> moves = validMovesForAgent(*gameMap, danger, *this, /*avoidDanger=*/true);
+    std::vector<Move> moves = validMovesForAgent(*gameMap, danger, *this, /*avoidDanger=*/difficulty != Difficulty::Easy);
     if (moves.empty()) {
         moves = validMovesForAgent(*gameMap, danger, *this, /*avoidDanger=*/false);
     }
 
     int tr = -1;
     int tc = -1;
-    bool hasTarget = false;
-    if (isEnemy()) {
-        hasTarget = findNearestPlayerTarget(*this, sr, sc, tr, tc);
-    } else {
-        hasTarget = findNearestHostileEnemyTarget(*this, sr, sc, tr, tc);
-    }
+    bool hasTarget = findNearestHostileTarget(*this, sr, sc, tr, tc);
 
     auto moveIsStillValid = [&](Move m) {
         if (m == MOVE_NONE) return false;
@@ -1453,7 +1406,9 @@ void Agent::Update()
     };
 
     Move desired = MOVE_NONE;
-    if (selfDanger) {
+    if (difficulty == Difficulty::Easy) {
+        desired = pickRandomMove(moves);
+    } else if (selfDanger) {
         desired = pickRandomMove(moves);
     } else if (hasTarget) {
         desired = bfsNextStepToTargetCellForAgent(*gameMap,
@@ -1471,6 +1426,23 @@ void Agent::Update()
             moveLockSeconds = 0.20f + rand01() * 0.45f;
         } else {
             desired = currentMove;
+        }
+    }
+
+    if (difficulty == Difficulty::Easy && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
+        const float perSecond = 0.20f;
+        if (rand01() < perSecond * std::max(0.0f, deltaTime) && cellHasAnyBomb(sr, sc) == false) {
+            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
+                                  sr,
+                                  sc,
+                                  /*owner=*/nullptr,
+                                  /*power=*/bombPower,
+                                  /*remote=*/false);
+            bomb->ownerIndex = -1;
+            bomb->ownerLeftTile = true;
+            gBombs.push_back(bomb);
+            ownedBombTiles.push_back(glm::ivec2(sr, sc));
+            bombCooldownSeconds = 0.75f;
         }
     }
 
