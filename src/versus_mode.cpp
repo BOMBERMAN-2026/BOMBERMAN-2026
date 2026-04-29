@@ -40,7 +40,7 @@ int countPlayersStillInMatch(const std::vector<Player*>& players)
     int count = 0;
     for (auto* p : players) {
         if (!p) continue;
-        if (!p->isGameOver()) count++;
+        if (p->isAlive()) count++;
     }
     return count;
 }
@@ -51,7 +51,7 @@ int findLastPlayerStillInMatchIndex(const std::vector<Player*>& players)
     for (int i = 0; i < (int)players.size(); ++i) {
         Player* p = players[i];
         if (!p) continue;
-        if (!p->isGameOver()) return i;
+        if (p->isAlive()) return i;
     }
     return -1;
 }

@@ -13,6 +13,7 @@
 #include "gamepad_input.hpp"
 #include "in_game_menu.hpp"
 #include "custom_game_menu.hpp"
+#include "custom_game_mode.hpp"
 
 /*
  * bomberman.hpp
@@ -34,6 +35,7 @@ enum GameState {
     GAME_CUSTOM_MENU_1, // Configuración custom game (pantalla 1)
     GAME_CUSTOM_MENU_2, // Configuración custom game (pantalla 2)
     GAME_CINEMATIC,  // Cinematicas (video FFmpeg)
+    GAME_RANKING,    // Pantalla de ranking tras Game Over
     GAME_PLAYING
 };
 
@@ -41,7 +43,11 @@ enum class CinematicType {
     Intro,              // Intro al abrir el juego -> GAME_MENU
     HistoryStart,       // Introduccion modo historia -> GAME_PLAYING (Historia 1 o 2 jugadores)
     HistoryEnd,         // Final modo historia -> GAME_MENU (Historia 1 o 2 jugadores)
-    LevelStart          // Pantalla de inicio de cada nivel -> GAME_PLAYING (nivel siguiente)
+    LevelStart,         // Pantalla de inicio de cada nivel -> GAME_PLAYING (nivel siguiente)
+    VsVictoryP1,        // Victoria en VS del jugador 1
+    VsVictoryP2,        // Victoria en VS del jugador 2
+    VsDraw,             // Empate en VS
+    VsDefeat            // Derrota en VS
 };
 
 enum class GameMode {
@@ -85,6 +91,17 @@ private:
     // Helpers de progresión.
     bool allPlayersOutOfLives() const;
     bool allEnemiesCleared() const;
+    void startVsRoundCinematic(CinematicType type, const std::string& videoPath, int winnerIndex);
+    void renderVsVictoryStatsOverlay();
+    void startContinueSequence();
+    void updateContinueSequence(float deltaTime);
+    void enterRankingScreen();
+    void renderContinueOverlay(float aspect);
+
+    // Secuencia TIME UP (se agotó el tiempo sin eliminar enemigos).
+    void startTimeUpSequence();
+    void updateTimeUpSequence(float deltaTime);
+    void renderTimeUpOverlay(float aspect);
 
     // Cámara 3D avanzada (estado interno de control/cursor).
     float cameraOrbitYaw = 0.0f;
@@ -131,6 +148,29 @@ private:
     int versusRoundNumber = 1;
     bool currentLevelHadEnemies = false;
 
+    // VS: resultado de cinemática y acción a ejecutar al terminar.
+    int vsCinematicWinnerIndex = -1;
+    enum class VsCinematicPostAction {
+        None,
+        RestartCurrentLevel,
+        AdvanceNextLevel,
+        ReturnToMenu
+    };
+    VsCinematicPostAction vsCinematicPostAction = VsCinematicPostAction::None;
+    bool vsCinematicSkipRequested = false;
+
+    // VS: overlay de victoria (texto naranja) — valores en proporcion a la resolucion de referencia 1920x1080.
+    float vsVictoryOverlayRightXRatio  = 1560.0f / 1920.0f;
+    float vsVictoryOverlayTopYRatio    = 361.0f  / 1080.0f;
+    float vsVictoryOverlayLineGapRatio = 108.0f  / 1080.0f;
+    float vsVictoryOverlayGlyphWRatio  = 60.0f   / 1920.0f;
+    float vsVictoryOverlayGlyphHRatio  = 67.0f   / 1080.0f;
+    float vsVictoryOverlaySpacingRatio = 8.0f    / 1920.0f;
+    float vsVictoryOverlaySpaceWidthFactor = 0.60f;
+
+    // VS: tiempo vivo acumulado (segundos) para la partida actual.
+    float vsAliveSeconds = 0.0f;
+
 public:
     std::vector<int> playerScores;
 
@@ -157,8 +197,35 @@ private:
     float levelAdvanceTimer = 0.0f;
     float levelAdvanceDelaySeconds = 1.0f;
 
+    // Secuencia de fin de partida (CONTINUE -> GAME OVER -> RANKING).
+    bool continueSequenceActive = false;
+    bool continueShowingGameOver = false;
+    float continueTimerSeconds = 0.0f;
+    float continueProgress01 = 0.0f;
+    int continueCountdownValue = 9;
+
+    // Secuencia TIME UP.
+    bool timeUpSequenceActive = false;
+    float timeUpTimer = 0.0f;
+    static constexpr float kTimeUpAnimDuration = 4.5f; // segundos hasta matar jugadores
+
+    // Ranking tras Game Over.
+    float rankingScreenTimer = 0.0f;
+    float rankingAutoExitSeconds = 5.0f;
+    bool isEnteringRankingName = false;
+    int rankingEntryIndex = -1;
+    std::string rankingPlayerName = "";
+    int rankingCurrentVocabIndex = 0;
+    int rankingPlayerOwner = 1;
+    float rankingInputTimer = 0.0f;
+    bool isRankingVs = false;
+
     // Cinemáticas de nivel: variables para rastrear transición a cinemática antes de cargar nivel.
     bool loadLevelPending = false;  // Flag para saber si después de la cinemática debe cargar un nivel
+    bool pendingLoadPreserveLivesAndScore = false;
+    float introCinematicElapsedSeconds = 0.0f;
+    bool introExplosionPlayed = false;
+    static constexpr float kIntroExplosionTriggerSeconds = 3.5f;
 
     // Progresión de niveles (uso interno).
     void loadLevel(int levelIndex, bool preserveLivesAndScore);
@@ -187,6 +254,7 @@ public:
         // UI Screen
         MenuScreen menuScreen;              // Gestiona menú
         CustomGameMenu customGameMenu;      // Menús de partida personalizada
+        CustomGameMode customGameMode;      // Runtime de partida personalizada
         CinematicPlayer cinematicPlayer;    // Reproductor de cinematicas (FFmpeg)
         CinematicType currentCinematicType = CinematicType::Intro;
         GameState nextStateAfterCinematic = GAME_INTRO;

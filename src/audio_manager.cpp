@@ -30,9 +30,13 @@ static constexpr int kMaxVoices = 12;  // hasta 12 explosiones simultáneas
 // ============================================================
 // Tipo de voz (pool de SFX simultáneos)
 // ============================================================
+static constexpr float kPlaceBombSoundStartDelaySeconds = 1.0f;
+static constexpr float kPlaceBombSoundDurationSeconds = 3.0f;
+
 struct SfxVoice {
     ma_sound sound;
     bool active = false;
+    ma_uint64 releaseTimeFrames = 0;
 };
 
 // ============================================================
@@ -44,9 +48,13 @@ struct AudioManager::Impl {
 
     // Sonidos SFX precargados (decodificados en RAM)
     ma_sound sfxExplosion;
-    ma_sound sfxPlace;
+    ma_sound sfxPlaceNormal;
+    ma_sound sfxPlaceSpecial;
     ma_sound sfxPickup;
     bool sfxReady = false;
+    bool placeSpecialReady = false;
+    bool useSpecialPlaceBombSound = false;
+    int placeSpecialTapCount = 0;
 
     // Pool de voces clonadas para SFX simultáneos
     std::vector<SfxVoice> explosionPool;
@@ -91,19 +99,44 @@ static std::string normalizePath(const std::string& p) {
 static void fireFromPool(ma_engine* engine,
                          ma_sound* prototype,
                          std::vector<SfxVoice>& pool,
-                         float volume)
+                         float volume,
+                         float startDelaySeconds = 0.0f,
+                         float durationSeconds = 0.0f)
 {
+    const ma_uint32 sampleRate = ma_engine_get_sample_rate(engine);
+    const ma_uint64 nowFrames = ma_engine_get_time_in_pcm_frames(engine);
+    const ma_uint64 startDelayFrames = (startDelaySeconds > 0.0f)
+        ? (ma_uint64)(startDelaySeconds * (float)sampleRate)
+        : 0;
+    const ma_uint64 durationFrames = (durationSeconds > 0.0f)
+        ? (ma_uint64)(durationSeconds * (float)sampleRate)
+        : 0;
+    const ma_uint64 startTimeFrames = nowFrames + startDelayFrames;
+    const ma_uint64 stopTimeFrames = (durationFrames > 0)
+        ? startTimeFrames + durationFrames
+        : 0;
+
     for (auto& v : pool) {
         // Si la voz está activa pero terminó, liberarla
-        if (v.active && !ma_sound_is_playing(&v.sound)) {
+        if (v.active &&
+            !ma_sound_is_playing(&v.sound) &&
+            (v.releaseTimeFrames == 0 || nowFrames >= v.releaseTimeFrames)) {
             ma_sound_uninit(&v.sound);
             v.active = false;
+            v.releaseTimeFrames = 0;
         }
         if (!v.active) {
             ma_result r = ma_sound_init_copy(engine, prototype, 0, nullptr, &v.sound);
             if (r != MA_SUCCESS) continue;
             ma_sound_set_volume(&v.sound, volume);
+            if (startDelayFrames > 0) {
+                ma_sound_set_start_time_in_pcm_frames(&v.sound, startTimeFrames);
+            }
+            if (stopTimeFrames > 0) {
+                ma_sound_set_stop_time_in_pcm_frames(&v.sound, stopTimeFrames);
+            }
             ma_sound_start(&v.sound);
+            v.releaseTimeFrames = stopTimeFrames;
             v.active = true;
             return;
         }
@@ -116,6 +149,8 @@ static void fireFromPool(ma_engine* engine,
 // ============================================================
 bool AudioManager::init(const std::string& basePath) {
     if (impl) return true;  // Ya inicializado
+
+    musicDisabled = false; VFXDisabled = false;
 
     impl = new Impl();
     impl->basePath = normalizePath(basePath);
@@ -150,9 +185,10 @@ bool AudioManager::init(const std::string& basePath) {
     };
 
     bool ok = true;
-    ok &= loadSfx(impl->sfxExplosion, "resources/sounds/VFX/explosion.wav");
-    ok &= loadSfx(impl->sfxPlace,     "resources/sounds/VFX/ponerbomba.wav");
-    ok &= loadSfx(impl->sfxPickup,    "resources/sounds/VFX/cogerpowerup.wav");
+    ok &= loadSfx(impl->sfxExplosion,    "resources/sounds/VFX/explosion.wav");
+    ok &= loadSfx(impl->sfxPlaceNormal,  "resources/sounds/VFX/ponerbomba.wav");
+    ok &= loadSfx(impl->sfxPickup,       "resources/sounds/VFX/cogerpowerup.wav");
+    impl->placeSpecialReady = loadSfx(impl->sfxPlaceSpecial, "resources/sounds/Voicy_allah akbar.mp3");
 
     impl->sfxReady = ok;
 
@@ -189,9 +225,13 @@ void AudioManager::shutdown() {
     // Liberar prototipos SFX
     if (impl->sfxReady) {
         ma_sound_uninit(&impl->sfxExplosion);
-        ma_sound_uninit(&impl->sfxPlace);
+        ma_sound_uninit(&impl->sfxPlaceNormal);
         ma_sound_uninit(&impl->sfxPickup);
         impl->sfxReady = false;
+    }
+    if (impl->placeSpecialReady) {
+        ma_sound_uninit(&impl->sfxPlaceSpecial);
+        impl->placeSpecialReady = false;
     }
 
     // Apagar engine
@@ -209,13 +249,21 @@ void AudioManager::shutdown() {
 // ============================================================
 void AudioManager::playVfx(VfxSound sfx) {
     if (!impl || !impl->engineReady || !impl->sfxReady) return;
+    if (VFXDisabled) return;
 
     std::lock_guard<std::mutex> lock(impl->poolMutex);
 
     switch (sfx) {
         case VfxSound::PlaceBomb:
-            fireFromPool(&impl->engine, &impl->sfxPlace,
-                         impl->placePool, impl->vfxVolume);
+            if (impl->useSpecialPlaceBombSound && impl->placeSpecialReady) {
+                fireFromPool(&impl->engine, &impl->sfxPlaceSpecial,
+                             impl->placePool, impl->vfxVolume,
+                             kPlaceBombSoundStartDelaySeconds,
+                             kPlaceBombSoundDurationSeconds);
+            } else {
+                fireFromPool(&impl->engine, &impl->sfxPlaceNormal,
+                             impl->placePool, impl->vfxVolume);
+            }
             break;
         case VfxSound::Explosion:
             fireFromPool(&impl->engine, &impl->sfxExplosion,
@@ -228,11 +276,31 @@ void AudioManager::playVfx(VfxSound sfx) {
     }
 }
 
+void AudioManager::registerPlaceBombSpecialTap() {
+    if (!impl || impl->useSpecialPlaceBombSound) return;
+
+    impl->placeSpecialTapCount += 1;
+    if (impl->placeSpecialTapCount >= 3) {
+        impl->useSpecialPlaceBombSound = impl->placeSpecialReady;
+        impl->placeSpecialTapCount = 0;
+    }
+}
+
+void AudioManager::resetPlaceBombSpecialSound() {
+    if (!impl) return;
+
+    std::lock_guard<std::mutex> lock(impl->poolMutex);
+    impl->useSpecialPlaceBombSound = false;
+    impl->placeSpecialTapCount = 0;
+}
+
 // ============================================================
 // playBgm
 // ============================================================
 void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) {
     if (!impl || !impl->engineReady) return;
+
+    if (musicDisabled) {stopBgm(); return;}
 
     // Parar la BGM anterior si existe
     stopBgm();
@@ -278,6 +346,25 @@ bool AudioManager::isBgmFinished() const {
     return !ma_sound_is_playing(&impl->bgmSound);
 }
 
+float AudioManager::getBgmProgress01() const {
+    if (!impl || !impl->bgmActive) return -1.0f;
+
+    ma_uint64 lengthFrames = 0;
+    ma_uint64 cursorFrames = 0;
+
+    const ma_result lenRes = ma_sound_get_length_in_pcm_frames(&impl->bgmSound, &lengthFrames);
+    const ma_result cursorRes = ma_sound_get_cursor_in_pcm_frames(&impl->bgmSound, &cursorFrames);
+
+    if (lenRes != MA_SUCCESS || cursorRes != MA_SUCCESS || lengthFrames == 0) {
+        return -1.0f;
+    }
+
+    const double ratio = (double)cursorFrames / (double)lengthFrames;
+    if (ratio <= 0.0) return 0.0f;
+    if (ratio >= 1.0) return 1.0f;
+    return (float)ratio;
+}
+
 // ============================================================
 // Volúmenes
 // ============================================================
@@ -293,3 +380,12 @@ void AudioManager::setBgmVolume(float v) {
         ma_sound_set_volume(&impl->bgmSound, v);
     }
 }
+
+void AudioManager::toggleMusicDisabled() { musicDisabled = !musicDisabled; stopBgm(); }
+
+void AudioManager::toggleVFXDisable() { VFXDisabled = !VFXDisabled; }
+
+bool AudioManager::isMusicDisabled() {return musicDisabled; }
+
+bool AudioManager::isVFXDisabled() { return VFXDisabled; }
+

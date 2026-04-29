@@ -11,6 +11,8 @@
 #include "sprite_atlas.hpp"
 #include "bomb.hpp"
 #include "bomberman.hpp"
+#include "versus_mode.hpp"
+#include "score_popup.hpp"
 #include <iostream>
 
 extern class Game* bomberman;
@@ -22,8 +24,26 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern GLuint uniformWhiteFlash;
 extern SpriteAtlas gPlayerAtlas;
+extern SpriteAtlas gNextLevelAtlas;
 extern GLuint texture;
+extern GLuint gNextLevelTexture;
 extern GameMap* gameMap;
+
+namespace {
+
+int scoreValueForItem(PowerUpType type) {
+    switch (type) {
+        case PowerUpType::Matches: return 5000;
+        case PowerUpType::Can: return 10000;
+        case PowerUpType::Lighter: return 30000;
+        case PowerUpType::Battery: return 40000;
+        case PowerUpType::Dragonfly: return 50000;
+        case PowerUpType::HudsonBee: return 77000;
+        default: return 0;
+    }
+}
+
+}
 
 /*
  * player.cpp
@@ -183,7 +203,9 @@ void Player::updateDeathAnimation() {
         // Si no quedan vidas, nunca se respawnea.
         // Importante: fijar el sprite al último frame de muerte para no caer en el
         // sprite anterior (p.ej. mirando abajo) si el deltaTime hace saltar frames.
-        if (lives <= 0) {
+        const bool disableRespawnForVs =
+            (bomberman != nullptr) && VersusMode::isVersusMode(bomberman->mode);
+        if (lives <= 0 || disableRespawnForVs) {
             pendingRespawn = false;
             deathFrame = lastFrame;
             if (prefix) {
@@ -210,6 +232,7 @@ void Player::updateDeathAnimation() {
 
 void Player::startWinning() {
     lifeState = PlayerLifeState::Winning;
+    winStartPosition = position;
     isWalking = false;
     winTimer = 0.0f;
     winPhase = 0;
@@ -314,7 +337,7 @@ void Player::updateWinningAnimation() {
             // Pose inicial de paz normal
             currentSpriteName = spritePrefix + ".victoria.recto.0";
             winScale = 1.8f;
-        } else if (winTimer < 1.5f) {
+        } else if (winTimer < 2.7f) {
             // Pose gigante
             currentSpriteName = spritePrefix + ".victoria.dedos.0"; 
             winScale = 2.8f; // Crecimiento
@@ -416,6 +439,42 @@ void Player::Draw() {
     glUniform1f(uniformWhiteFlash, whiteFlash);
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    // --- 3. DIBUJAR LA BOMBA/EFECTO (LO NUEVO) ENCIMA ---
+    if (lifeState == PlayerLifeState::Winning) {
+        int bombFrame = 0;
+        bool drawBomb = true;
+
+        if (winPhase == 0) {
+            bombFrame = ((int)(winTimer / 0.3f)) % 2; // Misma velocidad que la mecha de una bomba colocada (0.3f)
+        } else {
+            bombFrame = 2 + (int)(winTimer / 0.05f);
+            if (bombFrame > 7) {
+                drawBomb = false; // Desaparecer cuando acaben los sprites
+            }
+        }
+
+        if (drawBomb) {
+            std::string bombSprite = "next_lvl_bomb." + std::to_string(bombFrame);
+            glm::vec4 bombUv(0.0f);
+            if (getUvRectForSprite(gNextLevelAtlas, bombSprite, bombUv)) {
+                glm::mat4 bombModel = glm::mat4(1.0f);
+                // Usar winStartPosition para que se quede fijo, con un ligero ajuste de 10px a la derecha (5px originales + 5px nuevos)
+                bombModel = glm::translate(bombModel, glm::vec3(winStartPosition.x + (10.0f/24.0f)*halfTile, winStartPosition.y - 2.0f * halfTile, 0.0f));
+                // Escala 3.465f (+5% de 3.3f)
+                bombModel = glm::scale(bombModel, glm::vec3(halfTile * 3.465f, halfTile * 3.465f, 1.0f));
+
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, gNextLevelTexture);
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(bombModel));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(bombUv));
+                glUniform1f(uniformFlipX, 0.0f);
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glUniform1f(uniformWhiteFlash, 0.0f);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+        }
+    }
 }
 
 // Aplica un paso de movimiento con colisión (mapa + bombas) y “snap” al centro del tile.
@@ -457,13 +516,6 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     }
 
     glm::vec2 newPos = this->position;
-    switch (mov) {
-        case MOVE_UP:    newPos.y += step; break;
-        case MOVE_DOWN:  newPos.y -= step; break;
-        case MOVE_LEFT:  newPos.x -= step; break;
-        case MOVE_RIGHT: newPos.x += step; break;
-        default: return;
-    }
 
     // --- Sondas de colisión ---
     {
@@ -472,28 +524,57 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
         const float eSide  = halfTile * 0.60f;
 
         if (mov == MOVE_UP) {
+            bool hitLeft = false;
+            bool hitRight = false;
             map->ndcToGrid({newPos.x - eSide, newPos.y + eFront}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitLeft = true;
             map->ndcToGrid({newPos.x + eSide, newPos.y + eFront}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitRight = true;
+
+            if (hitLeft && hitRight) {} // No hacemos nada
+            else if (hitLeft && !hitRight) newPos.x += step * 0.75f;
+            else if (!hitLeft && hitRight) newPos.x -= step * 0.75f;
+            else newPos.y += step;
+
         }
         if (mov == MOVE_DOWN) {
+            bool hitLeft = false;
+            bool hitRight = false;
             map->ndcToGrid({newPos.x - eSide, newPos.y - eFront}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitLeft = true;
             map->ndcToGrid({newPos.x + eSide, newPos.y - eFront}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitRight = true;
+
+            if (hitLeft && hitRight) {} // No hacemos nada
+            else if (hitLeft && !hitRight) newPos.x += step * 0.75f;
+            else if (!hitLeft && hitRight) newPos.x -= step * 0.75f;
+            else newPos.y -= step;
         }
         if (mov == MOVE_LEFT) {
+            bool hitDown = false;
+            bool hitUp = false;
             map->ndcToGrid({newPos.x - eFront, newPos.y - eSide}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitDown = true;
             map->ndcToGrid({newPos.x - eFront, newPos.y + eSide}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitUp = true;
+
+            if (hitDown && hitUp) {} // No hacemos nada
+            else if (hitDown && !hitUp) newPos.y += step * 0.75f;
+            else if (!hitDown && hitUp) newPos.y -= step * 0.75f;
+            else newPos.x -= step;
         }
         if (mov == MOVE_RIGHT) {
+            bool hitDown = false;
+            bool hitUp = false;
             map->ndcToGrid({newPos.x + eFront, newPos.y - eSide}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitDown = true;
             map->ndcToGrid({newPos.x + eFront, newPos.y + eSide}, r, c);
-            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) return;
+            if (!map->isWalkable(r, c) || bombBlocksCellForPlayer(r, c, this->playerId)) hitUp = true;
+
+            if (hitDown && hitUp) {} // No hacemos nada
+            else if (hitDown && !hitUp) newPos.y += step * 0.75f;
+            else if (!hitDown && hitUp) newPos.y -= step * 0.75f;
+            else newPos.x += step;
         }
     }
 
@@ -589,13 +670,12 @@ void Player::applyPowerUp(PowerUpType type) {
         type == PowerUpType::Battery || type == PowerUpType::Dragonfly || type == PowerUpType::HudsonBee) {
         
         // Sumar al score por items
+        const int itemScore = scoreValueForItem(type);
         if (bomberman && playerId >= 0 && playerId < (int)bomberman->playerScores.size()) {
-            if (type == PowerUpType::Matches) bomberman->playerScores[playerId] += 5000;
-            else if (type == PowerUpType::Can) bomberman->playerScores[playerId] += 10000;
-            else if (type == PowerUpType::Lighter) bomberman->playerScores[playerId] += 30000;
-            else if (type == PowerUpType::Battery) bomberman->playerScores[playerId] += 40000;
-            else if (type == PowerUpType::Dragonfly) bomberman->playerScores[playerId] += 50000;
-            else if (type == PowerUpType::HudsonBee) bomberman->playerScores[playerId] += 77000;
+            bomberman->playerScores[playerId] += itemScore;
+        }
+        if (itemScore > 0) {
+            ScorePopup::spawn(position, itemScore, 1, true);
         }
         return; // Los items no otorgan buffs jugables 
     }

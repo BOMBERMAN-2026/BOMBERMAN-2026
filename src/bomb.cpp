@@ -45,6 +45,7 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, 
       explodeInterval(0.065f), // Intervalo de explosión intermedio (más rápido que 0.12s, más lento que 0.045s)
       currentSpriteName("bomb.1"),
       ownerIndex(ownerPlayer ? ownerPlayer->playerId : 0),
+      enemiesKilled(0),
       ownerLeftTile(false),
       power(bombPower),
       owner(ownerPlayer),
@@ -145,7 +146,7 @@ void Bomb::detonate() {
 
     explosionSegments.clear();
     // 1. Centro
-    explosionSegments.push_back({ position, "explosion", 0.0f });
+    explosionSegments.push_back({ position, "explosion", 0.0f, -1 });
     // Regla: si una explosión alcanza un ítem ya suelto en el suelo, desaparece.
     gameMap->destroyExposedPowerUp(gridRow, gridCol);
 
@@ -182,7 +183,7 @@ void Bomb::detonate() {
             }
 
             std::string baseName = isLast ? "explosion_end" : "explosion_mid";
-            explosionSegments.push_back({ gameMap->gridToNDC(r, c), baseName, angles[i] });
+            explosionSegments.push_back({ gameMap->gridToNDC(r, c), baseName, angles[i], i });
         }
     }
 }
@@ -215,16 +216,37 @@ void Bomb::Draw() {
     } else if (state == BombState::EXPLODING) {
         // Renderizar todos los segmentos de la explosión
         for (const auto& seg : explosionSegments) {
-            std::string spriteName = seg.baseName + "." + std::to_string(animFrame);
-            
+            std::string dirSuffix = "";
+            if (seg.dirIndex == 0) dirSuffix = "_right";
+            else if (seg.dirIndex == 1) dirSuffix = "_up";
+            else if (seg.dirIndex == 2) dirSuffix = "_left";
+            else if (seg.dirIndex == 3) dirSuffix = "_down";
+
+            std::string spriteNameDir = seg.baseName + dirSuffix + "." + std::to_string(animFrame);
             glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-            if (!getUvRectForSprite(gBombAtlas, spriteName, uvRect)) {
-                continue; // Si el usuario puso "XXXX" y no carga, saltar este segmento en lugar de colgarse
+            
+            float renderRotation = seg.rotation;
+            bool foundSprite = false;
+
+            if (seg.dirIndex != -1 && getUvRectForSprite(gBombAtlas, spriteNameDir, uvRect)) {
+                // Existe sprite específico de dirección en el atlas actual (ej: Stage 2)
+                foundSprite = true;
+                renderRotation = 0.0f; // Ya está orientado
+            } else {
+                // Fallback: usar el sprite genérico y rotarlo
+                std::string spriteNameGen = seg.baseName + "." + std::to_string(animFrame);
+                if (getUvRectForSprite(gBombAtlas, spriteNameGen, uvRect)) {
+                    foundSprite = true;
+                }
+            }
+
+            if (!foundSprite) {
+                continue; // Si falta sprite por completo, saltar
             }
 
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(seg.pos.x, seg.pos.y, 0.0f));
-            model = glm::rotate(model, seg.rotation, glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::rotate(model, renderRotation, glm::vec3(0.0f, 0.0f, 1.0f));
             model = glm::scale(model, glm::vec3(halfTile, halfTile, 1.0f));
 
             glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));

@@ -32,6 +32,7 @@ struct ExplosionSegment {
     glm::vec2 pos;          // Centro del tile en NDC
     std::string baseName;   // "explosion", "explosion_mid", "explosion_end"
     float rotation;         // Ángulo en radianes (0 para derecha, 90 arriba, etc.)
+    int dirIndex;           // 0=RIGHT, 1=UP, 2=LEFT, 3=DOWN, -1=CENTER
 };
 
 class Bomb {
@@ -54,6 +55,7 @@ public:
     std::string currentSpriteName; // Sprite actual en el atlas
 
     int ownerIndex;         // Índice del jugador que la colocó (0 o 1)
+    int enemiesKilled;      // Contador de enemigos muertos por esta bomba para los multiplicadores
 
     // Bloqueo de paso (tile-based).
     bool ownerLeftTile; // true cuando el dueño ya abandonó el tile (si es true, bloquea también para él).

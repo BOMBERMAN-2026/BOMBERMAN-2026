@@ -52,6 +52,10 @@ struct Block {
     bool powerUpCollected = false; // El power-up ya fue recogido
     bool powerUpPickupFxActive = false; // Efecto visual de brillo al recoger
     float powerUpPickupFxTimer = 0.0f;  // Tiempo acumulado del efecto de recogida
+    
+    bool itemExploding = false;         // Animacion especial al destruir el power-up
+    float itemExplodingTimer = 0.0f;
+    int itemExplodingFrame = 0;
 
     bool isWalkable() const {
         if (destroyed) return true; // destructible ya destruido → suelo
@@ -165,6 +169,10 @@ public:
     // Renderiza los power-ups revelados (bloques destruidos con power-up visible).
     void renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
                         GLuint uniformTintColor, GLuint uniformFlipX);
+
+    // Renderiza las explosiones de los items destruidos (para que se pinten encima de todo)
+    void renderPowerUpExplosions(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
+                                 GLuint uniformTintColor, GLuint uniformFlipX);
 
     // Consulta el power-up visible (revelado y no recogido) en una celda.
     bool getVisiblePowerUpType(int row, int col, PowerUpType& outType) const;

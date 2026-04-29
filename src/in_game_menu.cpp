@@ -120,7 +120,7 @@ void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, f
     }
 }
 
-void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, 
+void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, GLuint uniformFlipX,
                                   SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture,
                                   SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture) {
 
@@ -135,6 +135,8 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     //float aspect = (float)inGameMenuWidth / (float)inGameMenuHeight;
     // glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
     // glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+
+    glUniform1f(uniformFlipX, 0.0f);
 
     glm::mat4 orthoProj = glm::ortho(-2.0f, 2.0f, -1.0f, 1.0f);
     glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(orthoProj));

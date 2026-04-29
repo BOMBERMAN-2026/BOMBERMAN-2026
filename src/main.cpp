@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "bomberman.hpp"
+#include "audio_manager.hpp"
 
 /*
  * main.cpp
@@ -147,32 +148,16 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 
             // ========== JUEGO NORMAL ==========
             if (bomberman->state == GAME_PLAYING) {
-                if (key == GLFW_KEY_F1) {
-                    bomberman->toggleViewMode();
-                }
-
-                if (key == GLFW_KEY_F2 && bomberman->is3DViewEnabled()) {
-                    bomberman->cycleCamera3DType();
-                }
-
-                if (bomberman->is3DViewEnabled()) {
-                    if (key == GLFW_KEY_1 || key == GLFW_KEY_KP_1) {
-                        bomberman->setCamera3DType(Camera3DType::PerspectiveFixed);
-                    } else if (key == GLFW_KEY_2 || key == GLFW_KEY_KP_2) {
-                        bomberman->setCamera3DType(Camera3DType::PerspectiveMobile);
-                    } else if (key == GLFW_KEY_3 || key == GLFW_KEY_KP_3) {
-                        bomberman->setCamera3DType(Camera3DType::FirstPerson);
-                    } else if (key == GLFW_KEY_4 || key == GLFW_KEY_KP_4) {
-                        bomberman->setCamera3DType(Camera3DType::FreeCamera);
-                    }
+                if (key == GLFW_KEY_4 || key == GLFW_KEY_KP_4) {
+                    AudioManager::get().registerPlaceBombSpecialTap();
                 }
             }
 
-            if (key == GLFW_KEY_UP || key == GLFW_KEY_DOWN || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT) {
+            if (key == bomberman->inGameMenu.controlsMenu.upKey_P1 || key == bomberman->inGameMenu.controlsMenu.downKey_P1 || key == bomberman->inGameMenu.controlsMenu.leftKey_P1 || key == bomberman->inGameMenu.controlsMenu.rightKey_P1) {
                 bomberman->lastDirKey = key;
             }
 
-            if (key == GLFW_KEY_W || key == GLFW_KEY_A || key == GLFW_KEY_S || key == GLFW_KEY_D) {
+            if (key == bomberman->inGameMenu.controlsMenu.upKey_P2 || key == bomberman->inGameMenu.controlsMenu.downKey_P2 || key == bomberman->inGameMenu.controlsMenu.leftKey_P2 || key == bomberman->inGameMenu.controlsMenu.rightKey_P2) {
                 bomberman->lastDirKeyP2 = key;
             }
         }

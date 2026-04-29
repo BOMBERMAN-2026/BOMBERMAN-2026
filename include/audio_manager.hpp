@@ -36,15 +36,24 @@ public:
 
     // SFX: dispara un sonido de efecto de sonido — retorna inmediatamente, sin bloquear
     void playVfx(VfxSound sfx);
+    void registerPlaceBombSpecialTap();
+    void resetPlaceBombSpecialSound();
 
     // Música de fondo
     void playBgm(const std::string& absPath, bool loop = true, float volume = 0.6f);
     void stopBgm();
     bool isBgmFinished() const;
+    float getBgmProgress01() const; // [0..1], -1 si no se puede calcular.
 
     // Volúmenes globales (0.0 – 1.0)
     void setVfxVolume(float v);
     void setBgmVolume(float v);
+
+    void toggleMusicDisabled();
+    void toggleVFXDisable();
+
+    bool isMusicDisabled();
+    bool isVFXDisabled();
 
 private:
     AudioManager() = default;
@@ -55,4 +64,8 @@ private:
     // Implementación interna oculta (Pimpl — definida en audio_manager.cpp)
     struct Impl;
     Impl* impl = nullptr;
+
+    // Para implementar el muteo de la musisca y vfx
+    bool musicDisabled;
+    bool VFXDisabled;
 };

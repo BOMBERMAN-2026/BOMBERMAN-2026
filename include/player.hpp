@@ -84,6 +84,7 @@ class Player : public Entity {
         float win3DScale = 1.0f;       // Escala dinámica del modelo 3D
         float win3DGlitterTimer = -1.0f; // <0: sin burst. >=0: tiempo activo del burst glitter
         bool win3DGlitterBurst = false;
+        glm::vec2 winStartPosition = glm::vec2(0.0f); // Posición inicial al ganar para fijar sprites
         void startWinning();
         void updateWinningAnimation();
 

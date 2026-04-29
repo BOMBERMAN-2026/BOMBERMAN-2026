@@ -407,61 +407,229 @@
       "h": 48,
       "nombre": "explosion_frame3"
     },
-    "explosion_mid.0": {
+    "explosion_mid_up.0": {
       "x": 942,
       "y": 356,
       "w": 48,
       "h": 48,
       "nombre": "exp_mid0"
     },
-    "explosion_mid.1": {
+    "explosion_mid_up.1": {
       "x": 874,
       "y": 358,
       "w": 48,
       "h": 48,
       "nombre": "exp_mid1"
     },
-    "explosion_mid.2": {
+    "explosion_mid_up.2": {
       "x": 875,
       "y": 419,
       "w": 48,
       "h": 48,
       "nombre": "exp_mid2"
     },
-    "explosion_mid.3": {
+    "explosion_mid_up.3": {
       "x": 943,
       "y": 418,
       "w": 48,
       "h": 48,
       "nombre": "exp_mid3"
     },
-    "explosion_end.0": {
+    "explosion_mid_right.0": {
+      "x": 889,
+      "y": 490,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid0_r"
+    },
+    "explosion_mid_right.1": {
+      "x": 889,
+      "y": 543,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid1_r"
+    },
+    "explosion_mid_right.2": {
+      "x": 889,
+      "y": 596,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid2_r"
+    },
+    "explosion_mid_right.3": {
+      "x": 889,
+      "y": 649,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid3_r"
+    },
+    "explosion_mid_down.0": {
+      "x": 1020,
+      "y": 475,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid0_d"
+    },
+    "explosion_mid_down.1": {
+      "x": 1088,
+      "y": 475,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid1_d"
+    },
+    "explosion_mid_down.2": {
+      "x": 1152,
+      "y": 475,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid2_d"
+    },
+    "explosion_mid_down.3": {
+      "x": 1212,
+      "y": 475,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid3_d"
+    },
+    "explosion_mid_left.0": {
+      "x": 802,
+      "y": 490,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid0_l"
+    },
+    "explosion_mid_left.1": {
+      "x": 802,
+      "y": 543,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid1_l"
+    },
+    "explosion_mid_left.2": {
+      "x": 802,
+      "y": 596,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid2_l"
+    },
+    "explosion_mid_left.3": {
+      "x": 802,
+      "y": 649,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_mid3_l"
+    },
+    "explosion_end_up.0": {
       "x": 1020,
       "y": 355,
       "w": 48,
       "h": 48,
       "nombre": "exp_end0"
     },
-    "explosion_end.1": {
+    "explosion_end_up.1": {
       "x": 1088,
       "y": 353,
       "w": 48,
       "h": 48,
       "nombre": "exp_end1"
     },
-    "explosion_end.2": {
+    "explosion_end_up.2": {
       "x": 1152,
       "y": 352,
       "w": 48,
       "h": 48,
       "nombre": "exp_end2"
     },
-    "explosion_end.3": {
+    "explosion_end_up.3": {
       "x": 1212,
       "y": 351,
       "w": 48,
       "h": 48,
       "nombre": "exp_end3"
+    },
+    "explosion_end_right.0": {
+      "x": 943,
+      "y": 490,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end0_r"
+    },
+    "explosion_end_right.1": {
+      "x": 943,
+      "y": 543,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end1_r"
+    },
+    "explosion_end_right.2": {
+      "x": 943,
+      "y": 596,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end2_r"
+    },
+    "explosion_end_right.3": {
+      "x": 943,
+      "y": 649,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end3_r"
+    },
+    "explosion_end_down.0": {
+      "x": 1020,
+      "y": 418,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end0_d"
+    },
+    "explosion_end_down.1": {
+      "x": 1088,
+      "y": 418,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end1_d"
+    },
+    "explosion_end_down.2": {
+      "x": 1152,
+      "y": 418,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end2_d"
+    },
+    "explosion_end_down.3": {
+      "x": 1212,
+      "y": 418,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end3_d"
+    },
+    "explosion_end_left.0": {
+      "x": 748,
+      "y": 490,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end0_l"
+    },
+    "explosion_end_left.1": {
+      "x": 748,
+      "y": 543,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end1_l"
+    },
+    "explosion_end_left.2": {
+      "x": 748,
+      "y": 596,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end2_l"
+    },
+    "explosion_end_left.3": {
+      "x": 748,
+      "y": 649,
+      "w": 48,
+      "h": 48,
+      "nombre": "exp_end3_l"
     },
     "destructible_break.0": {
       "x": 555,

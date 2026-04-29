@@ -42,15 +42,8 @@ bool DragonJoven::isFiringAttack() const {
 int DragonJoven::getActiveFireSegmentCount() const {
     if (!isFiring || fireSegments.empty()) return 0;
 
-    const float elapsedTime = 0.5f - fireAnimTimer;
-    int activeSegments = 0;
-    if (elapsedTime >= 0.15f) {
-        activeSegments = (int)((elapsedTime - 0.15f) / 0.1f) + 1;
-    }
-
-    if (activeSegments < 0) activeSegments = 0;
-    if (activeSegments > (int)fireSegments.size()) activeSegments = (int)fireSegments.size();
-    return activeSegments;
+    // Todos de golpe, no gradual.
+    return (int)fireSegments.size();
 }
 
 const std::vector<ExplosionSegment>& DragonJoven::getFireSegments() const {
@@ -128,7 +121,7 @@ void DragonJoven::Update() {
         if (chargeTimer <= 0.0f) {
             isCharging = false;
             isFiring = true;
-            fireAnimTimer = 0.5f; // Medio segundo de duración para el fuego real
+            fireAnimTimer = 10 * 0.04f; // 10 frames de fuego a 0.04s
             fireAnimFrame = 0;
             // Ojo, hemos inicializado fireSegments abajo, aquí solo empezamos la fase 2
         }
@@ -139,10 +132,12 @@ void DragonJoven::Update() {
     if (isFiring) {
         fireAnimTimer -= deltaTime;
         
-        // Cambiar de frame cada 0.08s para la animación base (explosion.0..3)
-        int newFrame = (int)((0.5f - fireAnimTimer) / 0.08f);
-        if (newFrame > 3) newFrame = 3;
-        fireAnimFrame = newFrame;
+        // El sprite de la explosión empieza a la vez que el dragón abre la boca (2º sprite)
+        int step = (int)((10 * 0.04f - fireAnimTimer) / 0.04f);
+        if (step > 9) step = 9;
+        
+        const int expSequence[10] = {-1, 0, 1, 2, 3, 3, 2, 1, 0, -1};
+        fireAnimFrame = expSequence[step];
 
         // El fuego se expande "poco a poco" con un retraso inicial para cuadrar con el sprite
         const int activeSegments = getActiveFireSegmentCount();
@@ -211,14 +206,15 @@ void DragonJoven::Update() {
             // dr =  1 -> DOWN (angle = 180.0f = pi)
             // dc = -1 -> LEFT (angle = 90.0f = pi/2)
             // dc =  1 -> RIGHT (angle = -90.0f = -pi/2)
+            int dirInd = -1;
             if (fireDir == EnemyDirection::UP) { 
-                dr = -1; dc = 0; angle = 0.0f; 
+                dr = -1; dc = 0; angle = 0.0f; dirInd = 1;
             } else if (fireDir == EnemyDirection::DOWN) { 
-                dr = 1; dc = 0; angle = glm::radians(180.0f); 
+                dr = 1; dc = 0; angle = glm::radians(180.0f); dirInd = 3;
             } else if (fireDir == EnemyDirection::LEFT) { 
-                dr = 0; dc = -1; angle = glm::radians(90.0f); 
+                dr = 0; dc = -1; angle = glm::radians(90.0f); dirInd = 2;
             } else if (fireDir == EnemyDirection::RIGHT) { 
-                dr = 0; dc = 1; angle = glm::radians(-90.0f); 
+                dr = 0; dc = 1; angle = glm::radians(-90.0f); dirInd = 0;
             }
 
             int r, c;
@@ -239,7 +235,7 @@ void DragonJoven::Update() {
                     }
                 }
                 std::string base = isLast ? "explosion_end" : "explosion_mid";
-                fireSegments.push_back({ gameMap->gridToNDC(nr, nc), base, angle });
+                fireSegments.push_back({ gameMap->gridToNDC(nr, nc), base, angle, dirInd });
                 if (isLast) break;
             }
             
@@ -329,40 +325,78 @@ void DragonJoven::Draw() {
         if (activeSegments > 0) {
             for (int i = 0; i < activeSegments; ++i) {
                 const auto& seg = fireSegments[i];
-                std::string segSpriteName = seg.baseName + "." + std::to_string(fireAnimFrame);
+                
+                std::string dirSuffix = "";
+                if (seg.dirIndex == 0) dirSuffix = "_right";
+                else if (seg.dirIndex == 1) dirSuffix = "_up";
+                else if (seg.dirIndex == 2) dirSuffix = "_left";
+                else if (seg.dirIndex == 3) dirSuffix = "_down";
+
+                std::string segSpriteNameDir = seg.baseName + dirSuffix + "." + std::to_string(fireAnimFrame);
+                std::string segSpriteNameGen = seg.baseName + "." + std::to_string(fireAnimFrame);
                 glm::vec4 segUvRect(0.0f, 0.0f, 1.0f, 1.0f);
                 
-                if (getUvRectForSprite(gBombAtlas, segSpriteName, segUvRect)) {
+                float renderRotation = seg.rotation;
+                bool foundSprite = false;
+
+                if (seg.dirIndex != -1 && getUvRectForSprite(gBombAtlas, segSpriteNameDir, segUvRect)) {
+                    foundSprite = true;
+                    renderRotation = 0.0f;
+                } else {
+                    if (getUvRectForSprite(gBombAtlas, segSpriteNameGen, segUvRect)) {
+                        foundSprite = true;
+                    }
+                }
+
+                if (foundSprite) {
                     glm::mat4 segModel = glm::mat4(1.0f);
                     
-                    // AQUI PUEDES AJUSTAR LA ALTURA DEL FUEGO. 
-                    // Valores más negativos (-) bajan más el fuego, valores más positivos (+) lo suben.
-                    float visualOffsetY = -halfTile * 0.15f; 
-
-                    // El fuego se dibuja exactamente en las tiles pre-calculadas (que empiezan desde la siguiente al dragón)
-                    segModel = glm::translate(segModel, glm::vec3(seg.pos.x, seg.pos.y + visualOffsetY, 0.0f));
-                    segModel = glm::rotate(segModel, seg.rotation, glm::vec3(0.0f, 0.0f, 1.0f));
-                    
-                    // Dejar un pequeño espacio entre la boca del dragón y el primer segmento de fuego
-                    float gap = 0.0f;
-                    if (i == 0) {
-                        if (facing == EnemyDirection::LEFT || facing == EnemyDirection::RIGHT) {
-                            gap = halfTile * 1.0f; // Margen para horizontal
-                        } else if (facing == EnemyDirection::DOWN) {
-                            gap = -halfTile * 0.5f; // Acercar fuego al sprite del dragón hacia abajo
-                        } else {
-                            gap = halfTile * 0.2f; // Margen menor para vertical
-                        }
-                    }
-                    
-                    // Hacer el fuego más delgado en los primeros 2 frames (fireAnimFrame 0 y 1)
-                    float thicknessScale = 1.0f;
-                    if (fireAnimFrame == 0 || fireAnimFrame == 1) {
-                        thicknessScale = 0.5f; // Un 50% del grosor original
+                    // Ajustar escala y posición basándonos en el tamaño del sprite (ej. 24x48 o 48x24) en el atlas
+                    float scaleX = 1.0f;
+                    float scaleY = 1.0f;
+                    std::string actualSpriteName = (seg.dirIndex != -1 && foundSprite && renderRotation == 0.0f) ? segSpriteNameDir : segSpriteNameGen;
+                    auto itSprite = gBombAtlas.sprites.find(actualSpriteName);
+                    if (itSprite != gBombAtlas.sprites.end()) {
+                        scaleX = static_cast<float>(itSprite->second.w) / 48.0f;
+                        scaleY = static_cast<float>(itSprite->second.h) / 48.0f;
                     }
 
-                    segModel = glm::translate(segModel, glm::vec3(0.0f, gap / 2.0f, 0.0f));
-                    segModel = glm::scale(segModel, glm::vec3(halfTile * thicknessScale, halfTile - (gap / 2.0f), 1.0f));
+                    float offsetX = 0.0f;
+                    float offsetY = 0.0f;
+
+                    // Calcular offsets ANTES del estrechamiento, basados en las dimensiones reales del sprite.
+                    // Así el estrechamiento voluntario no genera offsets espurios.
+                    if (scaleX < 1.0f) {
+                        if (seg.dirIndex == 0) offsetX = halfTile * (1.0f - scaleX);       // RIGHT -> borde derecho
+                        else if (seg.dirIndex == 2) offsetX = -halfTile * (1.0f - scaleX); // LEFT  -> borde izquierdo
+                    }
+                    if (scaleY < 1.0f) {
+                        if (seg.dirIndex == 1) offsetY = halfTile * (1.0f - scaleY);       // UP   -> borde superior
+                        else if (seg.dirIndex == 3) offsetY = -halfTile * (1.0f - scaleY); // DOWN -> borde inferior
+                    }
+
+                    // Ajustar escala para que el fuego sea más estrecho perpendicular a su dirección
+                    // de forma exclusiva para el dragón.
+                    // Cuando se usan sprites genéricos con rotación ±90° (ej. Stage 1),
+                    // los ejes se intercambian, así que estrechamos el otro eje.
+                    bool axesSwapped = (std::abs(std::abs(renderRotation) - glm::radians(90.0f)) < 0.01f);
+                    if (seg.dirIndex == 0 || seg.dirIndex == 2) {
+                        if (axesSwapped)
+                            scaleX *= 0.9f; // Tras rotar ±90°, scaleX es la altura visual
+                        else
+                            scaleY *= 0.9f; // Sin rotación, scaleY es la altura
+                    } else if (seg.dirIndex == 1 || seg.dirIndex == 3) {
+                        scaleX *= 0.9f; // UP/DOWN: rotación 0 o 180, no intercambia ejes
+                    }
+                    
+                    // Si explota hacia los lados, bajar la explosión 5 píxeles
+                    if (seg.dirIndex == 0 || seg.dirIndex == 2) {
+                         offsetY -= (halfTile / 24.0f) * 5.0f;
+                    }
+
+                    segModel = glm::translate(segModel, glm::vec3(seg.pos.x + offsetX, seg.pos.y + offsetY, 0.0f));
+                    segModel = glm::rotate(segModel, renderRotation, glm::vec3(0.0f, 0.0f, 1.0f));
+                    segModel = glm::scale(segModel, glm::vec3(halfTile * scaleX, halfTile * scaleY, 1.0f));
 
                     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(segModel));
                     glUniform4fv(uniformUvRect, 1, glm::value_ptr(segUvRect));
@@ -398,15 +432,23 @@ void DragonJoven::Draw() {
     
     std::string spriteName = prefix + std::to_string(animFrame);
     if (isFiring || isCharging) {
-        // La animación de escupir fuego dura 0.5s en total y tiene 5 frames (0 a 4)
+        // Desplazar visualmente al escupir
+        if (facing == EnemyDirection::RIGHT) renderPos.x -= halfTile;
+        else if (facing == EnemyDirection::LEFT) renderPos.x += halfTile;
+        // Si va a explotar hacia arriba, el sprite se mueve 5 píxeles hacia abajo
+        else if (facing == EnemyDirection::UP) renderPos.y -= (halfTile / 24.0f) * 5.0f;
+        // Si va a explotar hacia abajo, se queda en el centro (no altera renderPos.y)
+
         int fireFrame = 0;
         if (isCharging) {
-            // Si está cargando, usar el frame 0 con boca abierta o el que sea (0 de fuego típicamente)
             fireFrame = 0;
         } else {
-            fireFrame = (int)((0.5f - fireAnimTimer) / 0.1f);
-            if (fireFrame < 0) fireFrame = 0;
-            if (fireFrame > 4) fireFrame = 4;
+            int step = (int)((10 * 0.04f - fireAnimTimer) / 0.04f);
+            if (step < 0) step = 0;
+            if (step > 9) step = 9;
+            
+            const int dragonSeq[10] = {0, 1, 2, 3, 4, 4, 3, 2, 1, 0};
+            fireFrame = dragonSeq[step];
         }
         spriteName = firePrefix + std::to_string(fireFrame);
         if (gEnemyAtlas.sprites.find(spriteName) == gEnemyAtlas.sprites.end()) {

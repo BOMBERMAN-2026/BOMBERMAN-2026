@@ -19,6 +19,8 @@ extern GLuint uniformWhiteFlash;
 #include <cmath>
 #include <map>
 
+extern uint32_t getHistoryRankingHighScore();
+
 namespace {
     constexpr float kPowerUpPickupFxDuration = 0.26f;
     constexpr float kPowerUpPickupFxStartScale = 0.32f;
@@ -276,6 +278,14 @@ bool GameMap::loadFromFile(const std::string& filePath) {
 
                 EnemySpawnType type;
                 if (!parseEnemySpawnTypeFromString(typeStr, type)) {
+                    const bool isNumericSlot = !typeStr.empty() && std::all_of(typeStr.begin(), typeStr.end(), [](unsigned char ch) {
+                        return std::isdigit(ch) != 0;
+                    });
+                    if (isNumericSlot) {
+                        // Formato custom game: enemy <slotId> <x> <y>.
+                        // Se procesa fuera de GameMap para mantener el flujo clásico intacto.
+                        continue;
+                    }
                     std::cerr << "GameMap: enemy: tipo desconocido '" << typeStr << "'\n";
                     continue;
                 }
@@ -445,6 +455,18 @@ void GameMap::update(float deltaTime) {
                     b.powerUpPickupFxActive = false;
                     b.powerUpPickupFxTimer = 0.0f;
                     if (b.powerUpCollected) {
+                        b.hasPowerUp = false;
+                    }
+                }
+            }
+
+            if (b.itemExploding) {
+                b.itemExplodingTimer += deltaTime;
+                if (b.itemExplodingTimer >= 0.065f) {
+                    b.itemExplodingTimer -= 0.065f;
+                    b.itemExplodingFrame++;
+                    if (b.itemExplodingFrame >= 8) {
+                        b.itemExploding = false;
                         b.hasPowerUp = false;
                     }
                 }
@@ -1039,7 +1061,7 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, G
         renderHudUtils( playerScores->size() > 1 ? (*playerScores)[1] : 0, scorePos2, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
             // centro (highest score)
-        renderHudUtils(5050, scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
+        renderHudUtils(getHistoryRankingHighScore(), scorePos5, scaleUsualHud, typeOfHud::Score, gScoreboardAtlas, scoreboardTexture, vao, uniformModel, uniformUvRect);
 
         // VIDAS
             // esquina superior izquierda del HUD (1er player)
@@ -1104,6 +1126,8 @@ void GameMap::renderHud(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, G
 // LoadTexture definido en bomberman.cpp
 extern GLuint LoadTexture(const char* filePath);
 extern GLuint uniformWhiteFlash;
+extern SpriteAtlas gExplosionObjetoAtlas;
+extern GLuint gExplosionObjetoTexture;
 
 void GameMap::loadPowerUpTextures() {
     if (powerUpTexturesLoaded) return;
@@ -1372,6 +1396,56 @@ void GameMap::renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRe
     glBindVertexArray(0);
 }
 
+void GameMap::renderPowerUpExplosions(GLuint vao, GLuint uniformModel, GLuint uniformUvRect, GLuint uniformTintColor, GLuint uniformFlipX) {
+    if (gExplosionObjetoTexture == 0) return;
+
+    glBindVertexArray(vao);
+    glUniform1f(uniformFlipX, 0.0f);
+    glUniform1f(uniformWhiteFlash, 0.0f);
+
+    float scale = tileSize / 2.0f;
+    glm::vec4 baseTint(1.0f, 1.0f, 1.0f, 1.0f);
+
+    for (int r = 0; r < rows; r++) {
+        for (int c = 0; c < cols; c++) {
+            const Block& block = grid[r][c];
+            if (block.itemExploding) {
+                std::string spriteName = "explosion_objeto." + std::to_string(block.itemExplodingFrame);
+                glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
+                if (getUvRectForSprite(gExplosionObjetoAtlas, spriteName, uvRect)) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, gExplosionObjetoTexture);
+
+                    glm::vec2 center = gridToNDC(r, c);
+                    glm::mat4 expModel = glm::mat4(1.0f);
+                    expModel = glm::translate(expModel, glm::vec3(center, 0.0f));
+                    
+                    float scaleX = scale;
+                    float scaleY = scale;
+                    auto it = gExplosionObjetoAtlas.sprites.find(spriteName);
+                    if (it != gExplosionObjetoAtlas.sprites.end()) {
+                        // El sprite estándar mide 48x48. Escalar usando su tamaño real del atlas.
+                        scaleX = ((float)it->second.w / 48.0f) * scale;
+                        scaleY = ((float)it->second.h / 48.0f) * scale;
+                    }
+                    
+                    expModel = glm::scale(expModel, glm::vec3(scaleX, scaleY, 1.0f));
+
+                    glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(expModel));
+                    glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
+                    glUniform4fv(uniformTintColor, 1, glm::value_ptr(baseTint));
+                    glUniform1f(uniformWhiteFlash, 0.0f);
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                }
+            }
+        }
+    }
+
+    glUniform4fv(uniformTintColor, 1, glm::value_ptr(baseTint));
+    glUniform1f(uniformWhiteFlash, 0.0f);
+    glBindVertexArray(0);
+}
+
 extern void PlayCogerPowerUpSound();
 
 bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
@@ -1409,9 +1483,12 @@ void GameMap::destroyExposedPowerUp(int row, int col) {
 
     Block& b = grid[row][col];
     // Solo destruir si está suelto/visible (no si está escondido bajo un destructible)
-    if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected) return;
+    if (!b.hasPowerUp || !b.powerUpRevealed || b.powerUpCollected || b.itemExploding) return;
 
-    b.hasPowerUp = false;
+    b.itemExploding = true;
+    b.itemExplodingTimer = 0.0f;
+    b.itemExplodingFrame = 0;
+    
     b.powerUpRevealed = false;
     b.powerUpCollected = true;
 }

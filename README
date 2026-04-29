@@ -38,7 +38,12 @@ Controles
   - `ESC`: Volver a Menú Custom Game 1.
 
 - **Cinematica**
-    - `ESPACIO`: Saltar.
+  - `ESPACIO`: Saltar.
+
+- **Ranking**
+  - `ESC`: Saltar.
+  - `↑/↓`: aumentar/disminuir caracter a escribir.
+  - `ENTER`: Seleccionar caracter.
 
 - **Juego**
   - **Jugador 1**: `↑/↓/←/→` mover.
