@@ -43,17 +43,17 @@ const std::array<float, kMenu1Rows> kMenu1ArrowYPixels = {
 constexpr float kMenuBombSizePixels = 108.0f;
 
 const std::array<glm::vec2, kEnemyTypeCount> kEnemyCounterCenters = {
-    glm::vec2(370.0f, 340.0f),
-    glm::vec2(830.0f, 340.0f),
-    glm::vec2(1350.0f, 340.0f),
-    glm::vec2(1700.0f, 340.0f),
-    glm::vec2(375.0f, 555.0f),
-    glm::vec2(835.0f, 555.0f),
-    glm::vec2(1400.0f, 555.0f),
-    glm::vec2(1700.0f, 555.0f),
-    glm::vec2(380.0f, 765.0f),
-    glm::vec2(840.0f, 765.0f),
-    glm::vec2(1450.0f, 765.0f)
+    glm::vec2(360.0f, 340.0f),
+    glm::vec2(810.0f, 340.0f),
+    glm::vec2(1250.0f, 340.0f),
+    glm::vec2(1690.0f, 340.0f),
+    glm::vec2(360.0f, 555.0f),
+    glm::vec2(810.0f, 555.0f),
+    glm::vec2(1250.0f, 555.0f),
+    glm::vec2(1690.0f, 555.0f),
+    glm::vec2(360.0f, 765.0f),
+    glm::vec2(810.0f, 765.0f),
+    glm::vec2(1250.0f, 765.0f)
 };
 
 const std::array<std::string, 5> kMapSpriteNames = {
@@ -221,7 +221,7 @@ void CustomGameMenu::initMenu2() {
     resetFlowFlags();
 
     if (menu2BackgroundTexture == 0) {
-        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame.jpg").c_str());
+        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame-v3.jpg").c_str());
         if (menu2BackgroundTexture == 0) {
             std::cerr << "Error cargando Menu2CustomGame.jpg\n";
         }
