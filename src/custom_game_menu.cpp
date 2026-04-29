@@ -550,11 +550,13 @@ void CustomGameMenu::processInputMenu1(std::map<int, int>& keys, ControlsMenu& c
 
                 if (settings.players == CustomPlayersOption::OnePlayer) {
                     settings.teamMode = CustomTeamModeOption::Versus;
+                } else if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
+                    settings.teamMode = CustomTeamModeOption::Cooperative;
                 }
                 break;
             }
             case 1: {
-                if (settings.players != CustomPlayersOption::OnePlayer) {
+                if (settings.players == CustomPlayersOption::TwoPlayers) {
                     settings.teamMode = (settings.teamMode == CustomTeamModeOption::Versus)
                         ? CustomTeamModeOption::Cooperative
                         : CustomTeamModeOption::Versus;
@@ -733,16 +735,19 @@ void CustomGameMenu::renderMenu1(GLuint VAO,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX, whiteColor);
 
     // Grupo versus/cooperativo.
-    const bool modeEditable = (settings.players != CustomPlayersOption::OnePlayer);
+    const bool modeEditable = (settings.players == CustomPlayersOption::TwoPlayers);
     const bool vsSelected = modeEditable && (settings.teamMode == CustomTeamModeOption::Versus);
-    const bool coopSelected = modeEditable && (settings.teamMode == CustomTeamModeOption::Cooperative);
+    const bool coopSelected = (settings.teamMode == CustomTeamModeOption::Cooperative);
+    const glm::vec4 disabledTint(0.65f, 0.65f, 0.65f, 1.0f);
+    const glm::vec4 vsTint = modeEditable ? whiteColor : disabledTint;
+    const glm::vec4 coopTint = (modeEditable || is1PComp) ? whiteColor : disabledTint;
 
     drawAtlasSprite(vsSelected ? "Vs_Ama" : "Vs_Bla", 800.0f, 365.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX,
-                    modeEditable ? whiteColor : glm::vec4(0.65f, 0.65f, 0.65f, 1.0f));
+                    vsTint);
     drawAtlasSprite(coopSelected ? "Coop_Ama" : "Coop_Bla", 1240.0f, 365.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX,
-                    modeEditable ? whiteColor : glm::vec4(0.65f, 0.65f, 0.65f, 1.0f));
+                    coopTint);
 
     // Grupo de tiempo limite.
     const bool t1 = (settings.timeLimit == CustomTimeLimitOption::OneMinute);

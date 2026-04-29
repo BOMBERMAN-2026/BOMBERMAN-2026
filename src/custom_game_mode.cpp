@@ -65,6 +65,11 @@ CustomGameMode::CustomGameMode()
 void CustomGameMode::activate(const CustomGameSettings& inSettings,
                               const std::array<int, 11>& inEnemyCounts) {
     settings = inSettings;
+
+    if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
+        settings.teamMode = CustomTeamModeOption::Cooperative;
+    }
+
     enemyCounts = inEnemyCounts;
 
     mapIndex = clampMapIndex(settings.mapIndex);
@@ -179,19 +184,21 @@ std::vector<CustomGameMode::CustomEnemyKind> CustomGameMode::buildEnemyQueue() c
     queue.reserve(kMaxEnemySlots);
 
     // Orden solicitado en Menu2:
-    // 1) Bomberman enemigo
-    // 2) Leon
-    // 3) Bebe lloron
-    // 4) Babosa
-    // 5) Fantasma
-    // 6) Sol
-    // 7) Dragon
-    // 8) Drones
-    // 9) KingBomberman
+    // 1) Bomberman facil
+    // 2) Bomberman medio
+    // 3) Bomberman dificil
+    // 4) Leon
+    // 5) Bebe lloron
+    // 6) Babosa
+    // 7) Fantasma
+    // 8) Sol
+    // 9) Dragon
+    // 10) Drones
+    // 11) KingBomberman
     const std::array<CustomEnemyKind, 11> indexToKind = {
-        CustomEnemyKind::BombermanEnemy,
-        CustomEnemyKind::BombermanEnemy,
-        CustomEnemyKind::BombermanEnemy,
+        CustomEnemyKind::BombermanEasy,
+        CustomEnemyKind::BombermanMedium,
+        CustomEnemyKind::BombermanHard,
         CustomEnemyKind::Leon,
         CustomEnemyKind::BebeLloron,
         CustomEnemyKind::Babosa,
@@ -219,27 +226,28 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
                                            const glm::vec2& position,
                                            const glm::vec2& enemySize,
                                            float defaultPlayerSpeed,
-                                           int& bomberDifficultyCursor,
                                            int& droneColorCursor) const {
+    auto createBomberEnemy = [&](CpuBomberman::Difficulty difficulty) -> Enemy* {
+        const std::string prefix = "jugadoramarillo";
+        const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
+
+        CpuBomberman::Agent* enemy = new CpuBomberman::Agent(position,
+                                                              enemySize,
+                                                              bomberSpeed,
+                                                              CpuBomberman::TeamAffiliation::Enemy,
+                                                              difficulty,
+                                                              prefix);
+        enemy->currentSpriteName = prefix + ".abajo.0";
+        return enemy;
+    };
+
     switch (kind) {
-        case CustomEnemyKind::BombermanEnemy: {
-            const std::string prefix = "jugadoramarillo";
-
-            const size_t difficultyIndex = std::min<size_t>(settings.enemyBombermanDifficulties.size() - 1,
-                                                            static_cast<size_t>(std::max(0, bomberDifficultyCursor)));
-            const CpuBomberman::Difficulty difficulty = settings.enemyBombermanDifficulties[difficultyIndex];
-            bomberDifficultyCursor += 1;
-
-            const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
-            CpuBomberman::Agent* enemy = new CpuBomberman::Agent(position,
-                                                                  enemySize,
-                                                                  bomberSpeed,
-                                                                  CpuBomberman::TeamAffiliation::Enemy,
-                                                                  difficulty,
-                                                                  prefix);
-            enemy->currentSpriteName = prefix + ".abajo.0";
-            return enemy;
-        }
+        case CustomEnemyKind::BombermanEasy:
+            return createBomberEnemy(CpuBomberman::Difficulty::Easy);
+        case CustomEnemyKind::BombermanMedium:
+            return createBomberEnemy(CpuBomberman::Difficulty::Medium);
+        case CustomEnemyKind::BombermanHard:
+            return createBomberEnemy(CpuBomberman::Difficulty::Hard);
         case CustomEnemyKind::Leon: {
             Leon* enemy = new Leon(position, enemySize, 0.10f);
             enemy->currentSpriteName = "leon.abajo.0";
@@ -304,17 +312,12 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
 
     // 1P+Comp: crea Bomberman rojo CPU como segundo jugador no humano.
     if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
-        const bool cooperative = (settings.teamMode == CustomTeamModeOption::Cooperative);
-        const CpuBomberman::TeamAffiliation affiliation = cooperative
-            ? CpuBomberman::TeamAffiliation::Ally
-            : CpuBomberman::TeamAffiliation::Enemy;
-
         const glm::vec2 cpuSpawnPos = gameMap->getSpawnPosition(1);
         const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
         CpuBomberman::Agent* companion = new CpuBomberman::Agent(cpuSpawnPos,
                                                                   enemySize,
                                                                   bomberSpeed,
-                                                                  affiliation,
+                                                                  CpuBomberman::TeamAffiliation::Ally,
                                                                   settings.allyCpuDifficulty,
                                                                   "jugadorazul");
         companion->currentSpriteName = "jugadorazul.abajo.0";
@@ -334,7 +337,6 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
     }
 
     const int spawnCount = std::min(static_cast<int>(slots.size()), static_cast<int>(queue.size()));
-    int bomberDifficultyCursor = 0;
     int droneColorCursor = 0;
 
     for (int i = 0; i < spawnCount; ++i) {
@@ -351,7 +353,6 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
                                            pos,
                                            enemySize,
                                            defaultPlayerSpeed,
-                                           bomberDifficultyCursor,
                                            droneColorCursor);
         if (!enemy) {
             continue;

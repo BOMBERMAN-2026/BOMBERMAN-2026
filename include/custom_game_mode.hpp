@@ -25,6 +25,8 @@ public:
     int getPlayerCount() const { return playerCount; }
     int getStageNumber() const { return stageNumber; }
     int getMapIndex() const { return mapIndex; }
+    bool isOnePlayerPlusCpu() const { return settings.players == CustomPlayersOption::OnePlayerPlusCpu; }
+    bool isCooperativeMode() const { return settings.teamMode == CustomTeamModeOption::Cooperative; }
     const std::string& getLevelPath() const { return levelPath; }
     const std::string& getHudLevelLabel() const { return hudLevelLabel; }
     float getInitialTimeSeconds() const { return initialTimeSeconds; }
@@ -38,7 +40,9 @@ public:
 
 private:
     enum class CustomEnemyKind {
-        BombermanEnemy,
+        BombermanEasy,
+        BombermanMedium,
+        BombermanHard,
         Leon,
         BebeLloron,
         Babosa,
@@ -73,7 +77,6 @@ private:
                                const glm::vec2& position,
                                const glm::vec2& enemySize,
                                float defaultPlayerSpeed,
-                               int& bomberDifficultyCursor,
                                int& droneColorCursor) const;
 
     static bool isAllDigits(const std::string& value);

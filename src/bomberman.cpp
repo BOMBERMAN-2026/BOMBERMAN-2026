@@ -561,6 +561,17 @@ static int countHostileEnemiesForPlayers() {
     return count;
 }
 
+static bool hasAliveAllyCpuAgent() {
+    for (auto* enemy : gEnemies) {
+        if (!enemy) continue;
+        if (enemy->lifeState != EnemyLifeState::Alive) continue;
+        if (CpuBomberman::isAllyAgent(enemy)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 static bool isVsResolutionCinematic(CinematicType type) {
     return type == CinematicType::VsVictoryP1
         || type == CinematicType::VsVictoryP2
@@ -5230,7 +5241,15 @@ void Game::update() {
                 return;
             }
         } else {
-            if (allPlayersOutOfLives()) {
+            const bool customOnePlayerCpuCoop = customGameMode.isActive()
+                && customGameMode.isOnePlayerPlusCpu()
+                && customGameMode.isCooperativeMode();
+
+            const bool shouldStartContinue = customOnePlayerCpuCoop
+                ? (allPlayersOutOfLives() && !hasAliveAllyCpuAgent())
+                : allPlayersOutOfLives();
+
+            if (shouldStartContinue) {
                 if (!continueSequenceActive) {
                     startContinueSequence();
                 }
