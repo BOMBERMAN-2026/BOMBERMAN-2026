@@ -95,6 +95,8 @@ SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
 SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
 SpriteAtlas gNextLevelAtlas;
+SpriteAtlas gExplosionObjetoAtlas;
+GLuint gExplosionObjetoTexture = 0;
 GLuint gNextLevelTexture = 0;
 GLuint mapTexture;
 GLuint horizonTexture;
@@ -2212,6 +2214,20 @@ void Game::ensureGameplayAssets() {
             timeUpTexture = LoadTexture(timeUpTexPath.c_str());
             if (timeUpTexture == 0) {
                 std::cerr << "Aviso: no se pudo cargar textura TimeUP: " << timeUpTexPath << std::endl;
+            }
+        }
+    }
+
+    // Atlas y textura de la explosión del objeto
+    {
+        const std::string explosionAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasExplosionObjeto.json");
+        if (!loadSpriteAtlasMinimal(explosionAtlasPath, gExplosionObjetoAtlas)) {
+            std::cerr << "Aviso: no se pudo cargar atlas ExplosionObjeto: " << explosionAtlasPath << std::endl;
+        } else {
+            const std::string explosionTexPath = resolveAssetPath(gExplosionObjetoAtlas.imagePath);
+            gExplosionObjetoTexture = LoadTexture(explosionTexPath.c_str());
+            if (gExplosionObjetoTexture == 0) {
+                std::cerr << "Aviso: no se pudo cargar textura ExplosionObjeto: " << explosionTexPath << std::endl;
             }
         }
     }
@@ -6831,6 +6847,9 @@ void Game::render2D() {
 
         glBindVertexArray(0);
     }
+
+    // === 4. Renderizar explosiones de power-ups (encima de mapa, jugadores y enemigos) ===
+    gameMap->renderPowerUpExplosions(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
 
     ScorePopup::render2D(gameMap,
                          VAO,
