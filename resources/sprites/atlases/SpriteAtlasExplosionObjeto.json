@@ -1,0 +1,17 @@
+{
+  "ruta_imagen": "resources/sprites/explosion_objeto.png",
+  "tamano_imagen": {
+    "ancho": 1369,
+    "alto": 847
+  },
+  "sprites": {
+    "explosion_objeto.0": { "x": 26, "y": 27, "w": 144, "h": 144 },
+    "explosion_objeto.1": { "x": 261, "y": 27, "w": 144, "h": 144 },
+    "explosion_objeto.2": { "x": 514, "y": 27, "w": 144, "h": 144 },
+    "explosion_objeto.3": { "x": 757, "y": 27, "w": 144, "h": 144 },
+    "explosion_objeto.4": { "x": 996, "y": 27, "w": 144, "h": 144 },
+    "explosion_objeto.5": { "x": 27, "y": 278, "w": 144, "h": 144 },
+    "explosion_objeto.6": { "x": 274, "y": 278, "w": 144, "h": 144 },
+    "explosion_objeto.7": { "x": 504, "y": 278, "w": 144, "h": 144 }
+  }
+}

@@ -73,7 +73,7 @@ private:
                                const glm::vec2& position,
                                const glm::vec2& enemySize,
                                float defaultPlayerSpeed,
-                               int& bomberColorCursor,
+                               int& bomberDifficultyCursor,
                                int& droneColorCursor) const;
 
     static bool isAllDigits(const std::string& value);

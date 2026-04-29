@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "bomberman.hpp" // GameMode
+#include "cpu_bomberman_difficulty.hpp"
 #include "enemy.hpp"     // Enemy
 #include "player.hpp"    // Player, Move
 
@@ -13,17 +14,6 @@ class GameMap;
 
 namespace CpuBomberman {
 
-// Dificultades (hardcodeadas por ahora).
-// - RandomAndBombs: se mueve aleatorio y pone bombas aleatorio.
-// - RandomNoSuicide: aleatorio pero intenta no auto-explotarse.
-// - PowerUpHunter: prioriza power-ups (y rompe ladrillos si procede).
-// - Omniscient: persigue rivales con pathfinding simple y evita peligros inminentes.
-enum class Difficulty {
-    RandomAndBombs,
-    RandomNoSuicide,
-    PowerUpHunter,
-    Omniscient
-};
 
 // Relación del Bomberman CPU con el equipo de jugadores humanos.
 enum class TeamAffiliation {
@@ -41,10 +31,10 @@ struct Settings {
     // Dificultad por playerId (0..3). Por defecto: CPU1 fácil, CPU2 media, CPU3 “hard”.
     // Nota: en VS 1P la CPU empieza en playerId=1; en VS 2P empieza en playerId=2.
     std::array<Difficulty, 4> difficultyByPlayerId = {
-        Difficulty::RandomAndBombs,   // P1 (humano normalmente)
-        Difficulty::RandomAndBombs,   // CPU #1
-        Difficulty::RandomNoSuicide,  // CPU #2
-        Difficulty::Omniscient        // CPU #3
+        Difficulty::Easy,    // P1 (humano normalmente)
+        Difficulty::Easy,    // CPU #1
+        Difficulty::Medium,  // CPU #2
+        Difficulty::Hard     // CPU #3
     };
 };
 
@@ -56,6 +46,7 @@ public:
           glm::vec2 size,
           float speed,
           TeamAffiliation affiliation,
+          Difficulty difficulty = Difficulty::Medium,
           const std::string& spritePrefix = "jugadorrojo");
     ~Agent() override;
 
@@ -72,6 +63,7 @@ public:
 
 private:
     TeamAffiliation affiliation;
+    Difficulty difficulty;
     std::string botSpritePrefix;
 
     Move currentMove = MOVE_NONE;

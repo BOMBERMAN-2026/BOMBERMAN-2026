@@ -95,6 +95,8 @@ SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
 SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
 SpriteAtlas gNextLevelAtlas;
+SpriteAtlas gExplosionObjetoAtlas;
+GLuint gExplosionObjetoTexture = 0;
 GLuint gNextLevelTexture = 0;
 GLuint mapTexture;
 GLuint horizonTexture;
@@ -2216,6 +2218,20 @@ void Game::ensureGameplayAssets() {
         }
     }
 
+    // Atlas y textura de la explosión del objeto
+    {
+        const std::string explosionAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasExplosionObjeto.json");
+        if (!loadSpriteAtlasMinimal(explosionAtlasPath, gExplosionObjetoAtlas)) {
+            std::cerr << "Aviso: no se pudo cargar atlas ExplosionObjeto: " << explosionAtlasPath << std::endl;
+        } else {
+            const std::string explosionTexPath = resolveAssetPath(gExplosionObjetoAtlas.imagePath);
+            gExplosionObjetoTexture = LoadTexture(explosionTexPath.c_str());
+            if (gExplosionObjetoTexture == 0) {
+                std::cerr << "Aviso: no se pudo cargar textura ExplosionObjeto: " << explosionTexPath << std::endl;
+            }
+        }
+    }
+
     gameplayAssetsLoaded = true;
 }
 
@@ -3005,10 +3021,33 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         "jugadoramarillo"
     };
 
+    // En VS: asignar colores según dificultad de CPU
+    // 1P VS: P1=blanco, P2=rojo(fácil), P3=azul(medio), P4=amarillo(difícil)
+    // 2P VS: P1=blanco, P2=rojo(humano), P3=azul(medio), P4=amarillo(difícil)
+    auto getPlayerColorIndex = [&](int playerId) -> int {
+        if (versus) {
+            const int humanCount = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
+            if (playerId < humanCount) {
+                return playerId; // 0=blanco, 1=rojo para humanos
+            } else {
+                // CPUs: playerId 1 o 2 -> rojo(fácil), 2 o 3 -> azul(medio), 3 -> amarillo(difícil)
+                // Simplemente mapear: segundo CPU (índice 2) = azul, tercer CPU (índice 3) = amarillo
+                if (playerId == 2) return 2; // azul (medio)
+                if (playerId == 3) return 3; // amarillo (difícil)
+                return 1; // rojo (fácil, para índice 1)
+            }
+        } else if (custom) {
+            return playerId;
+        } else {
+            return playerId;
+        }
+    };
+
     gPlayers.reserve(numPlayers);
     for (int i = 0; i < numPlayers; ++i) {
         glm::vec2 spawnPos = gameMap->getSpawnPosition(i);
-        const std::string prefix = (i >= 0 && i < 4) ? kPlayerPrefixes[i] : "jugadorblanco";
+        int colorIndex = getPlayerColorIndex(i);
+        const std::string prefix = (colorIndex >= 0 && colorIndex < 4) ? kPlayerPrefixes[colorIndex] : "jugadorblanco";
         Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/i, prefix);
 
         if (preserveLivesAndScore && i < (int)savedLives.size()) {
@@ -6831,6 +6870,9 @@ void Game::render2D() {
 
         glBindVertexArray(0);
     }
+
+    // === 4. Renderizar explosiones de power-ups (encima de mapa, jugadores y enemigos) ===
+    gameMap->renderPowerUpExplosions(VAO, uniformModel, uniformUvRect, uniformTintColor, uniformFlipX);
 
     ScorePopup::render2D(gameMap,
                          VAO,

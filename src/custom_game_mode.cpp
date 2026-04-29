@@ -217,23 +217,23 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
                                            const glm::vec2& position,
                                            const glm::vec2& enemySize,
                                            float defaultPlayerSpeed,
-                                           int& bomberColorCursor,
+                                           int& bomberDifficultyCursor,
                                            int& droneColorCursor) const {
     switch (kind) {
         case CustomEnemyKind::BombermanEnemy: {
-            static const char* kBomberEnemyPrefixes[2] = {
-                "jugadorazul",
-                "jugadoramarillo"
-            };
+            const std::string prefix = "jugadoramarillo";
 
-            const std::string prefix = kBomberEnemyPrefixes[bomberColorCursor % 2];
-            bomberColorCursor += 1;
+            const size_t difficultyIndex = std::min<size_t>(settings.enemyBombermanDifficulties.size() - 1,
+                                                            static_cast<size_t>(std::max(0, bomberDifficultyCursor)));
+            const CpuBomberman::Difficulty difficulty = settings.enemyBombermanDifficulties[difficultyIndex];
+            bomberDifficultyCursor += 1;
 
             const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
             CpuBomberman::Agent* enemy = new CpuBomberman::Agent(position,
                                                                   enemySize,
                                                                   bomberSpeed,
                                                                   CpuBomberman::TeamAffiliation::Enemy,
+                                                                  difficulty,
                                                                   prefix);
             enemy->currentSpriteName = prefix + ".abajo.0";
             return enemy;
@@ -313,8 +313,9 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
                                                                   enemySize,
                                                                   bomberSpeed,
                                                                   affiliation,
-                                                                  "jugadorrojo");
-        companion->currentSpriteName = "jugadorrojo.abajo.0";
+                                                                  settings.allyCpuDifficulty,
+                                                                  "jugadorazul");
+        companion->currentSpriteName = "jugadorazul.abajo.0";
         companion->setContext(gameMap, players);
         outEnemies.push_back(companion);
     }
@@ -331,7 +332,7 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
     }
 
     const int spawnCount = std::min(static_cast<int>(slots.size()), static_cast<int>(queue.size()));
-    int bomberColorCursor = 0;
+    int bomberDifficultyCursor = 0;
     int droneColorCursor = 0;
 
     for (int i = 0; i < spawnCount; ++i) {
@@ -348,7 +349,7 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
                                            pos,
                                            enemySize,
                                            defaultPlayerSpeed,
-                                           bomberColorCursor,
+                                           bomberDifficultyCursor,
                                            droneColorCursor);
         if (!enemy) {
             continue;

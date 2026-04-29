@@ -11,6 +11,7 @@
 #include <string>
 
 #include "controls_menu.hpp"
+#include "cpu_bomberman_difficulty.hpp"
 #include "sprite_atlas.hpp"
 
 enum class CustomPlayersOption {
@@ -36,6 +37,13 @@ struct CustomGameSettings {
     CustomTeamModeOption teamMode = CustomTeamModeOption::Versus;
     CustomTimeLimitOption timeLimit = CustomTimeLimitOption::ThreeMinutes;
     int mapIndex = 0;
+
+    CpuBomberman::Difficulty allyCpuDifficulty = CpuBomberman::Difficulty::Medium;
+    std::array<CpuBomberman::Difficulty, 3> enemyBombermanDifficulties = {
+        CpuBomberman::Difficulty::Easy,
+        CpuBomberman::Difficulty::Medium,
+        CpuBomberman::Difficulty::Hard
+    };
 };
 
 class CustomGameMenu {
