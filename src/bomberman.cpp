@@ -18,13 +18,24 @@
 #include "cpu_bomberman.hpp"
 #include "score_popup.hpp"
 
-
+#include <chrono>
+#include <thread>
 
 // ============================================================
 // Wrappers de audio — delegan al AudioManager (miniaudio)
 // ============================================================
 #include "audio_manager.hpp"
 
+// Para la carga asincrona de modelos 3d
+struct PendingModel {
+    std::string key;
+    std::string path;
+    TexturedMeshData meshData;
+    GLuint* vao; GLuint* vbo; GLuint* ebo; GLsizei* ic; GLuint* tex;
+};
+
+// Para la carga asincrona de modelos 3d
+std::vector<PendingModel> loadingQueue;
 
 
 // Llamada desde Bomb::detonate() en bomb.cpp
@@ -1329,22 +1340,15 @@ void CreateSphere()
     sphereIndexCount = sphereMesh->indexCount;
 }
 
-static bool createTexturedGlbModel(const std::string& meshCacheKey,
-                                   const std::string& modelPath,
-                                   GLuint& outVao,
-                                   GLuint& outVbo,
-                                   GLuint& outEbo,
-                                   GLsizei& outIndexCount,
-                                   GLuint& outTexture)
+static bool completeTexturedGlbModel(TexturedMeshData& meshData,
+                                    const std::string& meshCacheKey,
+                                    const std::string& modelPath,
+                                    GLuint& outVao,
+                                    GLuint& outVbo,
+                                    GLuint& outEbo,
+                                    GLsizei& outIndexCount,
+                                    GLuint& outTexture)
 {
-    TexturedMeshData meshData;
-    std::string loadError;
-    if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
-        std::cerr << "[Render] Aviso: no se pudo cargar GLB ('" << modelPath
-                  << "'): " << loadError << "\n";
-        return false;
-    }
-
     if (meshData.vertices.empty() || meshData.indices.empty()) {
         std::cerr << "[Render] Aviso: GLB sin datos renderizables: " << modelPath << "\n";
         return false;
@@ -1418,191 +1422,26 @@ static bool createTexturedGlbModel(const std::string& meshCacheKey,
     return true;
 }
 
-void CreateActorGlbModel(const std::string& modelPath)
+void asyncLoadTask(const std::string& meshCacheKey,
+                    const std::string& modelPath,
+                    GLuint* outVao,
+                    GLuint* outVbo,
+                    GLuint* outEbo,
+                    GLsizei* outIndexCount,
+                    GLuint* outTexture) 
 {
-    (void)createTexturedGlbModel("actorGLB",
-                                 modelPath,
-                                 actorGlbVAO,
-                                 actorGlbVBO,
-                                 actorGlbEBO,
-                                 actorGlbIndexCount,
-                                 actorGlbTexture);
-}
+    TexturedMeshData meshData;
+    std::string loadError;
+    if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
+        std::cerr << "[Render] Aviso: no se pudo cargar GLB ('" << modelPath
+                  << "'): " << loadError << "\n";
+        return;
+    }
 
-void CreateRedActorGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("redActorGLB",
-                                 modelPath,
-                                 redActorGlbVAO,
-                                 redActorGlbVBO,
-                                 redActorGlbEBO,
-                                 redActorGlbIndexCount,
-                                 redActorGlbTexture);
-}
-
-void CreateLeonGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("leonGLB",
-                                 modelPath,
-                                 leonGlbVAO,
-                                 leonGlbVBO,
-                                 leonGlbEBO,
-                                 leonGlbIndexCount,
-                                 leonGlbTexture);
-}
-
-void CreateFantasmaGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("fantasmaGLB",
-                                 modelPath,
-                                 fantasmaGlbVAO,
-                                 fantasmaGlbVBO,
-                                 fantasmaGlbEBO,
-                                 fantasmaGlbIndexCount,
-                                 fantasmaGlbTexture);
-}
-
-void CreateBebeGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("bebeGLB",
-                                 modelPath,
-                                 bebeGlbVAO,
-                                 bebeGlbVBO,
-                                 bebeGlbEBO,
-                                 bebeGlbIndexCount,
-                                 bebeGlbTexture);
-}
-
-void CreateBabosaGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("babosaGLB",
-                                 modelPath,
-                                 babosaGlbVAO,
-                                 babosaGlbVBO,
-                                 babosaGlbEBO,
-                                 babosaGlbIndexCount,
-                                 babosaGlbTexture);
-}
-
-void CreateBombGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("bombGLB",
-                                 modelPath,
-                                 bombGlbVAO,
-                                 bombGlbVBO,
-                                 bombGlbEBO,
-                                 bombGlbIndexCount,
-                                 bombGlbTexture);
-}
-
-void CreateFlameGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("flameGLB",
-                                 modelPath,
-                                 flameGlbVAO,
-                                 flameGlbVBO,
-                                 flameGlbEBO,
-                                 flameGlbIndexCount,
-                                 flameGlbTexture);
-}
-
-void CreateFlamePowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("flamePowerUpGLB",
-                                 modelPath,
-                                 flamePowerUpGlbVAO,
-                                 flamePowerUpGlbVBO,
-                                 flamePowerUpGlbEBO,
-                                 flamePowerUpGlbIndexCount,
-                                 flamePowerUpGlbTexture);
-}
-
-void CreateSpeedPowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("speedPowerUpGLB",
-                                 modelPath,
-                                 speedPowerUpGlbVAO,
-                                 speedPowerUpGlbVBO,
-                                 speedPowerUpGlbEBO,
-                                 speedPowerUpGlbIndexCount,
-                                 speedPowerUpGlbTexture);
-}
-
-void CreateKingBomberGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("kingBomberGLB",
-                                 modelPath,
-                                 kingBomberGlbVAO,
-                                 kingBomberGlbVBO,
-                                 kingBomberGlbEBO,
-                                 kingBomberGlbIndexCount,
-                                 kingBomberGlbTexture);
-}
-
-void CreateDronAzulGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronAzulGLB",
-                                 modelPath,
-                                 dronAzulGlbVAO,
-                                 dronAzulGlbVBO,
-                                 dronAzulGlbEBO,
-                                 dronAzulGlbIndexCount,
-                                 dronAzulGlbTexture);
-}
-
-void CreateDronRosaGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronRosaGLB",
-                                 modelPath,
-                                 dronRosaGlbVAO,
-                                 dronRosaGlbVBO,
-                                 dronRosaGlbEBO,
-                                 dronRosaGlbIndexCount,
-                                 dronRosaGlbTexture);
-}
-
-void CreateDronVerdeGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronVerdeGLB",
-                                 modelPath,
-                                 dronVerdeGlbVAO,
-                                 dronVerdeGlbVBO,
-                                 dronVerdeGlbEBO,
-                                 dronVerdeGlbIndexCount,
-                                 dronVerdeGlbTexture);
-}
-
-void CreateDronAmarilloGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronAmarilloGLB",
-                                 modelPath,
-                                 dronAmarilloGlbVAO,
-                                 dronAmarilloGlbVBO,
-                                 dronAmarilloGlbEBO,
-                                 dronAmarilloGlbIndexCount,
-                                 dronAmarilloGlbTexture);
-}
-
-void CreateSolGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("solGLB",
-                                 modelPath,
-                                 solGlbVAO,
-                                 solGlbVBO,
-                                 solGlbEBO,
-                                 solGlbIndexCount,
-                                 solGlbTexture);
-}
-
-void CreateDragonGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dragonGLB",
-                                 modelPath,
-                                 dragonGlbVAO,
-                                 dragonGlbVBO,
-                                 dragonGlbEBO,
-                                 dragonGlbIndexCount,
-                                 dragonGlbTexture);
+    loadingQueue.push_back( {
+        meshCacheKey, modelPath, std::move(meshData),
+        outVao, outVbo, outEbo, outIndexCount, outTexture
+    } );
 }
 
 void Compile3DShaders()
@@ -2077,23 +1916,59 @@ void Game::ensureRenderResources() {
     CompileShaders();
     CreateCube();
     CreateSphere();
-    // CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
-    // CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
-    // CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
-    // CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
-    // CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
-    // CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
-    // CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
-    // CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
-    // CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
-    // CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
-    // CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
-    // CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
-    // CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
-    // CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
-    // CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
-    // CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
-    // CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    std::thread t1 (asyncLoadTask, "actorGLB", resolveAssetPath(kPlayerGlbPath), &actorGlbVAO, &actorGlbVBO, &actorGlbEBO, &actorGlbIndexCount, &actorGlbTexture);
+    std::thread t2 (asyncLoadTask, "redActorGLB", resolveAssetPath(kRedPlayerGlbPath), &redActorGlbVAO, &redActorGlbVBO, &redActorGlbEBO, &redActorGlbIndexCount, &redActorGlbTexture);
+    std::thread t3 (asyncLoadTask, "leonGLB", resolveAssetPath(kLeonGlbPath), &leonGlbVAO, &leonGlbVBO, &leonGlbEBO, &leonGlbIndexCount, &leonGlbTexture);
+    std::thread t4 (asyncLoadTask, "fantasmaGLB", resolveAssetPath(kFantasmaGlbPath), &fantasmaGlbVAO, &fantasmaGlbVBO, &fantasmaGlbEBO, &fantasmaGlbIndexCount, &fantasmaGlbTexture);
+
+    std::thread t5 (asyncLoadTask, "bebeGLB", resolveAssetPath(kBebeGlbPath), &bebeGlbVAO, &bebeGlbVBO, &bebeGlbEBO, &bebeGlbIndexCount, &bebeGlbTexture);
+    std::thread t6 (asyncLoadTask, "babosaGLB", resolveAssetPath(kBabosaGlbPath), &babosaGlbVAO, &babosaGlbVBO, &babosaGlbEBO, &babosaGlbIndexCount, &babosaGlbTexture);
+    std::thread t7 (asyncLoadTask, "bombGLB", resolveAssetPath(kBombGlbPath), &bombGlbVAO, &bombGlbVBO, &bombGlbEBO, &bombGlbIndexCount, &bombGlbTexture);
+    std::thread t8 (asyncLoadTask, "flameGLB", resolveAssetPath(kFlameGlbPath), &flameGlbVAO, &flameGlbVBO, &flameGlbEBO, &flameGlbIndexCount, &flameGlbTexture);
+
+    std::thread t9 (asyncLoadTask, "flamePowerUpGLB", resolveAssetPath(kFlamePowerUpGlbPath), &flamePowerUpGlbVAO, &flamePowerUpGlbVBO, &flamePowerUpGlbEBO, &flamePowerUpGlbIndexCount, &flamePowerUpGlbTexture);
+    std::thread t10 (asyncLoadTask, "speedPowerUpGLB", resolveAssetPath(kSpeedPowerUpGlbPath), &speedPowerUpGlbVAO, &speedPowerUpGlbVBO, &speedPowerUpGlbEBO, &speedPowerUpGlbIndexCount, &speedPowerUpGlbTexture);
+    std::thread t11 (asyncLoadTask, "kingBomberGLB", resolveAssetPath(kKingBomberGlbPath), &kingBomberGlbVAO, &kingBomberGlbVBO, &kingBomberGlbEBO, &kingBomberGlbIndexCount, &kingBomberGlbTexture);
+    std::thread t12 (asyncLoadTask, "dronAzulGLB", resolveAssetPath(kDronAzulGlbPath), &dronAzulGlbVAO, &dronAzulGlbVBO, &dronAzulGlbEBO, &dronAzulGlbIndexCount, &dronAzulGlbTexture);
+
+    std::thread t13 (asyncLoadTask, "dronRosaGLB", resolveAssetPath(kFlamePowerUpGlbPath), &dronRosaGlbVAO, &dronRosaGlbVBO, &dronRosaGlbEBO, &dronRosaGlbIndexCount, &dronRosaGlbTexture);
+    std::thread t14 (asyncLoadTask, "dronVerdeGLB", resolveAssetPath(kSpeedPowerUpGlbPath), &dronVerdeGlbVAO, &dronVerdeGlbVBO, &dronVerdeGlbEBO, &dronVerdeGlbIndexCount, &dronVerdeGlbTexture);
+    std::thread t15 (asyncLoadTask, "dronAmarilloGLB", resolveAssetPath(kKingBomberGlbPath), &dronAmarilloGlbVAO, &dronAmarilloGlbVBO, &dronAmarilloGlbEBO, &dronAmarilloGlbIndexCount, &dronAmarilloGlbTexture);
+    std::thread t16 (asyncLoadTask, "solGLB", resolveAssetPath(kDronAzulGlbPath), &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
+
+    std::thread t17 (asyncLoadTask, "dragonGLB", resolveAssetPath(kDragonGlbPath), &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
+
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+
+    t5.join();
+    t6.join();
+    t7.join();
+    t8.join();
+
+    t9.join();
+    t10.join();
+    t11.join();
+    t12.join();
+
+    t13.join();
+    t14.join();
+    t15.join();
+    t16.join();
+
+    t17.join();
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::chrono::duration<float, std::milli> duration = end - start;
+
+    std::cout << "Tiempo total de carga de modelos: " << duration.count() << " ms" << std::endl;
+
     Compile3DShaders();
     Compile3DTexturedShaders();
     ensureOverlayWhiteTexture();
@@ -6849,6 +6724,13 @@ void Game::render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glViewport(0, 0, WIDTH, HEIGHT);
 
+    if (loadingQueue.size() > 0) {
+        auto it = loadingQueue.begin();
+        completeTexturedGlbModel(it->meshData, it->key, it->path, *(it->vao), *(it->vbo), *(it->ebo), *(it->ic), *(it->tex));
+        std::cout << "Modelo cargado y subido a GPU: " << it->path << std::endl;
+        it = loadingQueue.erase(it); // Quitar de la cola
+    }
+    
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
         // Menú siempre se dibuja en 2D puro: limpiar buffers y desactivar estados heredados de 3D.
