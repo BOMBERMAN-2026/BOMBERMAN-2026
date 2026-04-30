@@ -6304,154 +6304,153 @@ void Game::render3D() {
             }
         }
 
+        struct PowerUpRenderModelSpec {
+            GLuint vao = 0;
+            GLsizei indexCount = 0;
+            GLuint texture = 0;
+            float scale = 1.0f;
+            float spinSpeed = 0.0f;
+            float baseHeight = 0.10f;
+            float bobAmplitude = 0.0f;
+            float bobSpeed = 3.0f;
+        };
+
+        auto makePowerUpSpec = [&](GLuint vao,
+                                  GLsizei indexCount,
+                                  GLuint texture,
+                                  float scale,
+                                  float spinSpeed,
+                                  float baseHeight,
+                                  float bobAmplitude,
+                                  float bobSpeed) {
+            PowerUpRenderModelSpec spec;
+            spec.vao = vao;
+            spec.indexCount = indexCount;
+            spec.texture = texture;
+            spec.scale = scale;
+            spec.spinSpeed = spinSpeed;
+            spec.baseHeight = baseHeight;
+            spec.bobAmplitude = bobAmplitude;
+            spec.bobSpeed = bobSpeed;
+            return spec;
+        };
+
+        auto resolvePowerUpModelSpec = [&](PowerUpType type, PowerUpRenderModelSpec& outSpec) -> bool {
+            switch (type) {
+                case PowerUpType::BombUp:
+                    if (canRenderBombGlb) {
+                        outSpec = makePowerUpSpec(bombGlbVAO, bombGlbIndexCount, bombGlbTexture,
+                                                  0.74f, 1.85f, 0.11f, 0.012f, 2.8f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::FireUp:
+                    if (canRenderFlamePowerUpGlb) {
+                        outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                  0.66f, 2.05f, 0.12f, 0.020f, 3.2f);
+                        return true;
+                    }
+                    if (canRenderFlameGlb) {
+                        outSpec = makePowerUpSpec(flameGlbVAO, flameGlbIndexCount, flameGlbTexture,
+                                                  0.74f, 2.05f, 0.12f, 0.020f, 3.2f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::SpeedUp:
+                    if (canRenderSpeedPowerUpGlb) {
+                        outSpec = makePowerUpSpec(speedPowerUpGlbVAO, speedPowerUpGlbIndexCount, speedPowerUpGlbTexture,
+                                                  0.76f, 2.35f, 0.11f, 0.022f, 3.6f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::ExtraLife:
+                    if (canRenderExtraLifePowerUpGlb) {
+                        outSpec = makePowerUpSpec(extraLifePowerUpGlbVAO, extraLifePowerUpGlbIndexCount, extraLifePowerUpGlbTexture,
+                                                  0.84f, 1.65f, 0.11f, 0.016f, 2.7f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::Invincibility:
+                    if (canRenderFlamePowerUpGlb) {
+                        outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                  0.78f, 2.70f, 0.13f, 0.024f, 4.2f);
+                        return true;
+                    }
+                    if (canRenderFlameGlb) {
+                        outSpec = makePowerUpSpec(flameGlbVAO, flameGlbIndexCount, flameGlbTexture,
+                                                  0.82f, 2.70f, 0.13f, 0.024f, 4.2f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::RemoteControl:
+                    if (canRenderRemoteControlPowerUpGlb) {
+                        outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
+                                                  0.64f, 1.92f, 0.10f, 0.015f, 3.1f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::Matches:
+                    if (canRenderMatchesItemGlb) {
+                        outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
+                                                  0.58f, 1.75f, 0.10f, 0.014f, 2.9f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::Can:
+                    if (canRenderCanItemGlb) {
+                        outSpec = makePowerUpSpec(canItemGlbVAO, canItemGlbIndexCount, canItemGlbTexture,
+                                                  0.60f, 1.68f, 0.10f, 0.014f, 2.6f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::Lighter:
+                    if (canRenderLighterItemGlb) {
+                        outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
+                                                  0.62f, 1.92f, 0.10f, 0.015f, 3.0f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::Battery:
+                    if (canRenderRemoteControlPowerUpGlb) {
+                        outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
+                                                  0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
+                        return true;
+                    }
+                    if (canRenderCanItemGlb) {
+                        outSpec = makePowerUpSpec(canItemGlbVAO, canItemGlbIndexCount, canItemGlbTexture,
+                                                  0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::Dragonfly:
+                    if (canRenderMatchesItemGlb) {
+                        outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
+                                                  0.60f, 2.30f, 0.12f, 0.021f, 4.0f);
+                        return true;
+                    }
+                    if (canRenderFlamePowerUpGlb) {
+                        outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                  0.62f, 2.30f, 0.12f, 0.021f, 4.0f);
+                        return true;
+                    }
+                    break;
+                case PowerUpType::HudsonBee:
+                    if (canRenderLighterItemGlb) {
+                        outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
+                                                  0.64f, 2.45f, 0.12f, 0.022f, 4.2f);
+                        return true;
+                    }
+                    if (canRenderFlamePowerUpGlb) {
+                        outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
+                                                  0.66f, 2.45f, 0.12f, 0.022f, 4.2f);
+                        return true;
+                    }
+                    break;
+            }
+            return false;
+        };
+
         if (canRenderAnyPowerUpGlb) {
-            struct PowerUpRenderModelSpec {
-                GLuint vao = 0;
-                GLsizei indexCount = 0;
-                GLuint texture = 0;
-                float scale = 1.0f;
-                float spinSpeed = 0.0f;
-                float baseHeight = 0.10f;
-                float bobAmplitude = 0.0f;
-                float bobSpeed = 3.0f;
-            };
-
-            auto makePowerUpSpec = [](GLuint vao,
-                                      GLsizei indexCount,
-                                      GLuint texture,
-                                      float scale,
-                                      float spinSpeed,
-                                      float baseHeight,
-                                      float bobAmplitude,
-                                      float bobSpeed) {
-                PowerUpRenderModelSpec spec;
-                spec.vao = vao;
-                spec.indexCount = indexCount;
-                spec.texture = texture;
-                spec.scale = scale;
-                spec.spinSpeed = spinSpeed;
-                spec.baseHeight = baseHeight;
-                spec.bobAmplitude = bobAmplitude;
-                spec.bobSpeed = bobSpeed;
-                return spec;
-            };
-
-            auto resolvePowerUpModelSpec = [&](PowerUpType type, PowerUpRenderModelSpec& outSpec) -> bool {
-                switch (type) {
-                    case PowerUpType::BombUp:
-                        if (canRenderBombGlb) {
-                            outSpec = makePowerUpSpec(bombGlbVAO, bombGlbIndexCount, bombGlbTexture,
-                                                      0.74f, 1.85f, 0.11f, 0.012f, 2.8f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::FireUp:
-                        if (canRenderFlamePowerUpGlb) {
-                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
-                                                      0.66f, 2.05f, 0.12f, 0.020f, 3.2f);
-                            return true;
-                        }
-                        if (canRenderFlameGlb) {
-                            outSpec = makePowerUpSpec(flameGlbVAO, flameGlbIndexCount, flameGlbTexture,
-                                                      0.74f, 2.05f, 0.12f, 0.020f, 3.2f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::SpeedUp:
-                        if (canRenderSpeedPowerUpGlb) {
-                            outSpec = makePowerUpSpec(speedPowerUpGlbVAO, speedPowerUpGlbIndexCount, speedPowerUpGlbTexture,
-                                                      0.76f, 2.35f, 0.11f, 0.022f, 3.6f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::ExtraLife:
-                        if (canRenderExtraLifePowerUpGlb) {
-                            outSpec = makePowerUpSpec(extraLifePowerUpGlbVAO, extraLifePowerUpGlbIndexCount, extraLifePowerUpGlbTexture,
-                                                      0.84f, 1.65f, 0.11f, 0.016f, 2.7f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::Invincibility:
-                        if (canRenderFlamePowerUpGlb) {
-                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
-                                                      0.78f, 2.70f, 0.13f, 0.024f, 4.2f);
-                            return true;
-                        }
-                        if (canRenderFlameGlb) {
-                            outSpec = makePowerUpSpec(flameGlbVAO, flameGlbIndexCount, flameGlbTexture,
-                                                      0.82f, 2.70f, 0.13f, 0.024f, 4.2f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::RemoteControl:
-                        if (canRenderRemoteControlPowerUpGlb) {
-                            outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
-                                                      0.64f, 1.92f, 0.10f, 0.015f, 3.1f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::Matches:
-                        if (canRenderMatchesItemGlb) {
-                            outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
-                                                      0.58f, 1.75f, 0.10f, 0.014f, 2.9f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::Can:
-                        if (canRenderCanItemGlb) {
-                            outSpec = makePowerUpSpec(canItemGlbVAO, canItemGlbIndexCount, canItemGlbTexture,
-                                                      0.60f, 1.68f, 0.10f, 0.014f, 2.6f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::Lighter:
-                        if (canRenderLighterItemGlb) {
-                            outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
-                                                      0.62f, 1.92f, 0.10f, 0.015f, 3.0f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::Battery:
-                        if (canRenderRemoteControlPowerUpGlb) {
-                            outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
-                                                      0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
-                            return true;
-                        }
-                        if (canRenderCanItemGlb) {
-                            outSpec = makePowerUpSpec(canItemGlbVAO, canItemGlbIndexCount, canItemGlbTexture,
-                                                      0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::Dragonfly:
-                        if (canRenderMatchesItemGlb) {
-                            outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
-                                                      0.60f, 2.30f, 0.12f, 0.021f, 4.0f);
-                            return true;
-                        }
-                        if (canRenderFlamePowerUpGlb) {
-                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
-                                                      0.62f, 2.30f, 0.12f, 0.021f, 4.0f);
-                            return true;
-                        }
-                        break;
-                    case PowerUpType::HudsonBee:
-                        if (canRenderLighterItemGlb) {
-                            outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
-                                                      0.64f, 2.45f, 0.12f, 0.022f, 4.2f);
-                            return true;
-                        }
-                        if (canRenderFlamePowerUpGlb) {
-                            outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
-                                                      0.66f, 2.45f, 0.12f, 0.022f, 4.2f);
-                            return true;
-                        }
-                        break;
-                }
-
-                return false;
-            };
-
             const float now = (float)glfwGetTime();
             for (int r = 0; r < gameMap->getRows(); ++r) {
                 for (int c = 0; c < gameMap->getCols(); ++c) {
@@ -6481,6 +6480,51 @@ void Game::render3D() {
                     glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                     glBindVertexArray(spec.vao);
                     glDrawElements(GL_TRIANGLES, spec.indexCount, GL_UNSIGNED_INT, 0);
+                }
+            }
+        }
+
+        // --- Renderizado de objetos volando (3D) ---
+        const auto& gameGrid = gameMap->getGrid();
+        for (int r = 0; r < gameMap->getRows(); ++r) {
+            for (int c = 0; c < gameMap->getCols(); ++c) {
+                const Block& b = gameGrid[r][c];
+                if (!b.isFlying) continue;
+
+                // Calculamos posición NDC para billboards si fuera necesario
+                glm::vec2 ndcPos = gameMap->gridToNDC(r, c) + glm::vec2(b.flyOffset.x * 0.1f, b.flyOffset.y * 0.1f); 
+                // Pero mejor usamos worldPos para todo
+                glm::vec3 worldPos = gridToWorld3D(gameMap, r, c, 0.5f) + b.flyOffset;
+                
+                if (b.itemExploding) {
+                    // Es un power-up/ítem volando
+                    PowerUpRenderModelSpec spec;
+                    if (resolvePowerUpModelSpec(b.powerUpType, spec) && spec.vao != 0) {
+                        glUseProgram(shader3DTextured);
+                        glActiveTexture(GL_TEXTURE0);
+                        glBindTexture(GL_TEXTURE_2D, spec.texture);
+                        
+                        glm::mat4 model(1.0f);
+                        model = glm::translate(model, worldPos);
+                        model = glm::rotate(model, glm::radians(b.flyRot), glm::vec3(0.4f, 1.0f, 0.2f));
+                        model = glm::scale(model, glm::vec3(spec.scale, spec.scale, spec.scale));
+                        
+                        glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                        glBindVertexArray(spec.vao);
+                        glDrawElements(GL_TRIANGLES, spec.indexCount, GL_UNSIGNED_INT, 0);
+                    } else {
+                        // Fallback: Billboard del power-up (mantiene su aspecto 2D original)
+                        glUseProgram(shader); 
+                        GLuint puTex = gameMap->getPowerUpTexture(b.powerUpType, gameMap->getPowerUpAnimFrame());
+                        if (puTex != 0) {
+                            const float puSize = gameMap->getTileSize() * 0.8f;
+                            drawSpriteBillboard3D(puTex, 
+                                                  glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), 
+                                                  worldPos - glm::vec3(0.0f, puSize * 0.5f, 0.0f),
+                                                  puSize, puSize, 0.0f, glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+                        }
+                        glUseProgram(shader3DTextured); 
+                    }
                 }
             }
         }

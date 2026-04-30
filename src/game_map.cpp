@@ -429,22 +429,42 @@ void GameMap::update(float deltaTime) {
         powerUpAnimFrame = (powerUpAnimFrame + 1) % 2;
     }
 
-    // Actualizar bloques que se están rompiendo
+    // Actualizar bloques que se están rompiendo y objetos volando
     for (int r = 0; r < rows; r++) {
         for (int c = 0; c < cols; c++) {
             Block& b = grid[r][c];
+
+            // 1. Animación de rotura (2D y lógica de colisión)
             if (b.breaking) {
                 b.breakTimer += deltaTime;
-                if (b.breakTimer >= 0.13f) { // velocidad de destrucción intermedio entre 0.18s y 0.12s
+                if (b.breakTimer >= 0.13f) {
                     b.breakTimer -= 0.13f;
                     b.breakFrame++;
                     if (b.breakFrame >= 5) {
                         b.breaking = false;
-                        b.destroyed = true; // finalmente se destruye y pasa a ser suelo 100% transitable
-                        // Revelar power-up si tenía uno escondido
+                        b.destroyed = true; 
                         if (b.hasPowerUp && !b.powerUpCollected) {
                             b.powerUpRevealed = true;
                         }
+                    }
+                }
+            }
+
+            // 2. Física 3D de "salir volando"
+            if (b.isFlying) {
+                b.flyTimer += deltaTime;
+                
+                // Aplicar velocidad y gravedad reducida para que suban más
+                b.flyOffset += b.flyVel * deltaTime;
+                b.flyVel.y -= 4.0f * deltaTime; // gravedad suave para que no caigan tan rápido
+                b.flyRot += b.flyRotVel * deltaTime;
+
+                // Desaparecer rápido (antes de que vuelvan a caer al suelo)
+                if (b.flyTimer >= 1.2f) {
+                    b.isFlying = false;
+                    if (b.itemExploding) {
+                        b.itemExploding = false;
+                        b.hasPowerUp = false;
                     }
                 }
             }
@@ -668,6 +688,12 @@ bool GameMap::destroyTile(int row, int col) {
     b.breaking = true;
     b.breakTimer = 0.0f;
     b.breakFrame = 0;
+    
+    // El bloque se marca como destruido y tipo suelo para que se vea el fondo y se pueda pasar,
+    // pero b.breaking lo mantendrá dibujando la animación de rotura en 2D.
+    b.type = BlockType::FLOOR;
+    b.destroyed = true;
+
     // Si tenia un power-up, el sistema de juego deberia spawnearlo aqui cuando acabe
     return true;
 }
@@ -1163,6 +1189,13 @@ void GameMap::loadPowerUpTextures() {
     std::cout << "GameMap: power-up textures loaded" << std::endl;
 }
 
+GLuint GameMap::getPowerUpTexture(PowerUpType type, int frame) const {
+    int idx = (int)type;
+    if (idx < 0 || idx >= POWER_UP_TYPE_COUNT) return 0;
+    int f = std::max(0, std::min(1, frame));
+    return powerUpTextures[idx][f];
+}
+
 void GameMap::placePowerUps() {
     // 1) Si el nivel define power-ups explícitos (directiva `powerup`),
     //    no usamos colocación aleatoria; solo ajustamos si son visibles u ocultos.
@@ -1489,6 +1522,19 @@ void GameMap::destroyExposedPowerUp(int row, int col) {
     b.itemExplodingTimer = 0.0f;
     b.itemExplodingFrame = 0;
     
+    // Iniciamos la física de vuelo 3D para el power-up
+    b.isFlying = true;
+    b.flyTimer = 0.0f;
+    b.flyOffset = glm::vec3(0.0f);
+    
+    float vx = ((float)rand() / (float)RAND_MAX - 0.5f) * 3.0f;
+    float vy = 14.0f + ((float)rand() / (float)RAND_MAX) * 6.0f;
+    float vz = ((float)rand() / (float)RAND_MAX - 0.5f) * 3.0f;
+    b.flyVel = glm::vec3(vx, vy, vz);
+    
+    b.flyRot = 0.0f;
+    b.flyRotVel = 500.0f + ((float)rand() / (float)RAND_MAX) * 1000.0f;
+
     b.powerUpRevealed = false;
     b.powerUpCollected = true;
 }

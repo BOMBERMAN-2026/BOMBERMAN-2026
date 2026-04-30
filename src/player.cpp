@@ -205,12 +205,12 @@ void Player::updateDeathAnimation() {
             const float spinRate = 60.0f * brakeT * brakeT;
             death3DSpin += deltaTime * spinRate;
 
-            // Inclinación hacia adelante/suelo (vuelco)
-            death3DTilt = std::min(1.57f, death3DTotalTimer * 2.5f); // 90 grados en ~0.6s
+            // Inclinación hacia adelante/suelo
+            death3DTilt = std::min(1.57f, death3DTotalTimer * 2.5f);
 
             // Hundimiento suave hacia el suelo
             const float sinkT = std::min(1.0f, death3DTotalTimer / sinkDuration);
-            death3DHeight = -0.50f * sinkT;  // baja un poco para estar a ras de suelo tumbado
+            death3DHeight = -0.50f * sinkT;
 
             // Escala
             death3DScale = 1.0f;
@@ -221,7 +221,7 @@ void Player::updateDeathAnimation() {
                 death3DGlitterTimer = 0.0f;
             }
         } else {
-            // Fase glitter: se queda en el suelo rojo (el color se aplica en el render)
+            // Fase glitter: se queda en el suelo rojo
             death3DGlitterTimer += deltaTime;
             const float t = std::min(1.0f, death3DGlitterTimer / glitterDuration);
             

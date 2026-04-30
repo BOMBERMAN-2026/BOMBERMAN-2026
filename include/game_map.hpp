@@ -57,8 +57,17 @@ struct Block {
     float itemExplodingTimer = 0.0f;
     int itemExplodingFrame = 0;
 
+    // --- Animación 3D de "salir volando" ---
+    bool isFlying = false;
+    float flyTimer = 0.0f;
+    glm::vec3 flyOffset = glm::vec3(0.0f);
+    glm::vec3 flyVel = glm::vec3(0.0f);
+    float flyRot = 0.0f;
+    float flyRotVel = 0.0f;
+    glm::vec4 flyUv; // Para guardar la apariencia original al salir volando
+
     bool isWalkable() const {
-        if (destroyed) return true; // destructible ya destruido → suelo
+        if (destroyed || isFlying) return true; // destructible ya destruido o volando → suelo
         // Si está rompiéndose, TODAVÍA NO es caminable (foco de fuego)
         return (type == BlockType::FLOOR);
     }
@@ -127,6 +136,7 @@ public:
 
     int getRows() const { return rows; }
     int getCols() const { return cols; }
+    const std::vector<std::vector<Block>>& getGrid() const { return grid; }
 
     int getSpriteId(int row, int col) const;
     BlockType getBlockType(int row, int col) const;
@@ -195,6 +205,8 @@ public:
 
     // Carga las texturas de los power-ups.
     void loadPowerUpTextures();
+    GLuint getPowerUpTexture(PowerUpType type, int frame) const;
+    int getPowerUpAnimFrame() const { return powerUpAnimFrame; }
 
     // Comprueba si un jugador está sobre un power-up revelado y lo recoge.
     // Devuelve true si recogió un power-up (y lo aplica al player).
