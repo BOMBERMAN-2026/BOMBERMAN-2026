@@ -307,8 +307,8 @@ void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) 
 
     std::string path = normalizePath(absPath);
 
-    // MA_SOUND_FLAG_STREAM: streaming desde disco (no cargar MP3 entero en RAM)
-    ma_uint32 flags = MA_SOUND_FLAG_STREAM | MA_SOUND_FLAG_NO_SPATIALIZATION;
+    // MA_SOUND_FLAG_DECODE: cargar en RAM para evitar gaps en el loop.
+    ma_uint32 flags = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION;
 
     ma_result r = ma_sound_init_from_file(
         &impl->engine, path.c_str(), flags,
@@ -323,6 +323,7 @@ void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) 
     ma_sound_set_looping(&impl->bgmSound, loop ? MA_TRUE : MA_FALSE);
     float v = (volume > 0.0f) ? volume : impl->bgmVolume;
     ma_sound_set_volume(&impl->bgmSound, v);
+    ma_sound_set_pitch(&impl->bgmSound, 1.0f); // Reset pitch for new music
     ma_sound_start(&impl->bgmSound);
     impl->bgmActive = true;
     impl->bgmVolume = v;
@@ -336,6 +337,11 @@ void AudioManager::stopBgm() {
     ma_sound_stop(&impl->bgmSound);
     ma_sound_uninit(&impl->bgmSound);
     impl->bgmActive = false;
+}
+
+void AudioManager::setBgmPitch(float pitch) {
+    if (!impl || !impl->bgmActive) return;
+    ma_sound_set_pitch(&impl->bgmSound, pitch);
 }
 
 // ============================================================

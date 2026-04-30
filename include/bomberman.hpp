@@ -225,6 +225,7 @@ private:
     float introCinematicElapsedSeconds = 0.0f;
     bool introExplosionPlayed = false;
     static constexpr float kIntroExplosionTriggerSeconds = 3.5f;
+    bool fastMusicActive = false;
 
     // Progresión de niveles (uso interno).
     void loadLevel(int levelIndex, bool preserveLivesAndScore);
