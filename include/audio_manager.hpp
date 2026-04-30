@@ -42,6 +42,7 @@ public:
     // Música de fondo
     void playBgm(const std::string& absPath, bool loop = true, float volume = 0.6f);
     void stopBgm();
+    void setBgmPitch(float pitch);
     bool isBgmFinished() const;
     float getBgmProgress01() const; // [0..1], -1 si no se puede calcular.
 

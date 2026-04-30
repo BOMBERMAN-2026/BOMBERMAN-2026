@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -2947,6 +2947,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     levelAdvanceTimer = 0.0f;
     timeUpSequenceActive = false;
     timeUpTimer = 0.0f;
+    fastMusicActive = false;
+    AudioManager::get().setBgmPitch(1.0f);
 
     // Cargar / recargar mapa.
     if (!gameMap) gameMap = new GameMap();
@@ -5297,6 +5299,16 @@ void Game::update() {
     if (!(customGameMode.isActive() && customGameMode.isInfiniteTime())) {
         levelTimeRemaining -= deltaTime;
         if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
+
+        // Aceleración de música si queda 1 minuto o menos
+        if (this->state == GAME_PLAYING && levelTimeRemaining <= 60.0f) {
+            fastMusicActive = true;
+            AudioManager::get().setBgmPitch(1.25f); // Forzar siempre si el tiempo es bajo (corrige desmuteo)
+        } else if (this->state == GAME_PLAYING && fastMusicActive) {
+            // Si el tiempo vuelve a ser > 60 (p.ej. por un reset), volver a la normalidad
+            fastMusicActive = false;
+            AudioManager::get().setBgmPitch(1.0f);
+        }
     }
 
     // Actualizar secuencia TIME UP si esta activa.
