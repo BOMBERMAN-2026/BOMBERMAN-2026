@@ -2930,6 +2930,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     lastDirKey = GLFW_KEY_UNKNOWN;
     lastDirKeyP2 = GLFW_KEY_UNKNOWN;
 
+    CpuBomberman::resetRoundDeathTracking();
+
     // Guardar progreso a preservar (Historia y VS; en Custom se reinicia siempre).
     std::vector<int> savedLives;
     if (preserveLivesAndScore && !custom) {
@@ -3070,6 +3072,11 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                 p->deathFrame = 7; // Último frame de animación de muerte
                 p->currentSpriteName = p->spritePrefix + ".muerto.7";
                 p->isWalking = false;
+            } else if (versus && p->lives > 0) {
+                // Resetear a Alive si el jugador aún tiene vidas (nueva ronda en VS)
+                p->lifeState = PlayerLifeState::Alive;
+                p->isWalking = false;
+                p->currentSpriteName = p->spritePrefix + ".abajo.0";
             }
         } else if (versus) {
             // En VS, los jugadores inician con 4 vidas (vs historia con 3)
@@ -3182,15 +3189,17 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     // Power-Ups (texturas: se cargan una vez por instancia de GameMap)
     gameMap->loadPowerUpTextures();
-    if (!versus) {
-        gameMap->placePowerUps();
-    }
+    // Colocar power-ups usando la lógica de GameMap:
+    // Si el nivel define `powerup` se usan esos; si no, se hace colocación aleatoria.
+    // Ejecutar también en modo versus para reutilizar la misma lógica.
+    gameMap->placePowerUps();
 }
 
 // Arranca una partida nueva desde nivel_01 (índice 0).
 void Game::startNewRun(GameMode newMode) {
     customGameMode.deactivate();
     mode = newMode;
+    CpuBomberman::resetEvolutionState();
     currentLevelIndex = 0;
     versusRoundNumber = 1;
     currentLevelHadEnemies = false;
@@ -5082,6 +5091,11 @@ void Game::update() {
             for (auto* p : gPlayers) {
                 if (!p || !p->isAlive()) continue;
                 if (explosionHitsEntity(gameMap, b, p->position)) {
+                    CpuBomberman::DeathReason deathReason = CpuBomberman::DeathReason::ExplosionOther;
+                    if (b && b->ownerIndex == p->playerId) {
+                        deathReason = CpuBomberman::DeathReason::ExplosionSelfBomb;
+                    }
+                    CpuBomberman::recordCpuDeath(p->playerId, deathReason);
                     p->killByExplosion();
                 }
             }
@@ -5104,7 +5118,11 @@ void Game::update() {
                             int pointsEarned = enemy->scoreValue * multiplier;
                             b->enemiesKilled++;
 
-                            playerScores[b->ownerIndex] += pointsEarned;
+                            // En modo Versus `playerScores` representa wins (no puntos),
+                            // por lo que no debemos sumar puntos de enemigos aquí.
+                            if (!VersusMode::isVersusMode(mode)) {
+                                playerScores[b->ownerIndex] += pointsEarned;
+                            }
                             ScorePopup::spawn(enemy->position, enemy->scoreValue, multiplier, enemy->isBoss);
                         }
                     }
@@ -5137,6 +5155,7 @@ void Game::update() {
         for (auto* p : gPlayers) {
             if (!p || !p->isAlive()) continue;
             if (overlapsEnemyPlayer(gameMap, enemy->position, p->position)) {
+                CpuBomberman::recordCpuDeath(p->playerId, CpuBomberman::DeathReason::EnemyContact);
                 p->killByEnemy();
             }
         }
@@ -5145,6 +5164,10 @@ void Game::update() {
     // ========== Transiciones: Game Over / Next Level ==========
     if (this->state == GAME_PLAYING) {
         if (VersusMode::isVersusMode(mode)) {
+            auto evolveVsCpu = [&](bool playerWon) {
+                CpuBomberman::evolveCpuPlayers(playerWon, CpuBomberman::consumeRoundDeathReasons());
+            };
+
             const int survivingPlayers = VersusMode::countPlayersStillInMatch(gPlayers);
             const int hostileEnemiesAlive = countHostileEnemiesForPlayers();
             const bool noHostileEnemiesAlive = (hostileEnemiesAlive == 0);
@@ -5176,6 +5199,7 @@ void Game::update() {
                     (mode == GameMode::VsTwoPlayers && winnerIndex == 1);
 
                 if (winnerIsHuman) {
+                    evolveVsCpu(/*playerWon=*/true);
                     vsCinematicPostAction = VsCinematicPostAction::AdvanceNextLevel;
 
                     const bool winnerIsP2 = (winnerIndex == 1);
@@ -5187,6 +5211,7 @@ void Game::update() {
                                           cinematicPath,
                                           winnerIndex);
                 } else {
+                    evolveVsCpu(/*playerWon=*/false);
                     // Si gana un CPU/rival: derrota de ronda.
                     // Solo termina la partida si ya no queda ningún humano con vidas.
                     vsCinematicPostAction = (survivingHumans == 0)
@@ -5201,6 +5226,7 @@ void Game::update() {
 
             // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
             if (survivingPlayers == 0 && noHostileEnemiesAlive) {
+                evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = (survivingHumans == 0)
                     ? VsCinematicPostAction::ReturnToMenu
                     : VsCinematicPostAction::RestartCurrentLevel;
@@ -5218,6 +5244,7 @@ void Game::update() {
             // - Si ya no quedan vidas, termina la partida y vuelve al menú.
             // En ambos casos, la resolución visual de la ronda es derrota.
             if (aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
+                evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = (survivingHumans == 0)
                     ? VsCinematicPostAction::ReturnToMenu
                     : VsCinematicPostAction::RestartCurrentLevel;
@@ -5230,6 +5257,7 @@ void Game::update() {
 
             // Time Up "solo tiempo": empate sin descuento de vidas.
             if (timeUp) {
+                evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = (survivingHumans == 0)
                     ? VsCinematicPostAction::ReturnToMenu
                     : VsCinematicPostAction::RestartCurrentLevel;

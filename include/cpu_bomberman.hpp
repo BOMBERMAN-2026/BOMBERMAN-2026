@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "ai_config.hpp"
 #include "bomberman.hpp" // GameMode
 #include "cpu_bomberman_difficulty.hpp"
 #include "enemy.hpp"     // Enemy
@@ -36,6 +37,13 @@ struct Settings {
         Difficulty::Medium,  // CPU #2
         Difficulty::Hard     // CPU #3
     };
+};
+
+enum class DeathReason {
+    Unknown,
+    EnemyContact,
+    ExplosionOther,
+    ExplosionSelfBomb
 };
 
 // Bomberman controlado por IA pero gestionado como enemigo del mapa (gEnemies).
@@ -86,6 +94,12 @@ void updateCpuPlayers(GameMode mode,
                       float deltaTime,
                       const Context& context,
                       const Settings& settings);
+
+void resetEvolutionState();
+void resetRoundDeathTracking();
+void recordCpuDeath(int playerId, DeathReason reason);
+std::vector<DeathReason> consumeRoundDeathReasons();
+void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths);
 
 } // namespace CpuBomberman
 

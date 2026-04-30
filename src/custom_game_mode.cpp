@@ -227,8 +227,8 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
                                            const glm::vec2& enemySize,
                                            float defaultPlayerSpeed,
                                            int& droneColorCursor) const {
-    auto createBomberEnemy = [&](CpuBomberman::Difficulty difficulty) -> Enemy* {
-        const std::string prefix = "jugadoramarillo";
+    auto createBomberEnemy = [&](CpuBomberman::Difficulty difficulty, const std::string& prefixOverride = "jugadoramarillo") -> Enemy* {
+        const std::string prefix = prefixOverride;
         const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
 
         CpuBomberman::Agent* enemy = new CpuBomberman::Agent(position,
@@ -243,11 +243,14 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
 
     switch (kind) {
         case CustomEnemyKind::BombermanEasy:
-            return createBomberEnemy(CpuBomberman::Difficulty::Easy);
+            // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Easy);
+            return createBomberEnemy(CpuBomberman::Difficulty::Easy, "jugadorrojo");
         case CustomEnemyKind::BombermanMedium:
-            return createBomberEnemy(CpuBomberman::Difficulty::Medium);
+            // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Medium);
+            return createBomberEnemy(CpuBomberman::Difficulty::Medium, "jugadoramarillo");
         case CustomEnemyKind::BombermanHard:
-            return createBomberEnemy(CpuBomberman::Difficulty::Hard);
+            // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Hard);
+            return createBomberEnemy(CpuBomberman::Difficulty::Hard, "jugadorazul");
         case CustomEnemyKind::Leon: {
             Leon* enemy = new Leon(position, enemySize, 0.10f);
             enemy->currentSpriteName = "leon.abajo.0";
