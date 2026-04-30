@@ -325,6 +325,7 @@ GLuint uniform3DTexturedLightColor = 0;
 GLuint uniform3DTexturedAmbientStrength = 0;
 GLuint uniform3DTexturedSpecularStrength = 0;
 GLuint uniform3DTexturedShininess = 0;
+GLuint uniform3DTexturedTintColor = 0;
 
 static constexpr float kDefaultPlayerSpeed = 0.4f;
 static constexpr glm::vec2 kDefaultPlayerSize(0.2f, 0.2f);
@@ -1736,6 +1737,7 @@ void Compile3DTexturedShaders()
     uniform3DTexturedAmbientStrength = glGetUniformLocation(shader3DTextured, "ambientStrength");
     uniform3DTexturedSpecularStrength = glGetUniformLocation(shader3DTextured, "specularStrength");
     uniform3DTexturedShininess = glGetUniformLocation(shader3DTextured, "shininess");
+    uniform3DTexturedTintColor = glGetUniformLocation(shader3DTextured, "objectTintColor");
 }
 
 static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
@@ -5808,12 +5810,14 @@ void Game::render3D() {
 
         const bool isWinning = (p->lifeState == PlayerLifeState::Winning);
         const bool isWinning3D = (isWinning && p->winUse3DCelebration);
-        if (!p->isAlive() && !isWinning) continue;
+        const bool isDying = (p->lifeState == PlayerLifeState::DyingByEnemy || p->lifeState == PlayerLifeState::DyingByExplosion);
+        const bool isDying3D = (isDying && p->deathUse3DCelebration);
+        if (!p->isAlive() && !isWinning && !isDying3D) continue;
 
-        const glm::vec2 shadowBasePos = isWinning3D ? p->winAnchorPosition : p->position;
+        const glm::vec2 shadowBasePos = isWinning3D ? p->winAnchorPosition : (isDying3D ? p->deathStartPosition : p->position);
         const float shadowRadius = isWinning3D
             ? std::max(0.16f, 0.46f - p->win3DHeight * 0.10f)
-            : 0.46f;
+            : (isDying3D ? std::max(0.01f, 0.46f - std::abs(p->death3DHeight) * 0.5f) : 0.46f);
 
         const glm::vec3 feet = ndcToWorld3D(gameMap, shadowBasePos, 0.02f);
         drawMesh3D(sphereOrCubeVAO,
@@ -6084,6 +6088,54 @@ void Game::render3D() {
     }
 
     // Celebración al superar nivel en modo 3D: burst de glitter rosa desde el bomberman.
+    // También efecto de muerte 3D.
+    for (std::size_t playerIndex = 0; playerIndex < gPlayers.size(); ++playerIndex) {
+        Player* p = gPlayers[playerIndex];
+        if (!p) continue;
+
+        // Efecto de Muerte
+        const bool isDying = (p->lifeState == PlayerLifeState::DyingByEnemy || p->lifeState == PlayerLifeState::DyingByExplosion);
+        if (isDying && p->deathUse3DCelebration && p->death3DGlitterBurst && p->death3DGlitterTimer >= 0.0f) {
+            const float glitterDuration = 0.80f;
+            const float tRaw = p->death3DGlitterTimer / glitterDuration;
+            const float t = std::max(0.0f, std::min(1.0f, tRaw));
+            const float inv = 1.0f - t;
+            const float easeOut = 1.0f - (inv * inv);
+            const float intensity = std::max(0.0f, 1.0f - t);
+
+            const glm::vec3 center = ndcToWorld3D(gameMap, p->deathStartPosition, 0.50f + p->death3DHeight);
+
+            // Explosión de polvo grisaceo con naranja
+            const float corePulse = 1.0f + 0.2f * std::sin((1.0f - t) * 20.0f);
+            const float coreRadius = (0.20f + 0.65f * easeOut) * corePulse;
+            const glm::vec3 coreColor(0.80f + 0.20f * intensity, 0.60f + 0.30f * intensity, 0.40f + 0.10f * intensity);
+            drawMesh3D(sphereOrCubeVAO, sphereOrCubeIndexCount, center, glm::vec3(coreRadius, coreRadius, coreRadius), coreColor);
+
+            const int sparkleCount = 80;
+            for (int i = 0; i < sparkleCount; ++i) {
+                const float seed = ((float)(p->playerId + 1) * 31.4f) + ((float)(i + 1) * 22.1f) + (p->deathStartPosition.x * 12.3f);
+                const float hashBase = std::sin(seed) * 43758.5453f;
+                const float hash01 = glm::fract(hashBase);
+                const float hash02 = glm::fract(hashBase * 1.345f);
+                const float hash03 = glm::fract(hashBase * 2.112f);
+                
+                const float kTwoPi = 6.28318530718f;
+                const float angle = hash01 * kTwoPi;
+                const float elevation = (hash02 - 0.5f) * kTwoPi * 0.5f;
+                const float speed = 1.5f + 2.5f * hash03;
+
+                const glm::vec3 dir(std::cos(elevation) * std::cos(angle), std::sin(elevation), std::cos(elevation) * std::sin(angle));
+                const float dist = speed * t * easeOut;
+                
+                const glm::vec3 sparklePos = center + dir * dist;
+                const float sparkleSize = 0.04f + 0.04f * hash01 * intensity;
+                const glm::vec3 sparkleColor = (hash02 > 0.5f) ? glm::vec3(1.0f, 0.4f, 0.1f) : glm::vec3(0.5f, 0.5f, 0.5f);
+                
+                drawMesh3D(sphereOrCubeVAO, sphereOrCubeIndexCount, sparklePos, glm::vec3(sparkleSize, sparkleSize, sparkleSize), sparkleColor);
+            }
+        }
+    }
+
     for (std::size_t playerIndex = 0; playerIndex < gPlayers.size(); ++playerIndex) {
         Player* p = gPlayers[playerIndex];
         if (!p || p->lifeState != PlayerLifeState::Winning || !p->winUse3DCelebration) {
@@ -6224,6 +6276,7 @@ void Game::render3D() {
         glUniform1f(uniform3DTexturedAmbientStrength, 0.30f);
         glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
         glUniform1f(uniform3DTexturedShininess, 28.0f);
+        glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
 
         if (canRenderBombGlb) {
             glActiveTexture(GL_TEXTURE0);
@@ -6551,7 +6604,9 @@ void Game::render3D() {
 
                 const bool isWinning = (p->lifeState == PlayerLifeState::Winning);
                 const bool isWinning3D = (isWinning && p->winUse3DCelebration);
-                if (!p->isAlive() && !isWinning) continue;
+                const bool isDying = (p->lifeState == PlayerLifeState::DyingByEnemy || p->lifeState == PlayerLifeState::DyingByExplosion);
+                const bool isDying3D = (isDying && p->deathUse3DCelebration);
+                if (!p->isAlive() && !isWinning && !isDying3D) continue;
 
                 if (camera3DType == Camera3DType::FirstPerson && (int)i == trackedPlayerIndex) {
                     continue;
@@ -6584,20 +6639,37 @@ void Game::render3D() {
                     modelFacingDirKey = remapDirectionFor3DCamera(this, modelFacingDirKey);
                 }
 
-                const glm::vec2 modelBasePos = isWinning3D ? p->winAnchorPosition : p->position;
+                const glm::vec2 modelBasePos = isWinning3D ? p->winAnchorPosition : (isDying3D ? p->deathStartPosition : p->position);
                 const glm::vec3 feet = ndcToWorld3D(gameMap, modelBasePos, 0.08f);
                 float yaw = facingKeyToYawRadians(modelFacingDirKey) + kPlayerModelYawOffset;
                 if (isWinning3D) {
                     yaw += p->win3DSpin;
+                } else if (isDying3D) {
+                    yaw += p->death3DSpin;
                 }
 
-                const float modelLift = isWinning3D ? p->win3DHeight : 0.0f;
-                const float modelScale = isWinning3D ? std::max(1.0f, p->win3DScale) : 1.0f;
+                const float modelLift = isWinning3D ? p->win3DHeight : (isDying3D ? p->death3DHeight : 0.0f);
+                const float modelScale = isWinning3D ? std::max(1.0f, p->win3DScale) : (isDying3D ? std::max(0.01f, p->death3DScale) : 1.0f);
 
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f + modelLift, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+                
+                // Aplicar inclinación si está muriendo
+                if (isDying3D) {
+                    model = glm::rotate(model, p->death3DTilt, glm::vec3(1.0f, 0.0f, 0.0f));
+                }
+
                 model = glm::scale(model, glm::vec3(1.28f * modelScale, 1.28f * modelScale, 1.28f * modelScale));
+
+                // Aplicar color rojo si está muriendo
+                glm::vec3 tint(1.0f, 1.0f, 1.0f);
+                if (isDying3D) {
+                    // Turn redder as death progresses
+                    const float intensity = std::min(1.0f, p->death3DTotalTimer * 2.0f);
+                    tint = glm::vec3(1.0f, 1.0f - intensity, 1.0f - intensity);
+                }
+                glUniform3fv(uniform3DTexturedTintColor, 1, glm::value_ptr(tint));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                 glBindVertexArray(playerVao);

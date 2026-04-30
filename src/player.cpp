@@ -189,6 +189,57 @@ void Player::updateDeathAnimation() {
         return;
     }
 
+    // ---- Efectos visuales 3D en paralelo (no bloquean el respawn) ----
+    if (deathUse3DCelebration) {
+        death3DTotalTimer += deltaTime;
+        
+        // Fase 0: caída, giro y vuelco (primeros ~0.9s)
+        const float spinDuration = 0.80f;
+        const float sinkDuration = 0.60f;
+        const float glitterDelay = 0.20f;
+        const float glitterDuration = 0.85f;
+
+        if (death3DGlitterTimer < 0.0f) {
+            const float t = std::min(1.0f, death3DTotalTimer / spinDuration);
+            const float brakeT = 1.0f - t;
+            const float spinRate = 60.0f * brakeT * brakeT;
+            death3DSpin += deltaTime * spinRate;
+
+            // Inclinación hacia adelante/suelo (vuelco)
+            death3DTilt = std::min(1.57f, death3DTotalTimer * 2.5f); // 90 grados en ~0.6s
+
+            // Hundimiento suave hacia el suelo
+            const float sinkT = std::min(1.0f, death3DTotalTimer / sinkDuration);
+            death3DHeight = -0.50f * sinkT;  // baja un poco para estar a ras de suelo tumbado
+
+            // Escala
+            death3DScale = 1.0f;
+
+            // Arrancar glitter tras el delay
+            if (death3DTotalTimer >= glitterDelay) {
+                death3DGlitterBurst = true;
+                death3DGlitterTimer = 0.0f;
+            }
+        } else {
+            // Fase glitter: se queda en el suelo rojo (el color se aplica en el render)
+            death3DGlitterTimer += deltaTime;
+            const float t = std::min(1.0f, death3DGlitterTimer / glitterDuration);
+            
+            // Se queda tumbado
+            death3DTilt = 1.57f;
+            death3DHeight = -0.50f;
+            
+            // Pulso de escala leve mientras desaparece
+            float pulse = 1.0f + 0.05f * std::sin(death3DGlitterTimer * 10.0f);
+            death3DScale = pulse * (1.0f - t * 0.2f);
+
+            if (death3DGlitterTimer >= glitterDuration) {
+                deathUse3DCelebration = false;
+            }
+        }
+    }
+    // -----------------------------------------------------------------
+
     deathTimer += deltaTime;
     while (deathTimer >= deathFrameInterval) {
         deathTimer -= deathFrameInterval;
@@ -594,6 +645,17 @@ void Player::killByEnemy() {
     pendingRespawn = false;
     flipX = 0.0f;
     currentSpriteName = spritePrefix + ".muerto.0";
+    // Inicializar efectos visuales 3D
+    deathUse3DCelebration = (bomberman != nullptr && bomberman->viewMode == ViewMode::Mode3D);
+    deathPhase = 0;
+    death3DHeight = 0.0f;
+    death3DSpin = 0.0f;
+    death3DTilt = 0.0f;
+    death3DScale = 1.0f;
+    death3DGlitterTimer = -1.0f;
+    death3DGlitterBurst = false;
+    death3DTotalTimer = 0.0f;
+    deathStartPosition = position;
 }
 
 // Mata al jugador por explosión (usa "jugador.muerto.quemado.N").
@@ -610,6 +672,17 @@ void Player::killByExplosion() {
     pendingRespawn = false;
     flipX = 0.0f;
     currentSpriteName = "jugador.muerto.quemado.0";
+    // Inicializar efectos visuales 3D
+    deathUse3DCelebration = (bomberman != nullptr && bomberman->viewMode == ViewMode::Mode3D);
+    deathPhase = 0;
+    death3DHeight = 0.0f;
+    death3DSpin = 0.0f;
+    death3DTilt = 0.0f;
+    death3DScale = 1.0f;
+    death3DGlitterTimer = -1.0f;
+    death3DGlitterBurst = false;
+    death3DTotalTimer = 0.0f;
+    deathStartPosition = position;
 }
 
 // Vuelve al spawn y restaura estado. Nota: el jugador NO pierde power-ups acumulados durante el nivel.
@@ -630,6 +703,18 @@ void Player::respawn() {
     deathTimer = 0.0f;
     deathFrame = 0;
     pendingRespawn = false;
+
+    // Reset 3D death animation state
+    deathUse3DCelebration = false;
+    deathPhase = 0;
+    death3DHeight = 0.0f;
+    death3DSpin = 0.0f;
+    death3DTilt = 0.0f;
+    death3DScale = 1.0f;
+    death3DGlitterTimer = -1.0f;
+    death3DGlitterBurst = false;
+    death3DTotalTimer = 0.0f;
+    deathStartPosition = glm::vec2(0.0f);
 
     flipX = 0.0f;
     currentSpriteName = spritePrefix + ".abajo.0";

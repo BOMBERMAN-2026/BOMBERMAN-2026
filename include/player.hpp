@@ -71,6 +71,18 @@ class Player : public Entity {
         int deathFrame = 0;                               // Frame actual de muerte
         bool pendingRespawn = false;                      // true si terminó animación y toca respawnear
 
+        // Vida y animaciones de muerte 3D
+        bool deathUse3DCelebration = false;
+        int deathPhase = 0;
+        float death3DHeight = 0.0f;
+        float death3DSpin = 0.0f;
+        float death3DTilt = 0.0f;        // Inclinación para tumbarse al morir
+        float death3DScale = 1.0f;
+        float death3DGlitterTimer = -1.0f;
+        bool death3DGlitterBurst = false;
+        float death3DTotalTimer = 0.0f;
+        glm::vec2 deathStartPosition = glm::vec2(0.0f);
+
         // Vida y animaciones de victoria
         bool hasFinishedWinning = false;
         float winTimer = 0.0f;

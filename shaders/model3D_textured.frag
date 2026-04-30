@@ -9,6 +9,7 @@ uniform vec3 lightColor;
 uniform float ambientStrength;
 uniform float specularStrength;
 uniform float shininess;
+uniform vec3 objectTintColor; // Color para tintado (ej: rojo al morir)
 
 in vec3 FragPos;
 in vec3 Normal;
@@ -30,5 +31,5 @@ void main()
     vec3 specular = specularStrength * spec * lightColor;
 
     vec3 litColor = (ambient + diffuse + specular) * albedo.rgb;
-    FragColor = vec4(litColor, albedo.a);
+    FragColor = vec4(litColor * objectTintColor, albedo.a);
 }
