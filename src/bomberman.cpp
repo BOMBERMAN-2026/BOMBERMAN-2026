@@ -4989,6 +4989,9 @@ void Game::update() {
             }
             for (auto* enemy : gEnemies) {
                 if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+                if (b && b->ownerIndex == kBombOwnerKingBomberSpecial && dynamic_cast<KingBomber*>(enemy) != nullptr) {
+                    continue;
+                }
 
                 const bool hostileEnemy = isHostileEnemyForPlayers(enemy);
                 if (!hostileEnemy && b && b->ownerIndex >= 0) {

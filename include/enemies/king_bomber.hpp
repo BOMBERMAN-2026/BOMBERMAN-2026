@@ -8,14 +8,14 @@ bool IsKingPreBattleLockActive();
 bool IsKingPreBattleBlinkVisible();
 
 /*
- * King Bomber – 77000 pts, 9 HP (JEFE)
+ * King Bomber – 77000 pts, 3 fases (JEFE)
  *
  * Mecánicas:
  * - Movimiento continuo semi-aleatorio condicionado por colisiones del mapa.
  * - Colocación periódica de bombas con límite de bombas activas propias.
  * - Evasión básica: si su tile entra en peligro por explosiones activas
  *   o inminentes, prioriza moverse a una celda segura.
- * - Escala agresividad por vida restante (sprites kingbomber1/2/3).
+ * - Escala agresividad por fase (sprites kingbomber1/2/3).
  */
 
 class KingBomber : public Enemy {
@@ -92,10 +92,14 @@ private:
     float specialBlastFrameTimer;
     float specialBlastFrameInterval;
     int specialBlastFrame;
+    float specialBombLockBeforeDuration;
+    float specialBombLockAfterTimer;
+    float specialBombLockAfterDuration;
 
     // Evita recibir múltiples impactos por una misma explosión en frames consecutivos.
     float damageGraceTimer;
     float damageGraceDuration;
+    float phaseChangeGraceDuration;
 
     // Seguimiento de bombas propias para respetar límite simultáneo
     std::vector<glm::ivec2> ownedBombTiles;
@@ -118,9 +122,14 @@ private:
     void updateShieldCycle(float dt);
     void updateBombOwnershipState();
     bool isBombStillActiveAt(const glm::ivec2& tile) const;
+    bool hasActiveOwnedBombs() const;
+    bool canPlaceBombSafelyAt(int row, int col) const;
     bool isTileDangerous(int row, int col) const;
+    bool isTileBlockedForMovement(int row, int col) const;
     bool hasLineOfFireToBomb(int fromRow, int fromCol, int bombRow, int bombCol, int power) const;
     EnemyDirection chooseSafeDirection() const;
+    EnemyDirection chooseSafeDirectionAvoiding(EnemyDirection blockedDir) const;
+    EnemyDirection chooseEscapeDirectionFromBomb(int bombRow, int bombCol, int power) const;
     EnemyDirection chooseExplorationDirection() const;
     EnemyDirection chooseBiasedDirectionTowardPlayer(float towardWeight) const;
     bool tryFindTeleportNearPlayer(glm::vec2& outPos) const;

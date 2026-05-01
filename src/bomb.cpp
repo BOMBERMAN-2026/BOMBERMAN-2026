@@ -44,7 +44,7 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, 
       animInterval(0.3f),     // Intervalo constante de la mecha
       explodeInterval(0.065f), // Intervalo de explosión intermedio (más rápido que 0.12s, más lento que 0.045s)
       currentSpriteName("bomb.1"),
-      ownerIndex(ownerPlayer ? ownerPlayer->playerId : 0),
+      ownerIndex(ownerPlayer ? ownerPlayer->playerId : kBombOwnerNone),
       enemiesKilled(0),
       ownerLeftTile(false),
       power(bombPower),

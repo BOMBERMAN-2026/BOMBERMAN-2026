@@ -46,7 +46,7 @@ KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
       shieldActive(true),
       shieldStateTimer(0.0f),
       shieldOnDuration(4.0f),
-      shieldOffDuration(3.2f),
+      shieldOffDuration(5.0f),
     shieldAnimTimer(0.0f),
     shieldAnimFrame(0),
     shieldAnimFrameInterval(0.10f),
@@ -66,8 +66,12 @@ KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
       specialBlastFrameTimer(0.0f),
       specialBlastFrameInterval(0.12f),
       specialBlastFrame(1),
+      specialBombLockBeforeDuration(1.0f),
+      specialBombLockAfterTimer(0.0f),
+      specialBombLockAfterDuration(1.2f),
     damageGraceTimer(0.0f),
     damageGraceDuration(0.45f),
+    phaseChangeGraceDuration(1.25f),
       phaseIndex(1),
       phaseDeathTimer(0.0f),
       phaseDeathFrame(0),
@@ -108,17 +112,17 @@ bool KingBomber::hasAliveDrones() const {
 void KingBomber::updatePhaseAggression() {
     spriteBaseId = phaseBase();
     if (phaseIndex == 1) {
-        speed = 0.2f;
+        speed = 0.30f;
         bombCooldownMax = 2.4f;
         maxOwnedBombs = 2;
         specialCooldown = 7.0f;
     } else if (phaseIndex == 2) {
-        speed = 0.2f;
+        speed = 0.30f;
         bombCooldownMax = 1.75f;
         maxOwnedBombs = 3;
         specialCooldown = 5.6f;
     } else {
-        speed = 0.2f;
+        speed = 0.30f;
         bombCooldownMax = 1.15f;
         maxOwnedBombs = 4;
         specialCooldown = 4.4f;
@@ -166,6 +170,42 @@ bool KingBomber::isBombStillActiveAt(const glm::ivec2& tile) const {
         if (b->gridRow == tile.x && b->gridCol == tile.y) return true;
     }
     return false;
+}
+
+bool KingBomber::hasActiveOwnedBombs() const {
+    for (const auto& tile : ownedBombTiles) {
+        if (isBombStillActiveAt(tile)) return true;
+    }
+    return false;
+}
+
+bool KingBomber::canPlaceBombSafelyAt(int row, int col) const {
+    if (!gameMap) return false;
+
+    for (auto* b : gBombs) {
+        if (!b || b->state == BombState::DONE) continue;
+        if (b->ownerIndex != kBombOwnerKingBomber) continue;
+
+        if (b->state == BombState::EXPLODING) {
+            if (hasLineOfFireToBomb(row, col, b->gridRow, b->gridCol, b->power)) {
+                return false;
+            }
+            continue;
+        }
+
+        if (b->state != BombState::FUSE) continue;
+
+        const float remaining = b->fuseTime - b->fuseTimer;
+        if (remaining <= 1.15f) {
+            return false;
+        }
+
+        if (hasLineOfFireToBomb(row, col, b->gridRow, b->gridCol, b->power)) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool KingBomber::hasLineOfFireToBomb(int fromRow, int fromCol, int bombRow, int bombCol, int power) const {
@@ -223,8 +263,35 @@ bool KingBomber::isTileDangerous(int row, int col) const {
     return false;
 }
 
+bool KingBomber::isTileBlockedForMovement(int row, int col) const {
+    if (!gameMap) return true;
+    if (!gameMap->isWalkable(row, col)) return true;
+
+    for (auto* b : gBombs) {
+        if (!b || b->state == BombState::DONE) continue;
+        if (b->gridRow == row && b->gridCol == col) return true;
+    }
+
+    return false;
+}
+
 EnemyDirection KingBomber::chooseSafeDirection() const {
+    return chooseSafeDirectionAvoiding(EnemyDirection::NONE);
+}
+
+EnemyDirection KingBomber::chooseSafeDirectionAvoiding(EnemyDirection blockedDir) const {
     if (!gameMap) return EnemyDirection::NONE;
+
+    int row = 0, col = 0;
+    gameMap->ndcToGrid(position, row, col);
+
+    for (const auto& tile : ownedBombTiles) {
+        if (!isBombStillActiveAt(tile)) continue;
+        if (hasLineOfFireToBomb(row, col, tile.x, tile.y, bombPower)) {
+            EnemyDirection escapeDir = chooseEscapeDirectionFromBomb(tile.x, tile.y, bombPower);
+            if (escapeDir != EnemyDirection::NONE && escapeDir != blockedDir) return escapeDir;
+        }
+    }
 
     std::vector<EnemyDirection> dirs = {
         EnemyDirection::UP, EnemyDirection::DOWN, EnemyDirection::LEFT, EnemyDirection::RIGHT
@@ -232,11 +299,48 @@ EnemyDirection KingBomber::chooseSafeDirection() const {
     std::random_shuffle(dirs.begin(), dirs.end());
 
     for (EnemyDirection d : dirs) {
+        if (d == blockedDir) continue;
         if (!canMoveInDirection(d, gameMap->getTileSize() * 0.95f)) continue;
         glm::vec2 nextPos = position + dirToVec(d) * (gameMap->getTileSize() * 1.02f);
         int nr = 0, nc = 0;
         gameMap->ndcToGrid(nextPos, nr, nc);
         if (!isTileDangerous(nr, nc)) return d;
+    }
+
+    return EnemyDirection::NONE;
+}
+
+EnemyDirection KingBomber::chooseEscapeDirectionFromBomb(int bombRow, int bombCol, int power) const {
+    if (!gameMap) return EnemyDirection::NONE;
+
+    int row = 0, col = 0;
+    gameMap->ndcToGrid(position, row, col);
+
+    std::vector<EnemyDirection> dirs = {
+        EnemyDirection::UP, EnemyDirection::DOWN, EnemyDirection::LEFT, EnemyDirection::RIGHT
+    };
+    std::random_shuffle(dirs.begin(), dirs.end());
+
+    for (EnemyDirection d : dirs) {
+        int dr = 0;
+        int dc = 0;
+        switch (d) {
+            case EnemyDirection::UP:    dr = -1; break;
+            case EnemyDirection::DOWN:  dr =  1; break;
+            case EnemyDirection::LEFT:  dc = -1; break;
+            case EnemyDirection::RIGHT: dc =  1; break;
+            default: break;
+        }
+
+        for (int step = 1; step <= power + 1; ++step) {
+            const int nr = row + dr * step;
+            const int nc = col + dc * step;
+            if (isTileBlockedForMovement(nr, nc)) break;
+
+            if (!hasLineOfFireToBomb(nr, nc, bombRow, bombCol, power) && !isTileDangerous(nr, nc)) {
+                return d;
+            }
+        }
     }
 
     return EnemyDirection::NONE;
@@ -272,12 +376,34 @@ void KingBomber::updateMovement(float dt, float towardWeight, bool avoidDanger) 
 
     const float step = speed * dt;
     EnemyDirection moveDir = EnemyDirection::NONE;
-    const bool mustEvadeOwnBomb = avoidDanger && ownBombEvadeTimer > 0.0f;
+    const bool mustEvadeOwnBomb = avoidDanger && (ownBombEvadeTimer > 0.0f || hasActiveOwnedBombs());
 
     int row = 0, col = 0;
     gameMap->ndcToGrid(position, row, col);
 
-    if ((avoidDanger && isTileDangerous(row, col)) || mustEvadeOwnBomb) {
+    if (mustEvadeOwnBomb) {
+        moveDir = chooseSafeDirection();
+
+        bool moved = false;
+        if (moveDir != EnemyDirection::NONE) {
+            moved = tryMove(moveDir, step);
+        }
+
+        if (!moved) {
+            movingToTarget = false;
+            plannedDir = chooseSafeDirectionAvoiding(moveDir);
+            if (plannedDir != EnemyDirection::NONE) {
+                tryMove(plannedDir, step);
+            }
+        } else {
+            plannedDir = moveDir;
+        }
+
+        stepsUntilReevaluate = 1;
+        return;
+    }
+
+    if (avoidDanger && isTileDangerous(row, col)) {
         moveDir = chooseSafeDirection();
         if (moveDir != EnemyDirection::NONE) {
             plannedDir = moveDir;
@@ -289,14 +415,6 @@ void KingBomber::updateMovement(float dt, float towardWeight, bool avoidDanger) 
         if (stepsUntilReevaluate <= 0 || plannedDir == EnemyDirection::NONE ||
             !canMoveInDirection(plannedDir, gameMap->getTileSize() * 0.95f)) {
             plannedDir = chooseBiasedDirectionTowardPlayer(towardWeight);
-            if (mustEvadeOwnBomb) {
-                plannedDir = chooseSafeDirection();
-                if (plannedDir == EnemyDirection::NONE) {
-                    plannedDir = chooseExplorationDirection();
-                }
-            } else {
-                plannedDir = chooseBiasedDirectionTowardPlayer(towardWeight);
-            }
             stepsUntilReevaluate = 3 + (std::rand() % 6);
         }
         moveDir = plannedDir;
@@ -308,8 +426,16 @@ void KingBomber::updateMovement(float dt, float towardWeight, bool avoidDanger) 
     }
 
     if (!moved) {
-        plannedDir = mustEvadeOwnBomb ? chooseSafeDirection() : chooseExplorationDirection();
-        if (plannedDir == EnemyDirection::NONE) {
+        movingToTarget = false;
+        int snapRow = 0;
+        int snapCol = 0;
+        gameMap->ndcToGrid(position, snapRow, snapCol);
+        if (!isTileBlockedForMovement(snapRow, snapCol)) {
+            position = gameMap->gridToNDC(snapRow, snapCol);
+        }
+
+        plannedDir = mustEvadeOwnBomb ? chooseSafeDirectionAvoiding(moveDir) : chooseExplorationDirection();
+        if (!mustEvadeOwnBomb && plannedDir == EnemyDirection::NONE) {
             plannedDir = chooseExplorationDirection();
         }
         if (plannedDir != EnemyDirection::NONE) {
@@ -335,7 +461,19 @@ void KingBomber::placeBombOnCurrentTile() {
         }
     }
 
+    if (!canPlaceBombSafelyAt(r, c)) {
+        bombCooldown = 0.45f;
+        return;
+    }
+
+    EnemyDirection escapeDir = chooseEscapeDirectionFromBomb(r, c, bombPower);
+    if (escapeDir == EnemyDirection::NONE) {
+        bombCooldown = 0.30f;
+        return;
+    }
+
     auto* bomb = new Bomb(gameMap->gridToNDC(r, c), r, c, /*owner=*/nullptr, bombPower, /*remote=*/false);
+    bomb->ownerIndex = kBombOwnerKingBomber;
     bomb->fuseTime = 2.0f;
     bomb->fuseTimer = 0.0f;
     gBombs.push_back(bomb);
@@ -343,14 +481,15 @@ void KingBomber::placeBombOnCurrentTile() {
     bombCooldown = bombCooldownMax;
     ownBombEvadeTimer = ownBombEvadeDuration;
 
-    plannedDir = chooseSafeDirection();
-    if (plannedDir == EnemyDirection::NONE) {
-        plannedDir = chooseExplorationDirection();
-    }
-    stepsUntilReevaluate = 1;
+    plannedDir = escapeDir;
+    stepsUntilReevaluate = bombPower + 1;
 }
 
 void KingBomber::maybePlaceBomb() {
+    if (specialState != SpecialAttackState::Idle) return;
+    if (specialCooldownTimer <= specialBombLockBeforeDuration) return;
+    if (specialBombLockAfterTimer > 0.0f) return;
+    if (movingToTarget) return;
     if (bombCooldown > 0.0f) return;
     if ((int)ownedBombTiles.size() >= maxOwnedBombs) return;
     placeBombOnCurrentTile();
@@ -403,6 +542,7 @@ void KingBomber::emitSpecialCrossExplosion(int stepDist) {
     // Draw center tile on step 1
     if (stepDist == 1) {
         auto* centerFire = new Bomb(gameMap->gridToNDC(r, c), r, c, nullptr, 0, false);
+        centerFire->ownerIndex = kBombOwnerKingBomberSpecial;
         centerFire->fuseTime = 0.0f;
         centerFire->detonate();
         gBombs.push_back(centerFire);
@@ -442,6 +582,7 @@ void KingBomber::emitSpecialCrossExplosion(int stepDist) {
         // Crear bomba fake que detone inmediatamente para mostrar fuego visual.
         // Luego se ajusta el segmento para usar mid/end con orientacion correcta.
         auto* visualFire = new Bomb(gameMap->gridToNDC(nr, nc), nr, nc, nullptr, 0, false);
+        visualFire->ownerIndex = kBombOwnerKingBomberSpecial;
         visualFire->fuseTime = 0.0f;
         visualFire->detonate();
 
@@ -516,6 +657,7 @@ void KingBomber::updateSpecialAttack(float dt) {
             ++specialBlastFrame;
             if (specialBlastFrame > 4) {
                 specialState = SpecialAttackState::Idle;
+                specialBombLockAfterTimer = specialBombLockAfterDuration;
                 return;
             }
         }
@@ -534,6 +676,10 @@ void KingBomber::Update() {
     if (ownBombEvadeTimer > 0.0f) {
         ownBombEvadeTimer -= deltaTime;
         if (ownBombEvadeTimer < 0.0f) ownBombEvadeTimer = 0.0f;
+    }
+    if (specialBombLockAfterTimer > 0.0f) {
+        specialBombLockAfterTimer -= deltaTime;
+        if (specialBombLockAfterTimer < 0.0f) specialBombLockAfterTimer = 0.0f;
     }
 
     updatePhaseAggression();
@@ -587,7 +733,11 @@ void KingBomber::Update() {
             break;
 
         case BattleState::CombatLoop:
-            if (specialState == SpecialAttackState::Idle) {
+        {
+            const bool wasSpecialIdle = (specialState == SpecialAttackState::Idle);
+            updateSpecialAttack(deltaTime);
+
+            if (wasSpecialIdle && specialState == SpecialAttackState::Idle) {
                 updateShieldCycle(deltaTime);
                 bombCooldown -= deltaTime;
                 if (bombCooldown < 0.0f) bombCooldown = 0.0f;
@@ -599,8 +749,8 @@ void KingBomber::Update() {
                     maybePlaceBomb();
                 }
             }
-            updateSpecialAttack(deltaTime);
             break;
+        }
 
         case BattleState::Dying:
             return;
@@ -646,7 +796,7 @@ bool KingBomber::takeDamage(const SpriteAtlas& atlas, int amount) {
     if (phaseIndex < 3) {
         ++phaseIndex;
         updatePhaseAggression();
-        damageGraceTimer = damageGraceDuration;
+        damageGraceTimer = phaseChangeGraceDuration;
         return false;
     }
 
