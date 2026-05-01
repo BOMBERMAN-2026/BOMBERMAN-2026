@@ -80,7 +80,7 @@ class Game
 {
 private:
     void render2D();
-    void render3D();
+    void render3D(const glm::mat4& lightSpaceMatrix);
     void refreshWindowTitle() const;
 
     // Carga y reutilización de recursos.

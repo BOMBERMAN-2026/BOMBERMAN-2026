@@ -99,6 +99,7 @@ SpriteAtlas gExplosionObjetoAtlas;
 GLuint gExplosionObjetoTexture = 0;
 GLuint gNextLevelTexture = 0;
 GLuint mapTexture;
+GLuint floor3DTexture = 0;
 GLuint horizonTexture;
 GLuint enemyTexture = 0;
 GLuint scoreboardTexture = 0; // Textura del scoreboard/HUD 
@@ -200,6 +201,9 @@ GLuint sphereVAO = 0;
 GLuint sphereVBO = 0;
 GLuint sphereEBO = 0;
 GLsizei sphereIndexCount = 0;
+GLuint floorVAO = 0;
+GLuint floorVBO = 0;
+GLuint floorEBO = 0;
 GLuint actorGlbVAO = 0;
 GLuint actorGlbVBO = 0;
 GLuint actorGlbEBO = 0;
@@ -368,6 +372,16 @@ GLuint uniform3DTexturedAmbientStrength = 0;
 GLuint uniform3DTexturedSpecularStrength = 0;
 GLuint uniform3DTexturedShininess = 0;
 GLuint uniform3DTexturedTintColor = 0;
+GLuint uniform3DTexturedLightSpaceMatrix = 0;
+GLuint uniform3DTexturedShadowMap = 0;
+
+GLuint shadowMapFBO = 0;
+GLuint shadowMapTex = 0;
+GLuint shaderShadow = 0;
+GLuint uniformShadowModel = 0;
+GLuint uniformShadowLightSpaceMatrix = 0;
+GLuint uniform3DLightSpaceMatrix = 0;
+GLuint uniform3DShadowMap = 0;
 
 static constexpr float kDefaultPlayerSpeed = 0.4f;
 static constexpr glm::vec2 kDefaultPlayerSize(0.2f, 0.2f);
@@ -1323,6 +1337,46 @@ void CreateCube()
     cubeIndexCount = cubeMesh->indexCount;
 }
 
+void CreateFloorVAO()
+{
+    GLfloat vertices[] = {
+        // Posicion (x, y, z)    // Normal (x, y, z)    // UV (u, v)
+        -0.5f, 0.0f, -0.5f,      0.0f, 1.0f, 0.0f,      0.0f, 1.0f,
+         0.5f, 0.0f, -0.5f,      0.0f, 1.0f, 0.0f,      1.0f, 1.0f,
+         0.5f, 0.0f,  0.5f,      0.0f, 1.0f, 0.0f,      1.0f, 0.0f,
+        -0.5f, 0.0f,  0.5f,      0.0f, 1.0f, 0.0f,      0.0f, 0.0f
+    };
+
+    GLuint indices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+
+    glGenVertexArrays(1, &floorVAO);
+    glGenBuffers(1, &floorVBO);
+    glGenBuffers(1, &floorEBO);
+
+    glBindVertexArray(floorVAO);
+
+    glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, floorEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)0);
+    glEnableVertexAttribArray(0);
+    // Normal attribute
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)(3 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(1);
+    // UV attribute
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(GLfloat), (GLvoid*)(6 * sizeof(GLfloat)));
+    glEnableVertexAttribArray(2);
+
+    glBindVertexArray(0);
+}
+
 void CreateSphere()
 {
     MeshResource* sphereMesh = ResourceManager::createMesh("sphere", []() -> MeshResource {
@@ -1834,6 +1888,23 @@ void Compile3DShaders()
     uniform3DAmbientStrength = glGetUniformLocation(shader3D, "ambientStrength");
     uniform3DSpecularStrength = glGetUniformLocation(shader3D, "specularStrength");
     uniform3DShininess = glGetUniformLocation(shader3D, "shininess");
+    uniform3DLightSpaceMatrix = glGetUniformLocation(shader3D, "lightSpaceMatrix");
+    uniform3DShadowMap = glGetUniformLocation(shader3D, "shadowMap");
+}
+
+void CompileShadowShader()
+{
+    const std::string resolvedVertexPath = resolveAssetPath("shaders/shadow.vs");
+    const std::string resolvedFragmentPath = resolveAssetPath("shaders/shadow.frag");
+
+    shaderShadow = ResourceManager::loadShader("shadow", resolvedVertexPath, resolvedFragmentPath);
+    if (shaderShadow == 0) {
+        std::cerr << "Error creando/cargando programa shader de sombras\n";
+        return;
+    }
+
+    uniformShadowModel = glGetUniformLocation(shaderShadow, "model");
+    uniformShadowLightSpaceMatrix = glGetUniformLocation(shaderShadow, "lightSpaceMatrix");
 }
 
 void Compile3DTexturedShaders()
@@ -1858,12 +1929,15 @@ void Compile3DTexturedShaders()
     uniform3DTexturedSpecularStrength = glGetUniformLocation(shader3DTextured, "specularStrength");
     uniform3DTexturedShininess = glGetUniformLocation(shader3DTextured, "shininess");
     uniform3DTexturedTintColor = glGetUniformLocation(shader3DTextured, "objectTintColor");
+    uniform3DTexturedLightSpaceMatrix = glGetUniformLocation(shader3DTextured, "lightSpaceMatrix");
+    uniform3DTexturedShadowMap = glGetUniformLocation(shader3DTextured, "shadowMap");
 }
 
 static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
 {
-    const float worldX = (float)col - ((float)map->getCols() * 0.5f) + 0.5f;
-    const float worldZ = (float)row - ((float)map->getRows() * 0.5f) + 0.5f;
+    if (!map) return glm::vec3(0.0f, y, 0.0f);
+    float worldX = (float)col - (float)map->getCols() * 0.5f + 0.5f;
+    float worldZ = (float)row - (float)map->getRows() * 0.5f + 0.5f;
     return glm::vec3(worldX, y, worldZ);
 }
 
@@ -1891,6 +1965,74 @@ static glm::vec3 ndcToWorld3D(const GameMap* map, const glm::vec2& ndc, float y)
     const float worldZ = row - ((float)map->getRows() * 0.5f) + 0.5f;
     return glm::vec3(worldX, y, worldZ);
 }
+
+static glm::mat4 renderShadowPass(GameMap* gameMap, const glm::vec3& lightPos)
+{
+    if (!gameMap || shadowMapFBO == 0 || shaderShadow == 0) return glm::mat4(1.0f);
+
+    const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+    const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+    const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+    const glm::vec3 mapCenter(0.0f, 0.0f, 0.0f);
+
+    float near_plane = 1.0f, far_plane = 60.0f;
+    float orthoSize = mapRadius * 1.6f;
+    glm::mat4 lightProjection = glm::ortho(-orthoSize, orthoSize, -orthoSize, orthoSize, near_plane, far_plane);
+    glm::mat4 lightView = glm::lookAt(lightPos, mapCenter, glm::vec3(0.0f, 1.0f, 0.0f));
+    glm::mat4 lightSpaceMatrix = lightProjection * lightView;
+
+    glViewport(0, 0, 2048, 2048);
+    glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glUseProgram(shaderShadow);
+    glUniformMatrix4fv(uniformShadowLightSpaceMatrix, 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
+
+    auto drawShadowMesh = [&](GLuint vao, GLsizei indexCount, const glm::vec3& pos, const glm::vec3& scale, float yaw = 0.0f) {
+        if (vao == 0 || indexCount <= 0) return;
+        glm::mat4 model(1.0f);
+        model = glm::translate(model, pos);
+        if (std::abs(yaw) > 0.001f) model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
+        model = glm::scale(model, scale);
+        glUniformMatrix4fv(uniformShadowModel, 1, GL_FALSE, glm::value_ptr(model));
+        glBindVertexArray(vao);
+        glDrawElements(GL_TRIANGLES, indexCount, GL_UNSIGNED_INT, 0);
+    };
+
+    // 1. Muros y bloques
+    for (int r = 0; r < gameMap->getRows(); ++r) {
+        for (int c = 0; c < gameMap->getCols(); ++c) {
+            if (!gameMap->isWalkable(r, c)) {
+                drawShadowMesh(cubeVAO, cubeIndexCount, gridToWorld3D(gameMap, r, c, 0.5f), glm::vec3(0.95f, 1.0f, 0.95f));
+            }
+        }
+    }
+
+    // 2. Bombas
+    for (auto* b : gBombs) {
+        if (b && b->state != BombState::DONE) {
+            drawShadowMesh(bombGlbVAO, bombGlbIndexCount, gridToWorld3D(gameMap, b->gridRow, b->gridCol, 0.38f), glm::vec3(0.42f));
+        }
+    }
+
+    // 3. Jugadores
+    for (auto* p : gPlayers) {
+        if (p && p->isAlive()) {
+             // Simplificación: usamos el modelo base para sombras
+             drawShadowMesh(actorGlbVAO, actorGlbIndexCount, ndcToWorld3D(gameMap, p->position, 0.55f), glm::vec3(0.55f));
+        }
+    }
+
+    // 4. Enemigos
+    for (auto* e : gEnemies) {
+        if (e && e->lifeState == EnemyLifeState::Alive) {
+            drawShadowMesh(leonGlbVAO, leonGlbIndexCount, ndcToWorld3D(gameMap, e->position, 0.45f), glm::vec3(0.45f));
+        }
+    }
+
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return lightSpaceMatrix;
+}
+
 
 static glm::vec3 winBombCenter3D(const GameMap* map, const Player* player)
 {
@@ -2294,8 +2436,31 @@ void Game::ensureRenderResources() {
 
     CreateRectangle();
     CompileShaders();
+    CompileShadowShader();
     CreateCube();
+    CreateFloorVAO();
     CreateSphere();
+
+    // --- Inicialización del Shadow Map FBO ---
+    if (shadowMapFBO == 0) {
+        const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
+        glGenFramebuffers(1, &shadowMapFBO);
+        glGenTextures(1, &shadowMapTex);
+        glBindTexture(GL_TEXTURE_2D, shadowMapTex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SHADOW_WIDTH, SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+        float borderColor[] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, shadowMapTex, 0);
+        glDrawBuffer(GL_NONE);
+        glReadBuffer(GL_NONE);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    }
     CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
     CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
     CreateBlueActorGlbModel(resolveAssetPath(kBluePlayerGlbPath));
@@ -3202,12 +3367,22 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         glDeleteTextures(1, &mapTexture);
         mapTexture = 0;
     }
+    if (floor3DTexture != 0) {
+        glDeleteTextures(1, &floor3DTexture);
+        floor3DTexture = 0;
+    }
 
     std::string mapTexPath = resolveAssetPath("resources/sprites/mapas/Stage" + stageNumStr + "/sprites-Stage" + stageNumStr + ".png");
     mapTexture = LoadTexture(mapTexPath.c_str());
     if (mapTexture == 0) {
         std::cerr << "Error cargando textura del mapa: " << mapTexPath << std::endl;
         std::exit(EXIT_FAILURE);
+    }
+
+    std::string floorTexPath = resolveAssetPath("resources/sprites/mapas/Stage" + stageNumStr + "/sueloLimpioStage" + stageNumStr + ".png");
+    floor3DTexture = LoadTexture(floorTexPath.c_str());
+    if (floor3DTexture == 0) {
+        std::cerr << "Aviso: No se pudo cargar textura de suelo limpio: " << floorTexPath << ". Usando fallback.\n";
     }
 
     std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json");
@@ -3928,6 +4103,7 @@ Game::~Game() {
 
     texture = 0;
     mapTexture = 0;
+    floor3DTexture = 0;
     horizonTexture = 0;
     enemyTexture = 0;
     overlayWhiteTexture = 0;
@@ -3935,10 +4111,10 @@ Game::~Game() {
     rankingVsTexture = 0;
 
     shader = 0;
-    shader3D = 0;
     shader3DTextured = 0;
     cubeVAO = cubeVBO = cubeEBO = 0;
     cubeIndexCount = 0;
+    floorVAO = floorVBO = floorEBO = 0;
     sphereVAO = sphereVBO = sphereEBO = 0;
     sphereIndexCount = 0;
     actorGlbVAO = actorGlbVBO = actorGlbEBO = 0;
@@ -5567,7 +5743,7 @@ void Game::update() {
 }
 
 // Renderiza mapa, bombas, jugadores y enemigos en 3D.
-void Game::render3D() {
+void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     glEnable(GL_DEPTH_TEST);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -5742,12 +5918,17 @@ void Game::render3D() {
 
     glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
+    glUniformMatrix4fv(uniform3DLightSpaceMatrix, 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
     glUniform3fv(uniform3DLightPos, 1, glm::value_ptr(keyLightPos));
     glUniform3fv(uniform3DViewPos, 1, glm::value_ptr(cameraPos));
     glUniform3fv(uniform3DLightColor, 1, glm::value_ptr(keyLightColor));
     glUniform1f(uniform3DAmbientStrength, 0.34f);
     glUniform1f(uniform3DSpecularStrength, 0.38f);
     glUniform1f(uniform3DShininess, 24.0f);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, shadowMapTex);
+    glUniform1i(uniform3DShadowMap, 1);
 
     auto drawMesh3D = [&](GLuint vao, GLsizei indexCount, const glm::vec3& center, const glm::vec3& scale, const glm::vec3& color) {
         if (vao == 0 || indexCount <= 0) {
@@ -5809,22 +5990,19 @@ void Game::render3D() {
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     };
 
-    // Mapa: cubos por tile.
+    // Mapa: cubos por tile (SOLO MUROS). El suelo se dibuja después con textura limpia y luz 3D.
     for (int r = 0; r < gameMap->getRows(); ++r) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
+            if (walkable) continue; // Saltamos suelo, se dibuja abajo.
+
             const bool destructible = gameMap->isDestructible(r, c);
             const bool checker = (((r + c) % 2) == 0);
 
-            float h = 0.08f;
-            glm::vec3 color = checker ? glm::vec3(0.20f, 0.22f, 0.24f)
-                                      : glm::vec3(0.23f, 0.25f, 0.27f);
-            if (!walkable) {
-                h = 1.00f;
-                color = destructible
-                    ? (checker ? glm::vec3(0.78f, 0.47f, 0.22f) : glm::vec3(0.72f, 0.42f, 0.18f))
-                    : (checker ? glm::vec3(0.36f, 0.37f, 0.43f) : glm::vec3(0.32f, 0.33f, 0.39f));
-            }
+            float h = 1.00f;
+            glm::vec3 color = destructible
+                ? (checker ? glm::vec3(0.78f, 0.47f, 0.22f) : glm::vec3(0.72f, 0.42f, 0.18f))
+                : (checker ? glm::vec3(0.36f, 0.37f, 0.43f) : glm::vec3(0.32f, 0.33f, 0.39f));
 
             const glm::vec3 center = gridToWorld3D(gameMap, r, c, h * 0.5f);
             drawMesh3D(cubeVAO, cubeIndexCount, center, glm::vec3(0.95f, h, 0.95f), color);
@@ -5885,8 +6063,8 @@ void Game::render3D() {
                 continue;
             }
 
-            // Cara superior (incluye suelos en 3D).
-            {
+            // Cara superior: SOLO para bloques no walkable (techo de muros).
+            if (!walkable) {
                 const glm::vec3 centerTop = gridToWorld3D(gameMap, r, c, h + sideOutward);
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, centerTop);
@@ -5929,12 +6107,7 @@ void Game::render3D() {
     glUseProgram(shader3D);
     glUniformMatrix4fv(uniform3DView, 1, GL_FALSE, glm::value_ptr(view));
     glUniformMatrix4fv(uniform3DProjection, 1, GL_FALSE, glm::value_ptr(projection));
-    glUniform3fv(uniform3DLightPos, 1, glm::value_ptr(keyLightPos));
-    glUniform3fv(uniform3DViewPos, 1, glm::value_ptr(cameraPos));
-    glUniform3fv(uniform3DLightColor, 1, glm::value_ptr(keyLightColor));
-    glUniform1f(uniform3DAmbientStrength, 0.34f);
-    glUniform1f(uniform3DSpecularStrength, 0.38f);
-    glUniform1f(uniform3DShininess, 24.0f);
+    glUniformMatrix4fv(uniform3DLightSpaceMatrix, 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
 
     const bool hasSphereMesh = (sphereVAO != 0 && sphereIndexCount > 0);
     const GLuint sphereOrCubeVAO = hasSphereMesh ? sphereVAO : cubeVAO;
@@ -6450,7 +6623,7 @@ void Game::render3D() {
         return false;
     };
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || (floor3DTexture != 0)) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -6459,6 +6632,7 @@ void Game::render3D() {
         glUseProgram(shader3DTextured);
         glUniformMatrix4fv(uniform3DTexturedView, 1, GL_FALSE, glm::value_ptr(view));
         glUniformMatrix4fv(uniform3DTexturedProjection, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniformMatrix4fv(uniform3DTexturedLightSpaceMatrix, 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
         glUniform1i(uniform3DTexturedSampler, 0);
         glUniform3fv(uniform3DTexturedLightPos, 1, glm::value_ptr(keyLightPos));
         glUniform3fv(uniform3DTexturedViewPos, 1, glm::value_ptr(cameraPos));
@@ -6467,6 +6641,29 @@ void Game::render3D() {
         glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
         glUniform1f(uniform3DTexturedShininess, 28.0f);
         glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, shadowMapTex);
+        glUniform1i(uniform3DTexturedShadowMap, 1);
+
+        // --- Renderizado del SUELO LIMPIO con luz 3D ---
+        if (floor3DTexture != 0) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, floor3DTexture);
+            glBindVertexArray(floorVAO); // Usamos el floorVAO que tiene UVs correctas
+
+            for (int r = 0; r < gameMap->getRows(); ++r) {
+                for (int c = 0; c < gameMap->getCols(); ++c) {
+                    if (gameMap->isWalkable(r, c)) {
+                        glm::mat4 model(1.0f);
+                        model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.001f)); // Casi a nivel de suelo
+                        model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // Tamaño normal de tile
+                        glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                    }
+                }
+            }
+        }
 
         if (canRenderBombGlb) {
             glActiveTexture(GL_TEXTURE0);
@@ -7915,6 +8112,15 @@ void Game::render() {
     }
 
     if (this->viewMode == ViewMode::Mode3D && shader3D != 0 && cubeVAO != 0 && gameMap != nullptr) {
+        // Shadow Pass
+        const float mapHalfWidth = std::max(2.0f, (float)gameMap->getCols() * 0.5f);
+        const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
+        const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
+        const glm::vec3 mapCenter(0.0f, 0.0f, 0.0f);
+        const glm::vec3 keyLightPos = mapCenter + glm::vec3(mapRadius * 0.30f, mapRadius * 1.85f + 3.5f, mapRadius * 0.24f);
+        
+        glm::mat4 lightSpaceMatrix = renderShadowPass(gameMap, keyLightPos);
+
         const bool splitFirstPersonTwoPlayers =
             (this->camera3DType == Camera3DType::FirstPerson &&
              this->mode == GameMode::TwoPlayers &&
@@ -7932,12 +8138,12 @@ void Game::render() {
             this->active3DViewportPlayerIndex = 0;
             glViewport(0, 0, leftWidth, fullHeight);
             glScissor(0, 0, leftWidth, fullHeight);
-            render3D();
+            render3D(lightSpaceMatrix);
 
             this->active3DViewportPlayerIndex = 1;
             glViewport(leftWidth, 0, rightWidth, fullHeight);
             glScissor(leftWidth, 0, rightWidth, fullHeight);
-            render3D();
+            render3D(lightSpaceMatrix);
 
             glDisable(GL_SCISSOR_TEST);
             this->active3DViewportPlayerIndex = 0;
@@ -7945,7 +8151,7 @@ void Game::render() {
         } else {
             this->active3DViewportPlayerIndex = 0;
             glViewport(0, 0, WIDTH, HEIGHT);
-            render3D();
+            render3D(lightSpaceMatrix);
         }
     } else {
         glViewport(0, 0, WIDTH, HEIGHT);
