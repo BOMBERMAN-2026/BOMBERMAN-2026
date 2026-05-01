@@ -400,8 +400,8 @@ static constexpr float kFreeCameraMoveSpeed = 8.2f;
 static constexpr float kFreeCameraRollSpeed = 1.42f;
 static constexpr float kFreeCameraZoomStep = 0.38f;
 static constexpr float kFreeCameraDragPanSensitivity = 0.0065f;
-static constexpr float kFirstPersonHeadBobAmplitude = 0.060f;
-static constexpr float kFirstPersonHeadBobFrequency = 15.2f;
+static constexpr float kFirstPersonHeadBobAmplitude = 0.035f;
+static constexpr float kFirstPersonHeadBobFrequency = 12.5f;
 static constexpr float kFirstPersonCrossProbeTiles = 1.05f;
 static constexpr float kFirstPersonCrossBlockedHintDuration = 0.36f;
 static constexpr int kBombExplosionVerticalLayers = 5;
@@ -4676,48 +4676,88 @@ void Game::processInput() {
                 p1->facingDirKey = idleFacingDir;
             }
         } else {
-            GLint keyToUse = GLFW_KEY_UNKNOWN;
-            if (pressedCount == 1) {
-                if (up) keyToUse = GLFW_KEY_UP;
-                if (down) keyToUse = GLFW_KEY_DOWN;
-                if (left) keyToUse = GLFW_KEY_LEFT;
-                if (right) keyToUse = GLFW_KEY_RIGHT;
-                this->lastDirKey = keyToUse;
-            } else {
-                switch (this->lastDirKey) {
-                    case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
-                    case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
-                    case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
-                    case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
-                }
-                if (keyToUse == GLFW_KEY_UNKNOWN) {
-                    if (up) keyToUse = GLFW_KEY_UP;
-                    else if (down) keyToUse = GLFW_KEY_DOWN;
-                    else if (left) keyToUse = GLFW_KEY_LEFT;
-                    else if (right) keyToUse = GLFW_KEY_RIGHT;
-                }
-            }
+            // Movimiento diagonal solo para Primera Persona 3D
+            if (this->viewMode == ViewMode::Mode3D && this->camera3DType == Camera3DType::FirstPerson) {
+                bool movedAny = false;
+                GLint primaryKey = GLFW_KEY_UNKNOWN;
 
-            if (keyToUse != GLFW_KEY_UNKNOWN) {
-                const GLint mappedDir = remapDirectionFor3DCamera(this, keyToUse);
-                const Move mappedMove = directionKeyToMove(mappedDir);
-                if (mappedMove != MOVE_NONE) {
-                    const bool moved = movePlayerWithCrossRule(p1, mappedMove);
+                // Procesar eje vertical
+                if (up && !down) {
+                    const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_UP);
+                    if (movePlayerWithCrossRule(p1, directionKeyToMove(mapped))) movedAny = true;
+                    primaryKey = GLFW_KEY_UP;
+                } else if (down && !up) {
+                    const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_DOWN);
+                    if (movePlayerWithCrossRule(p1, directionKeyToMove(mapped))) movedAny = true;
+                    primaryKey = GLFW_KEY_DOWN;
+                }
 
-                    const GLint facingDir = keepScreenFacingForCameraRelative3D
-                        ? keyToUse
-                        : mappedDir;
+                // Procesar eje horizontal
+                if (left && !right) {
+                    const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_LEFT);
+                    if (movePlayerWithCrossRule(p1, directionKeyToMove(mapped))) movedAny = true;
+                    if (primaryKey == GLFW_KEY_UNKNOWN || this->lastDirKey == GLFW_KEY_LEFT) primaryKey = GLFW_KEY_LEFT;
+                } else if (right && !left) {
+                    const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_RIGHT);
+                    if (movePlayerWithCrossRule(p1, directionKeyToMove(mapped))) movedAny = true;
+                    if (primaryKey == GLFW_KEY_UNKNOWN || this->lastDirKey == GLFW_KEY_RIGHT) primaryKey = GLFW_KEY_RIGHT;
+                }
+
+                if (primaryKey != GLFW_KEY_UNKNOWN) {
+                    this->lastDirKey = primaryKey;
+                    const GLint facingDir = remapDirectionFor3DCamera(this, primaryKey);
                     if (!p1->isWalking || p1->facingDirKey != facingDir) {
                         p1->walkTimer = 0.0f;
                         p1->walkPhase = 0;
                     }
                     p1->facingDirKey = facingDir;
-                    p1->isWalking = moved;
+                }
+                p1->isWalking = movedAny;
+            } else {
+                // Logica original de direccion unica
+                GLint keyToUse = GLFW_KEY_UNKNOWN;
+                if (pressedCount == 1) {
+                    if (up) keyToUse = GLFW_KEY_UP;
+                    if (down) keyToUse = GLFW_KEY_DOWN;
+                    if (left) keyToUse = GLFW_KEY_LEFT;
+                    if (right) keyToUse = GLFW_KEY_RIGHT;
+                    this->lastDirKey = keyToUse;
+                } else {
+                    switch (this->lastDirKey) {
+                        case GLFW_KEY_UP: if (up) keyToUse = GLFW_KEY_UP; break;
+                        case GLFW_KEY_DOWN: if (down) keyToUse = GLFW_KEY_DOWN; break;
+                        case GLFW_KEY_LEFT: if (left) keyToUse = GLFW_KEY_LEFT; break;
+                        case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
+                    }
+                    if (keyToUse == GLFW_KEY_UNKNOWN) {
+                        if (up) keyToUse = GLFW_KEY_UP;
+                        else if (down) keyToUse = GLFW_KEY_DOWN;
+                        else if (left) keyToUse = GLFW_KEY_LEFT;
+                        else if (right) keyToUse = GLFW_KEY_RIGHT;
+                    }
+                }
+
+                if (keyToUse != GLFW_KEY_UNKNOWN) {
+                    const GLint mappedDir = remapDirectionFor3DCamera(this, keyToUse);
+                    const Move mappedMove = directionKeyToMove(mappedDir);
+                    if (mappedMove != MOVE_NONE) {
+                        const bool moved = movePlayerWithCrossRule(p1, mappedMove);
+
+                        const GLint facingDir = keepScreenFacingForCameraRelative3D
+                            ? keyToUse
+                            : mappedDir;
+                        if (!p1->isWalking || p1->facingDirKey != facingDir) {
+                            p1->walkTimer = 0.0f;
+                            p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = facingDir;
+                        p1->isWalking = moved;
+                    } else {
+                        p1->isWalking = false;
+                    }
                 } else {
                     p1->isWalking = false;
                 }
-            } else {
-                p1->isWalking = false;
             }
         }
     } else {
@@ -4755,57 +4795,102 @@ void Game::processInput() {
                     p2->facingDirKey = idleFacingDir2;
                 }
             } else {
-                GLint keyToUse2 = GLFW_KEY_UNKNOWN;
-                if (pressedCount2 == 1) {
-                    if (up2) keyToUse2 = GLFW_KEY_W;
-                    if (down2) keyToUse2 = GLFW_KEY_S;
-                    if (left2) keyToUse2 = GLFW_KEY_A;
-                    if (right2) keyToUse2 = GLFW_KEY_D;
-                    this->lastDirKeyP2 = keyToUse2;
-                } else {
-                    switch (this->lastDirKeyP2) {
-                        case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
-                        case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
-                        case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
-                        case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
-                    }
-                    if (keyToUse2 == GLFW_KEY_UNKNOWN) {
-                        if (up2) keyToUse2 = GLFW_KEY_W;
-                        else if (down2) keyToUse2 = GLFW_KEY_S;
-                        else if (left2) keyToUse2 = GLFW_KEY_A;
-                        else if (right2) keyToUse2 = GLFW_KEY_D;
-                    }
-                }
+                // Movimiento diagonal solo para Primera Persona 3D
+                if (this->viewMode == ViewMode::Mode3D && this->camera3DType == Camera3DType::FirstPerson) {
+                    bool movedAny2 = false;
+                    GLint primaryKey2 = GLFW_KEY_UNKNOWN;
 
-                if (keyToUse2 != GLFW_KEY_UNKNOWN) {
-                    GLint dir2Screen = GLFW_KEY_DOWN;
-                    switch (keyToUse2) {
-                        case GLFW_KEY_W: dir2Screen = GLFW_KEY_UP; break;
-                        case GLFW_KEY_S: dir2Screen = GLFW_KEY_DOWN; break;
-                        case GLFW_KEY_A: dir2Screen = GLFW_KEY_LEFT; break;
-                        case GLFW_KEY_D: dir2Screen = GLFW_KEY_RIGHT; break;
+                    if (up2 && !down2) {
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_UP);
+                        if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
+                        primaryKey2 = GLFW_KEY_W;
+                    } else if (down2 && !up2) {
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_DOWN);
+                        if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
+                        primaryKey2 = GLFW_KEY_S;
                     }
 
-                    const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen);
-                    const Move mov2 = directionKeyToMove(dir2);
+                    if (left2 && !right2) {
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_LEFT);
+                        if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
+                        if (primaryKey2 == GLFW_KEY_UNKNOWN || this->lastDirKeyP2 == GLFW_KEY_A) primaryKey2 = GLFW_KEY_A;
+                    } else if (right2 && !left2) {
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_RIGHT);
+                        if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
+                        if (primaryKey2 == GLFW_KEY_UNKNOWN || this->lastDirKeyP2 == GLFW_KEY_D) primaryKey2 = GLFW_KEY_D;
+                    }
 
-                    if (mov2 != MOVE_NONE) {
-                        const bool moved2 = movePlayerWithCrossRule(p2, mov2);
-
-                        const GLint facingDir2 = keepScreenFacingForCameraRelative3D
-                            ? dir2Screen
-                            : dir2;
+                    if (primaryKey2 != GLFW_KEY_UNKNOWN) {
+                        this->lastDirKeyP2 = primaryKey2;
+                        GLint screenDir2 = GLFW_KEY_DOWN;
+                        switch (primaryKey2) {
+                            case GLFW_KEY_W: screenDir2 = GLFW_KEY_UP; break;
+                            case GLFW_KEY_S: screenDir2 = GLFW_KEY_DOWN; break;
+                            case GLFW_KEY_A: screenDir2 = GLFW_KEY_LEFT; break;
+                            case GLFW_KEY_D: screenDir2 = GLFW_KEY_RIGHT; break;
+                        }
+                        const GLint facingDir2 = remapDirectionFor3DCamera(this, screenDir2);
                         if (!p2->isWalking || p2->facingDirKey != facingDir2) {
                             p2->walkTimer = 0.0f;
                             p2->walkPhase = 0;
                         }
                         p2->facingDirKey = facingDir2;
-                        p2->isWalking = moved2;
+                    }
+                    p2->isWalking = movedAny2;
+                } else {
+                    // Logica original de direccion unica para P2
+                    GLint keyToUse2 = GLFW_KEY_UNKNOWN;
+                    if (pressedCount2 == 1) {
+                        if (up2) keyToUse2 = GLFW_KEY_W;
+                        if (down2) keyToUse2 = GLFW_KEY_S;
+                        if (left2) keyToUse2 = GLFW_KEY_A;
+                        if (right2) keyToUse2 = GLFW_KEY_D;
+                        this->lastDirKeyP2 = keyToUse2;
+                    } else {
+                        switch (this->lastDirKeyP2) {
+                            case GLFW_KEY_W: if (up2) keyToUse2 = GLFW_KEY_W; break;
+                            case GLFW_KEY_S: if (down2) keyToUse2 = GLFW_KEY_S; break;
+                            case GLFW_KEY_A: if (left2) keyToUse2 = GLFW_KEY_A; break;
+                            case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
+                        }
+                        if (keyToUse2 == GLFW_KEY_UNKNOWN) {
+                            if (up2) keyToUse2 = GLFW_KEY_W;
+                            else if (down2) keyToUse2 = GLFW_KEY_S;
+                            else if (left2) keyToUse2 = GLFW_KEY_A;
+                            else if (right2) keyToUse2 = GLFW_KEY_D;
+                        }
+                    }
+
+                    if (keyToUse2 != GLFW_KEY_UNKNOWN) {
+                        GLint dir2Screen = GLFW_KEY_DOWN;
+                        switch (keyToUse2) {
+                            case GLFW_KEY_W: dir2Screen = GLFW_KEY_UP; break;
+                            case GLFW_KEY_S: dir2Screen = GLFW_KEY_DOWN; break;
+                            case GLFW_KEY_A: dir2Screen = GLFW_KEY_LEFT; break;
+                            case GLFW_KEY_D: dir2Screen = GLFW_KEY_RIGHT; break;
+                        }
+
+                        const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen);
+                        const Move mov2 = directionKeyToMove(dir2);
+
+                        if (mov2 != MOVE_NONE) {
+                            const bool moved2 = movePlayerWithCrossRule(p2, mov2);
+
+                            const GLint facingDir2 = keepScreenFacingForCameraRelative3D
+                                ? dir2Screen
+                                : dir2;
+                            if (!p2->isWalking || p2->facingDirKey != facingDir2) {
+                                p2->walkTimer = 0.0f;
+                                p2->walkPhase = 0;
+                            }
+                            p2->facingDirKey = facingDir2;
+                            p2->isWalking = moved2;
+                        } else {
+                            p2->isWalking = false;
+                        }
                     } else {
                         p2->isWalking = false;
                     }
-                } else {
-                    p2->isWalking = false;
                 }
             }
         }
