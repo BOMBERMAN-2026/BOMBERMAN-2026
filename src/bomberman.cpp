@@ -163,14 +163,19 @@ static const char* kFantasmaGlbPath = "models/3D/ghost character 3d model.glb";
 static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
 static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
 static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
+static const char* kNextLevelBombGlbPath = "models/3D/bombaNextLevel.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
 static const char* kFlamePowerUpGlbPath = "models/3D/fireball 3d model.glb";
 static const char* kSpeedPowerUpGlbPath = "models/3D/roller skate 3d model.glb";
 static const char* kExtraLifePowerUpGlbPath = "models/3D/vidaExtra.glb";
 static const char* kRemoteControlPowerUpGlbPath = "models/3D/detonator.glb";
+static const char* kInvincibilityPowerUpGlbPath = "models/3D/invencible.glb";
 static const char* kMatchesItemGlbPath = "models/3D/cerilla power-up.glb";
 static const char* kCanItemGlbPath = "models/3D/lata.glb";
 static const char* kLighterItemGlbPath = "models/3D/mechero.glb";
+static const char* kBatteryItemGlbPath = "models/3D/pila.glb";
+static const char* kDragonflyItemGlbPath = "models/3D/libelula.glb";
+static const char* kHudsonBeeItemGlbPath = "models/3D/hudsonBee.glb";
 static const char* kKingBomberGlbPath = "models/3D/king bomber 3d model.glb";
 static const char* kDronAzulGlbPath = "models/3D/blue robot 3d model.glb";
 static const char* kDronRosaGlbPath = "models/3D/pink robot 3d model.glb";
@@ -228,6 +233,11 @@ GLuint bombGlbVBO = 0;
 GLuint bombGlbEBO = 0;
 GLsizei bombGlbIndexCount = 0;
 GLuint bombGlbTexture = 0;
+GLuint nextLevelBombGlbVAO = 0;
+GLuint nextLevelBombGlbVBO = 0;
+GLuint nextLevelBombGlbEBO = 0;
+GLsizei nextLevelBombGlbIndexCount = 0;
+GLuint nextLevelBombGlbTexture = 0;
 GLuint flameGlbVAO = 0;
 GLuint flameGlbVBO = 0;
 GLuint flameGlbEBO = 0;
@@ -253,6 +263,11 @@ GLuint remoteControlPowerUpGlbVBO = 0;
 GLuint remoteControlPowerUpGlbEBO = 0;
 GLsizei remoteControlPowerUpGlbIndexCount = 0;
 GLuint remoteControlPowerUpGlbTexture = 0;
+GLuint invincibilityPowerUpGlbVAO = 0;
+GLuint invincibilityPowerUpGlbVBO = 0;
+GLuint invincibilityPowerUpGlbEBO = 0;
+GLsizei invincibilityPowerUpGlbIndexCount = 0;
+GLuint invincibilityPowerUpGlbTexture = 0;
 GLuint matchesItemGlbVAO = 0;
 GLuint matchesItemGlbVBO = 0;
 GLuint matchesItemGlbEBO = 0;
@@ -268,6 +283,21 @@ GLuint lighterItemGlbVBO = 0;
 GLuint lighterItemGlbEBO = 0;
 GLsizei lighterItemGlbIndexCount = 0;
 GLuint lighterItemGlbTexture = 0;
+GLuint batteryItemGlbVAO = 0;
+GLuint batteryItemGlbVBO = 0;
+GLuint batteryItemGlbEBO = 0;
+GLsizei batteryItemGlbIndexCount = 0;
+GLuint batteryItemGlbTexture = 0;
+GLuint dragonflyItemGlbVAO = 0;
+GLuint dragonflyItemGlbVBO = 0;
+GLuint dragonflyItemGlbEBO = 0;
+GLsizei dragonflyItemGlbIndexCount = 0;
+GLuint dragonflyItemGlbTexture = 0;
+GLuint hudsonBeeItemGlbVAO = 0;
+GLuint hudsonBeeItemGlbVBO = 0;
+GLuint hudsonBeeItemGlbEBO = 0;
+GLsizei hudsonBeeItemGlbIndexCount = 0;
+GLuint hudsonBeeItemGlbTexture = 0;
 GLuint kingBomberGlbVAO = 0;
 GLuint kingBomberGlbVBO = 0;
 GLuint kingBomberGlbEBO = 0;
@@ -350,6 +380,7 @@ static constexpr float kFirstPersonCrossProbeTiles = 1.05f;
 static constexpr float kFirstPersonCrossBlockedHintDuration = 0.36f;
 static constexpr int kBombExplosionVerticalLayers = 5;
 static constexpr float kBombExplosionVerticalLayerStep = 0.36f;
+static constexpr float kWinCelebrationPlayerExtraHeight = 0.45f;
 static constexpr float kContinueCountdownPhase = 0.86f;
 static constexpr float kContinueFallbackDurationSeconds = 9.0f;
 
@@ -1528,6 +1559,17 @@ void CreateBombGlbModel(const std::string& modelPath)
                                  bombGlbTexture);
 }
 
+void CreateNextLevelBombGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("nextLevelBombGLB",
+                                 modelPath,
+                                 nextLevelBombGlbVAO,
+                                 nextLevelBombGlbVBO,
+                                 nextLevelBombGlbEBO,
+                                 nextLevelBombGlbIndexCount,
+                                 nextLevelBombGlbTexture);
+}
+
 void CreateFlameGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("flameGLB",
@@ -1583,6 +1625,17 @@ void CreateRemoteControlPowerUpGlbModel(const std::string& modelPath)
                                  remoteControlPowerUpGlbTexture);
 }
 
+void CreateInvincibilityPowerUpGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("invincibilityPowerUpGLB",
+                                 modelPath,
+                                 invincibilityPowerUpGlbVAO,
+                                 invincibilityPowerUpGlbVBO,
+                                 invincibilityPowerUpGlbEBO,
+                                 invincibilityPowerUpGlbIndexCount,
+                                 invincibilityPowerUpGlbTexture);
+}
+
 void CreateMatchesItemGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("matchesItemGLB",
@@ -1614,6 +1667,39 @@ void CreateLighterItemGlbModel(const std::string& modelPath)
                                  lighterItemGlbEBO,
                                  lighterItemGlbIndexCount,
                                  lighterItemGlbTexture);
+}
+
+void CreateBatteryItemGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("batteryItemGLB",
+                                 modelPath,
+                                 batteryItemGlbVAO,
+                                 batteryItemGlbVBO,
+                                 batteryItemGlbEBO,
+                                 batteryItemGlbIndexCount,
+                                 batteryItemGlbTexture);
+}
+
+void CreateDragonflyItemGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("dragonflyItemGLB",
+                                 modelPath,
+                                 dragonflyItemGlbVAO,
+                                 dragonflyItemGlbVBO,
+                                 dragonflyItemGlbEBO,
+                                 dragonflyItemGlbIndexCount,
+                                 dragonflyItemGlbTexture);
+}
+
+void CreateHudsonBeeItemGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("hudsonBeeItemGLB",
+                                 modelPath,
+                                 hudsonBeeItemGlbVAO,
+                                 hudsonBeeItemGlbVBO,
+                                 hudsonBeeItemGlbEBO,
+                                 hudsonBeeItemGlbIndexCount,
+                                 hudsonBeeItemGlbTexture);
 }
 
 void CreateKingBomberGlbModel(const std::string& modelPath)
@@ -1770,6 +1856,16 @@ static glm::vec3 ndcToWorld3D(const GameMap* map, const glm::vec2& ndc, float y)
     const float worldX = col - ((float)map->getCols() * 0.5f) + 0.5f;
     const float worldZ = row - ((float)map->getRows() * 0.5f) + 0.5f;
     return glm::vec3(worldX, y, worldZ);
+}
+
+static glm::vec3 winBombCenter3D(const GameMap* map, const Player* player)
+{
+    if (!map || !player) {
+        return glm::vec3(0.0f, 0.0f, 0.0f);
+    }
+
+    const float bombHeight = std::max(0.08f, (0.10f + player->win3DHeight) - 0.55f);
+    return ndcToWorld3D(map, player->winAnchorPosition, bombHeight);
 }
 
 static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height)
@@ -2173,14 +2269,19 @@ void Game::ensureRenderResources() {
     CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
     CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
     CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
+    CreateNextLevelBombGlbModel(resolveAssetPath(kNextLevelBombGlbPath));
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
     CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
     CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
     CreateExtraLifePowerUpGlbModel(resolveAssetPath(kExtraLifePowerUpGlbPath));
     CreateRemoteControlPowerUpGlbModel(resolveAssetPath(kRemoteControlPowerUpGlbPath));
+    CreateInvincibilityPowerUpGlbModel(resolveAssetPath(kInvincibilityPowerUpGlbPath));
     CreateMatchesItemGlbModel(resolveAssetPath(kMatchesItemGlbPath));
     CreateCanItemGlbModel(resolveAssetPath(kCanItemGlbPath));
     CreateLighterItemGlbModel(resolveAssetPath(kLighterItemGlbPath));
+    CreateBatteryItemGlbModel(resolveAssetPath(kBatteryItemGlbPath));
+    CreateDragonflyItemGlbModel(resolveAssetPath(kDragonflyItemGlbPath));
+    CreateHudsonBeeItemGlbModel(resolveAssetPath(kHudsonBeeItemGlbPath));
     CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
     CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
     CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
@@ -5507,7 +5608,7 @@ void Game::render3D() {
             ? trackedPlayer->winAnchorPosition
             : trackedPlayer->position;
         const float trackedHeight = trackedIsWinning3D
-            ? (0.55f + trackedPlayer->win3DHeight)
+            ? (0.55f + trackedPlayer->win3DHeight + kWinCelebrationPlayerExtraHeight)
             : 0.55f;
         trackedPlayerCenter = ndcToWorld3D(gameMap, trackedBasePos, trackedHeight);
     }
@@ -5816,7 +5917,7 @@ void Game::render3D() {
 
         const glm::vec2 shadowBasePos = isWinning3D ? p->winAnchorPosition : (isDying3D ? p->deathStartPosition : p->position);
         const float shadowRadius = isWinning3D
-            ? std::max(0.16f, 0.46f - p->win3DHeight * 0.10f)
+            ? std::max(0.16f, 0.46f - (p->win3DHeight + kWinCelebrationPlayerExtraHeight) * 0.10f)
             : (isDying3D ? std::max(0.01f, 0.46f - std::abs(p->death3DHeight) * 0.5f) : 0.46f);
 
         const glm::vec3 feet = ndcToWorld3D(gameMap, shadowBasePos, 0.02f);
@@ -5850,6 +5951,8 @@ void Game::render3D() {
     const GLsizei fuseMeshIndexCount = sphereOrCubeIndexCount;
     const bool canRenderBombGlb =
         (bombGlbVAO != 0 && bombGlbIndexCount > 0 && bombGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderNextLevelBombGlb =
+        (nextLevelBombGlbVAO != 0 && nextLevelBombGlbIndexCount > 0 && nextLevelBombGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFlameGlb =
         (flameGlbVAO != 0 && flameGlbIndexCount > 0 && flameGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFlamePowerUpGlb =
@@ -5860,12 +5963,20 @@ void Game::render3D() {
         (extraLifePowerUpGlbVAO != 0 && extraLifePowerUpGlbIndexCount > 0 && extraLifePowerUpGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderRemoteControlPowerUpGlb =
         (remoteControlPowerUpGlbVAO != 0 && remoteControlPowerUpGlbIndexCount > 0 && remoteControlPowerUpGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderInvincibilityPowerUpGlb =
+        (invincibilityPowerUpGlbVAO != 0 && invincibilityPowerUpGlbIndexCount > 0 && invincibilityPowerUpGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderMatchesItemGlb =
         (matchesItemGlbVAO != 0 && matchesItemGlbIndexCount > 0 && matchesItemGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderCanItemGlb =
         (canItemGlbVAO != 0 && canItemGlbIndexCount > 0 && canItemGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderLighterItemGlb =
         (lighterItemGlbVAO != 0 && lighterItemGlbIndexCount > 0 && lighterItemGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderBatteryItemGlb =
+        (batteryItemGlbVAO != 0 && batteryItemGlbIndexCount > 0 && batteryItemGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDragonflyItemGlb =
+        (dragonflyItemGlbVAO != 0 && dragonflyItemGlbIndexCount > 0 && dragonflyItemGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderHudsonBeeItemGlb =
+        (hudsonBeeItemGlbVAO != 0 && hudsonBeeItemGlbIndexCount > 0 && hudsonBeeItemGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderKingBomberGlb =
         (kingBomberGlbVAO != 0 && kingBomberGlbIndexCount > 0 && kingBomberGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderDronAzulGlb =
@@ -6087,7 +6198,7 @@ void Game::render3D() {
         }
     }
 
-    // Celebración al superar nivel en modo 3D: burst de glitter rosa desde el bomberman.
+    // Celebracion al superar nivel en modo 3D: burst de glitter rosa desde la bomba bajo el bomberman.
     // También efecto de muerte 3D.
     for (std::size_t playerIndex = 0; playerIndex < gPlayers.size(); ++playerIndex) {
         Player* p = gPlayers[playerIndex];
@@ -6153,9 +6264,7 @@ void Game::render3D() {
         const float intensity = std::max(0.0f, 1.0f - t);
         const float kTwoPi = 6.28318530718f;
 
-        const glm::vec3 center = ndcToWorld3D(gameMap,
-                                              p->winAnchorPosition,
-                                              0.78f + p->win3DHeight);
+        const glm::vec3 center = winBombCenter3D(gameMap, p);
 
         const float corePulse = 1.0f + 0.28f * std::sin((1.0f - t) * 30.0f);
         const float coreRadius = (0.16f + 0.55f * easeOut) * corePulse;
@@ -6237,9 +6346,13 @@ void Game::render3D() {
         canRenderSpeedUpGlb ||
         canRenderExtraLifePowerUpGlb ||
         canRenderRemoteControlPowerUpGlb ||
+        canRenderInvincibilityPowerUpGlb ||
         canRenderMatchesItemGlb ||
         canRenderCanItemGlb ||
-        canRenderLighterItemGlb;
+        canRenderLighterItemGlb ||
+        canRenderBatteryItemGlb ||
+        canRenderDragonflyItemGlb ||
+        canRenderHudsonBeeItemGlb;
     const bool canRenderKingBomber3D = canRenderKingBomberGlb;
     const bool canRenderDrones3D = canRenderAnyDronGlb;
 
@@ -6260,7 +6373,7 @@ void Game::render3D() {
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -6301,6 +6414,38 @@ void Game::render3D() {
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                 glBindVertexArray(bombGlbVAO);
                 glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
+            }
+        }
+
+        if (canRenderNextLevelBombGlb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, nextLevelBombGlbTexture);
+
+            for (auto* p : gPlayers) {
+                if (!p || p->lifeState != PlayerLifeState::Winning || !p->winUse3DCelebration) {
+                    continue;
+                }
+                if (!p->win3DGlitterBurst || p->win3DGlitterTimer < 0.0f) {
+                    continue;
+                }
+
+                const float bombDuration = 0.55f;
+                const float tRaw = p->win3DGlitterTimer / bombDuration;
+                const float t = std::max(0.0f, std::min(1.0f, tRaw));
+                const float inv = 1.0f - t;
+                const float easeOut = 1.0f - (inv * inv);
+                const float pulse = 1.0f + 0.65f * easeOut;
+                const float spin = t * 6.4f;
+
+                const glm::vec3 bombCenter = winBombCenter3D(gameMap, p);
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, bombCenter + glm::vec3(0.0f, 0.02f + 0.06f * easeOut, 0.0f));
+                model = glm::rotate(model, spin, glm::vec3(0.0f, 1.0f, 0.0f));
+                model = glm::scale(model, glm::vec3(0.78f * pulse, 0.78f * pulse, 0.78f * pulse));
+
+                glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                glBindVertexArray(nextLevelBombGlbVAO);
+                glDrawElements(GL_TRIANGLES, nextLevelBombGlbIndexCount, GL_UNSIGNED_INT, 0);
             }
         }
 
@@ -6371,6 +6516,11 @@ void Game::render3D() {
                     }
                     break;
                 case PowerUpType::Invincibility:
+                    if (canRenderInvincibilityPowerUpGlb) {
+                        outSpec = makePowerUpSpec(invincibilityPowerUpGlbVAO, invincibilityPowerUpGlbIndexCount, invincibilityPowerUpGlbTexture,
+                                                  0.82f, 2.70f, 0.13f, 0.024f, 4.2f);
+                        return true;
+                    }
                     if (canRenderFlamePowerUpGlb) {
                         outSpec = makePowerUpSpec(flamePowerUpGlbVAO, flamePowerUpGlbIndexCount, flamePowerUpGlbTexture,
                                                   0.78f, 2.70f, 0.13f, 0.024f, 4.2f);
@@ -6411,6 +6561,11 @@ void Game::render3D() {
                     }
                     break;
                 case PowerUpType::Battery:
+                    if (canRenderBatteryItemGlb) {
+                        outSpec = makePowerUpSpec(batteryItemGlbVAO, batteryItemGlbIndexCount, batteryItemGlbTexture,
+                                                  0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
+                        return true;
+                    }
                     if (canRenderRemoteControlPowerUpGlb) {
                         outSpec = makePowerUpSpec(remoteControlPowerUpGlbVAO, remoteControlPowerUpGlbIndexCount, remoteControlPowerUpGlbTexture,
                                                   0.56f, 1.88f, 0.10f, 0.013f, 2.8f);
@@ -6423,6 +6578,11 @@ void Game::render3D() {
                     }
                     break;
                 case PowerUpType::Dragonfly:
+                    if (canRenderDragonflyItemGlb) {
+                        outSpec = makePowerUpSpec(dragonflyItemGlbVAO, dragonflyItemGlbIndexCount, dragonflyItemGlbTexture,
+                                                  0.60f, 2.30f, 0.12f, 0.021f, 4.0f);
+                        return true;
+                    }
                     if (canRenderMatchesItemGlb) {
                         outSpec = makePowerUpSpec(matchesItemGlbVAO, matchesItemGlbIndexCount, matchesItemGlbTexture,
                                                   0.60f, 2.30f, 0.12f, 0.021f, 4.0f);
@@ -6435,6 +6595,11 @@ void Game::render3D() {
                     }
                     break;
                 case PowerUpType::HudsonBee:
+                    if (canRenderHudsonBeeItemGlb) {
+                        outSpec = makePowerUpSpec(hudsonBeeItemGlbVAO, hudsonBeeItemGlbIndexCount, hudsonBeeItemGlbTexture,
+                                                  0.64f, 2.45f, 0.12f, 0.022f, 4.2f);
+                        return true;
+                    }
                     if (canRenderLighterItemGlb) {
                         outSpec = makePowerUpSpec(lighterItemGlbVAO, lighterItemGlbIndexCount, lighterItemGlbTexture,
                                                   0.64f, 2.45f, 0.12f, 0.022f, 4.2f);
@@ -6693,10 +6858,11 @@ void Game::render3D() {
                 }
 
                 const float modelLift = isWinning3D ? p->win3DHeight : (isDying3D ? p->death3DHeight : 0.0f);
+                const float winExtraLift = isWinning3D ? kWinCelebrationPlayerExtraHeight : 0.0f;
                 const float modelScale = isWinning3D ? std::max(1.0f, p->win3DScale) : (isDying3D ? std::max(0.01f, p->death3DScale) : 1.0f);
 
                 glm::mat4 model(1.0f);
-                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f + modelLift, 0.0f));
+                model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f + modelLift + winExtraLift, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
                 
                 // Aplicar inclinación si está muriendo
@@ -7012,7 +7178,7 @@ void Game::render3D() {
 
         if (hasUv) {
             const glm::vec2 billboardBasePos = isWinning3D ? p->winAnchorPosition : p->position;
-            const float billboardLift = isWinning3D ? p->win3DHeight : 0.0f;
+            const float billboardLift = isWinning3D ? (p->win3DHeight + kWinCelebrationPlayerExtraHeight) : 0.0f;
             const float billboardScale = isWinning3D ? std::max(1.0f, p->win3DScale) : 1.0f;
             const glm::vec3 feet = ndcToWorld3D(gameMap, billboardBasePos, 0.02f + billboardLift);
             drawSpriteBillboard3D(texture,
