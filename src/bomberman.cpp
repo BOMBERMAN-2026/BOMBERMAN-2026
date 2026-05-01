@@ -158,6 +158,8 @@ static const char* kModel3DTexturedVertexShaderPath = "shaders/model3D_textured.
 static const char* kModel3DTexturedFragmentShaderPath = "shaders/model3D_textured.frag";
 static const char* kPlayerGlbPath = "models/3D/cartoon astronaut 3d model.glb";
 static const char* kRedPlayerGlbPath = "models/3D/red bomberman.glb";
+static const char* kBluePlayerGlbPath = "models/3D/blue bomberman.glb";
+static const char* kYellowPlayerGlbPath = "models/3D/yellow bomberman.glb";
 static const char* kLeonGlbPath = "models/3D/monstrous creature 3d model.glb";
 static const char* kFantasmaGlbPath = "models/3D/ghost character 3d model.glb";
 static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
@@ -208,6 +210,16 @@ GLuint redActorGlbVBO = 0;
 GLuint redActorGlbEBO = 0;
 GLsizei redActorGlbIndexCount = 0;
 GLuint redActorGlbTexture = 0;
+GLuint blueActorGlbVAO = 0;
+GLuint blueActorGlbVBO = 0;
+GLuint blueActorGlbEBO = 0;
+GLsizei blueActorGlbIndexCount = 0;
+GLuint blueActorGlbTexture = 0;
+GLuint yellowActorGlbVAO = 0;
+GLuint yellowActorGlbVBO = 0;
+GLuint yellowActorGlbEBO = 0;
+GLsizei yellowActorGlbIndexCount = 0;
+GLuint yellowActorGlbTexture = 0;
 GLuint leonGlbVAO = 0;
 GLuint leonGlbVBO = 0;
 GLuint leonGlbEBO = 0;
@@ -1504,6 +1516,28 @@ void CreateRedActorGlbModel(const std::string& modelPath)
                                  redActorGlbTexture);
 }
 
+void CreateBlueActorGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("blueActorGLB",
+                                 modelPath,
+                                 blueActorGlbVAO,
+                                 blueActorGlbVBO,
+                                 blueActorGlbEBO,
+                                 blueActorGlbIndexCount,
+                                 blueActorGlbTexture);
+}
+
+void CreateYellowActorGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("yellowActorGLB",
+                                 modelPath,
+                                 yellowActorGlbVAO,
+                                 yellowActorGlbVBO,
+                                 yellowActorGlbEBO,
+                                 yellowActorGlbIndexCount,
+                                 yellowActorGlbTexture);
+}
+
 void CreateLeonGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("leonGLB",
@@ -2264,6 +2298,8 @@ void Game::ensureRenderResources() {
     CreateSphere();
     CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
     CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
+    CreateBlueActorGlbModel(resolveAssetPath(kBluePlayerGlbPath));
+    CreateYellowActorGlbModel(resolveAssetPath(kYellowPlayerGlbPath));
     CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
     CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
     CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
@@ -6360,6 +6396,10 @@ void Game::render3D() {
         (actorGlbVAO != 0 && actorGlbIndexCount > 0 && actorGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderRedPlayerGlb =
         (redActorGlbVAO != 0 && redActorGlbIndexCount > 0 && redActorGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderBluePlayerGlb =
+        (blueActorGlbVAO != 0 && blueActorGlbIndexCount > 0 && blueActorGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderYellowPlayerGlb =
+        (yellowActorGlbVAO != 0 && yellowActorGlbIndexCount > 0 && yellowActorGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderLeonGlb =
         (leonGlbVAO != 0 && leonGlbIndexCount > 0 && leonGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFantasmaGlb =
@@ -6373,7 +6413,44 @@ void Game::render3D() {
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb) {
+    auto resolvePlayerGlbResource = [&](const Player* p,
+                                        GLuint& outVao,
+                                        GLsizei& outIndexCount,
+                                        GLuint& outTexture) -> bool {
+        if (!p) {
+            return false;
+        }
+
+        const std::string& prefix = p->spritePrefix;
+        auto useResource = [&](GLuint vao, GLsizei indexCount, GLuint texture) -> bool {
+            if (vao == 0 || indexCount <= 0 || texture == 0) {
+                return false;
+            }
+            outVao = vao;
+            outIndexCount = indexCount;
+            outTexture = texture;
+            return true;
+        };
+
+        if (prefix.find("jugadorrojo") != std::string::npos && canRenderRedPlayerGlb) {
+            return useResource(redActorGlbVAO, redActorGlbIndexCount, redActorGlbTexture);
+        }
+        if (prefix.find("jugadorazul") != std::string::npos && canRenderBluePlayerGlb) {
+            return useResource(blueActorGlbVAO, blueActorGlbIndexCount, blueActorGlbTexture);
+        }
+        if (prefix.find("jugadoramarillo") != std::string::npos && canRenderYellowPlayerGlb) {
+            return useResource(yellowActorGlbVAO, yellowActorGlbIndexCount, yellowActorGlbTexture);
+        }
+        if (prefix.find("jugadorblanco") != std::string::npos && canRenderPlayerGlb) {
+            return useResource(actorGlbVAO, actorGlbIndexCount, actorGlbTexture);
+        }
+        if (canRenderPlayerGlb) {
+            return useResource(actorGlbVAO, actorGlbIndexCount, actorGlbTexture);
+        }
+        return false;
+    };
+
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -6803,7 +6880,7 @@ void Game::render3D() {
             model = glm::rotate(model, roll, glm::vec3(0.0f, 0.0f, 1.0f));
         };
 
-        if (canRenderPlayerGlb || canRenderRedPlayerGlb) {
+        if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb) {
             // Ajuste de orientacion base del modelo GLB.
             const float kPlayerModelYawOffset = 1.57079632679f;
 
@@ -6824,17 +6901,7 @@ void Game::render3D() {
                 GLuint playerVao = 0;
                 GLsizei playerIndexCount = 0;
                 GLuint playerTexture = 0;
-
-                const bool isWasdPlayer = (this->mode == GameMode::TwoPlayers && i == 1);
-                if (isWasdPlayer && canRenderRedPlayerGlb) {
-                    playerVao = redActorGlbVAO;
-                    playerIndexCount = redActorGlbIndexCount;
-                    playerTexture = redActorGlbTexture;
-                } else if (canRenderPlayerGlb) {
-                    playerVao = actorGlbVAO;
-                    playerIndexCount = actorGlbIndexCount;
-                    playerTexture = actorGlbTexture;
-                } else {
+                if (!resolvePlayerGlbResource(p, playerVao, playerIndexCount, playerTexture)) {
                     continue;
                 }
 
@@ -7161,10 +7228,10 @@ void Game::render3D() {
             continue;
         }
 
-        const bool isWasdPlayer = (this->mode == GameMode::TwoPlayers && i == 1);
-        const bool has3DModel =
-            (isWasdPlayer && canRenderRedPlayerGlb) ||
-            canRenderPlayerGlb;
+        GLuint billboardVao = 0;
+        GLsizei billboardIndexCount = 0;
+        GLuint billboardTexture = 0;
+        const bool has3DModel = resolvePlayerGlbResource(p, billboardVao, billboardIndexCount, billboardTexture);
         if (has3DModel) {
             continue;
         }
