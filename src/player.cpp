@@ -206,8 +206,7 @@ void Player::updateDeathAnimation() {
         // Si no quedan vidas, nunca se respawnea.
         // Importante: fijar el sprite al último frame de muerte para no caer en el
         // sprite anterior (p.ej. mirando abajo) si el deltaTime hace saltar frames.
-        const bool disableRespawnForVs =
-            (bomberman != nullptr) && VersusMode::isVersusMode(bomberman->mode);
+        const bool disableRespawnForVs = (bomberman != nullptr) && VersusMode::isVersusMode(bomberman->mode);
         if (lives <= 0 || disableRespawnForVs) {
             pendingRespawn = false;
             deathFrame = lastFrame;
@@ -219,6 +218,7 @@ void Player::updateDeathAnimation() {
             return;
         }
 
+        // Fuera de Versus (Historia), respawnear inmediatamente si quedan vidas.
         respawn();
         return;
     }
@@ -609,9 +609,19 @@ void Player::applyPowerUp(PowerUpType type) {
     }
 
     switch (type) {
-        case PowerUpType::ExtraLife:
+        case PowerUpType::ExtraLife: {
+            // En Versus, las CPUs no deben ganar vidas extra (solo humanos).
+            if (bomberman && VersusMode::isVersusMode(bomberman->mode)) {
+                const int humanSlots = (bomberman->mode == GameMode::VsTwoPlayers) ? 2 : 1;
+                if (playerId >= 0 && playerId >= humanSlots) {
+                    // CPU en Versus: ignorar ExtraLife
+                    break;
+                }
+            }
+
             lives += 1;
             break;
+        }
 
         case PowerUpType::BombUp:
             maxBombs = std::min(maxBombs + 1, ArcadeCaps::MAX_BOMBS);
