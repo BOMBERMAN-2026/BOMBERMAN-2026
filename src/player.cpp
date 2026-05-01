@@ -465,8 +465,8 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     // --- Sondas de colisión ---
     {
         int r, c;
-        const float eFront = halfTile;
-        const float eSide  = halfTile * 0.60f;
+        const float eFront = halfTile * 0.82f;
+        const float eSide  = halfTile * 0.48f;
 
         if (mov == MOVE_UP) {
             bool hitLeft = false;

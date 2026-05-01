@@ -23,6 +23,8 @@ public:
     EnemyDirection findPathToPlayer() const;
 
 private:
+    float movementStepForDirection(EnemyDirection dir) const;
+
     // Evita girar en bucle continuo mientras la misma bomba está cerca.
     float bombTurnCooldown;
     EnemyDirection bombEscapeDir;
