@@ -182,7 +182,8 @@ void window_focus_callback(GLFWwindow* window, int focused) {
 
 // Ajusta el viewport cuando cambia el tamaño de la ventana.
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    // El viewport sera calculado en render() con letterboxing para mantener 16:9
+    glViewport(0, 0, width, height);
+
     if (bomberman != nullptr) {
         bomberman->onResize(width, height);
     }
