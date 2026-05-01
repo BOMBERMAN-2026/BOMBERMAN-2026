@@ -1036,7 +1036,7 @@ void GameMap::loadPowerUpTextures() {
     std::cout << "GameMap: power-up textures loaded" << std::endl;
 }
 
-void GameMap::placePowerUps() {
+void GameMap::placePowerUps(bool excludeItemsInVersus, bool excludeExtraLife) {
     // 1) Si el nivel define power-ups explícitos (directiva `powerup`),
     //    no usamos colocación aleatoria; solo ajustamos si son visibles u ocultos.
     bool hasExplicit = false;
@@ -1101,19 +1101,18 @@ void GameMap::placePowerUps() {
         int count;
     };
 
-    PowerUpPlacement placements[] = {
-        { PowerUpType::BombUp,         2 },  // Stackeable
-        { PowerUpType::FireUp,         2 },  // Stackeable
-        { PowerUpType::SpeedUp,        2 },  // Stackeable
-        { PowerUpType::ExtraLife,      1 },  // No stackeable
-        { PowerUpType::Invincibility,  1 },  // No stackeable
-        { PowerUpType::RemoteControl,  1 },  // No stackeable
-    };
+    std::vector<PowerUpPlacement> placementsVec;
+    placementsVec.push_back({ PowerUpType::BombUp, 2 });
+    placementsVec.push_back({ PowerUpType::FireUp, 2 });
+    placementsVec.push_back({ PowerUpType::SpeedUp, 2 });
+    if (!excludeExtraLife) placementsVec.push_back({ PowerUpType::ExtraLife, 1 });
+    placementsVec.push_back({ PowerUpType::Invincibility, 1 });
+    placementsVec.push_back({ PowerUpType::RemoteControl, 1 });
 
     int cellIndex = 0;
     int totalPlaced = 0;
 
-    for (const auto& p : placements) {
+    for (const auto& p : placementsVec) {
         for (int i = 0; i < p.count; i++) {
             if (cellIndex >= (int)destructibles.size()) break;
             Cell& cell = destructibles[cellIndex++];
@@ -1127,40 +1126,42 @@ void GameMap::placePowerUps() {
     }
     
     // Asignar items de puntuación en los bloques destructibles sobrantes
-    // Frecuencias: Cerillas y Lata (Común), Mechero (Poco común), Pila y Libélula (Rara), Hudson Bee (Muy rara)
+    // Solo se colocan si no estamos en Versus (excludeItemsInVersus = false)
     int itemsPlaced = 0;
-    std::uniform_real_distribution<float> itemDist(0.0f, 100.0f);
+    if (!excludeItemsInVersus) {
+        std::uniform_real_distribution<float> itemDist(0.0f, 100.0f);
 
-    while (cellIndex < (int)destructibles.size()) {
-        float randVal = itemDist(rng);
-        PowerUpType chosenItemType;
-        bool placeItem = false;
+        while (cellIndex < (int)destructibles.size()) {
+            float randVal = itemDist(rng);
+            PowerUpType chosenItemType;
+            bool placeItem = false;
 
-        // Probabilidades acumulativas aproximadas (del 0 a 100%)
-        // ~10% de que un bloque sobrante tenga un item
-        if (randVal < 10.0f) {
-            placeItem = true;
-            float rarityRoll = itemDist(rng); // 0 a 100
+            // Probabilidades acumulativas aproximadas (del 0 a 100%)
+            // ~10% de que un bloque sobrante tenga un item
+            if (randVal < 10.0f) {
+                placeItem = true;
+                float rarityRoll = itemDist(rng); // 0 a 100
+                
+                if (rarityRoll < 35.0f) chosenItemType = PowerUpType::Matches;        // 35% dentro del pool (Común)
+                else if (rarityRoll < 70.0f) chosenItemType = PowerUpType::Can;       // 35% dentro del pool (Común)
+                else if (rarityRoll < 85.0f) chosenItemType = PowerUpType::Lighter;   // 15% dentro del pool (Poco común)
+                else if (rarityRoll < 93.0f) chosenItemType = PowerUpType::Battery;   // 8% dentro del pool (Rara)
+                else if (rarityRoll < 98.0f) chosenItemType = PowerUpType::Dragonfly; // 5% dentro del pool (Rara)
+                else chosenItemType = PowerUpType::HudsonBee;                         // 2% dentro del pool (Muy rara)
+            }
+
+            if (placeItem) {
+                Cell& cell = destructibles[cellIndex];
+                Block& b = grid[cell.r][cell.c];
+                b.hasPowerUp = true;
+                b.powerUpType = chosenItemType;
+                b.powerUpRevealed = false;
+                b.powerUpCollected = false;
+                itemsPlaced++;
+            }
             
-            if (rarityRoll < 35.0f) chosenItemType = PowerUpType::Matches;        // 35% dentro del pool (Común)
-            else if (rarityRoll < 70.0f) chosenItemType = PowerUpType::Can;       // 35% dentro del pool (Común)
-            else if (rarityRoll < 85.0f) chosenItemType = PowerUpType::Lighter;   // 15% dentro del pool (Poco común)
-            else if (rarityRoll < 93.0f) chosenItemType = PowerUpType::Battery;   // 8% dentro del pool (Rara)
-            else if (rarityRoll < 98.0f) chosenItemType = PowerUpType::Dragonfly; // 5% dentro del pool (Rara)
-            else chosenItemType = PowerUpType::HudsonBee;                         // 2% dentro del pool (Muy rara)
+            cellIndex++;
         }
-
-        if (placeItem) {
-            Cell& cell = destructibles[cellIndex];
-            Block& b = grid[cell.r][cell.c];
-            b.hasPowerUp = true;
-            b.powerUpType = chosenItemType;
-            b.powerUpRevealed = false;
-            b.powerUpCollected = false;
-            itemsPlaced++;
-        }
-        
-        cellIndex++;
     }
 
     std::cout << "GameMap: " << totalPlaced << " power-ups fijos y " << itemsPlaced 

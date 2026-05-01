@@ -17,9 +17,6 @@ bool isVersusMode(GameMode mode);
 const std::vector<std::string>& levelSequence();
 const std::vector<int>& levelToStage();
 
-// Primero que llegue a este número de wins gana el encuentro VS.
-int winsToEndMatch();
-
 // Cuenta cuántos jugadores siguen en pie en la ronda (estado Alive).
 int countPlayersStillInMatch(const std::vector<Player*>& players);
 
@@ -38,9 +35,6 @@ bool isDraw(int remainingPlayers, float levelTimeRemaining);
 
 // VS infinito: siguiente ronda ciclando sobre la secuencia.
 int nextLevelIndex(int currentLevelIndex);
-
-// Devuelve true si algún jugador ya llegó al límite de wins.
-bool hasMatchWinner(const std::vector<int>& wins);
 
 } // namespace VersusMode
 

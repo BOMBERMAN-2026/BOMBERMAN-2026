@@ -138,6 +138,7 @@ static const std::vector<std::string> kRankingVocab = {
 };
 
 static constexpr int kRankingMaxEntries = 7;
+static constexpr int kVsRankingMaxReasonableWins = 99;
 static const char* kHistoryRankingRelativePath = "resources/rankings/history_ranking.txt";
 static const char* kVsRankingRelativePath = "resources/rankings/vs_ranking.txt";
 static std::vector<HistoryRankingEntry> gHistoryRankingEntries;
@@ -666,13 +667,13 @@ static void ensureSampleRankingFilesExist()
         std::ofstream vsOut(vsPath.c_str(), std::ios::trunc);
         if (vsOut.is_open()) {
             vsOut
-                << "NOVA;7;365\n"
-                << "RAY;6;341\n"
-                << "LUX;6;319\n"
-                << "ARGO;5;287\n"
-                << "KIRA;4;244\n"
-                << "ORBIT;3;208\n"
-                << "ION;3;193\n";
+                << "NOVA;3;365\n"
+                << "RAY;3;341\n"
+                << "LUX;3;319\n"
+                << "ARGO;2;287\n"
+                << "KIRA;2;244\n"
+                << "ORBIT;1;208\n"
+                << "ION;1;193\n";
         }
     }
 }
@@ -756,14 +757,15 @@ static void loadHistoryRankingEntries()
               });
 }
 
-static void loadVsRankingEntries()
+static bool loadVsRankingEntries()
 {
     gVsRankingEntries.clear();
+    bool prunedInvalidEntries = false;
 
     const std::string path = resolveAssetPath(kVsRankingRelativePath);
     std::ifstream file(path.c_str(), std::ios::binary);
     if (!file.is_open()) {
-        return;
+        return false;
     }
 
     std::string line;
@@ -791,14 +793,30 @@ static void loadVsRankingEntries()
             entry.wins = std::max(0, std::stoi(trimAscii(winsPart)));
             entry.aliveSeconds = std::max(0, std::stoi(trimAscii(aliveMsPart)));
         } catch (...) {
+            prunedInvalidEntries = true;
+            continue;
+        }
+
+        if (entry.wins <= 0 || entry.wins > kVsRankingMaxReasonableWins) {
+            prunedInvalidEntries = true;
             continue;
         }
 
         gVsRankingEntries.push_back(entry);
-        if ((int)gVsRankingEntries.size() >= kRankingMaxEntries) {
-            break;
-        }
     }
+
+    std::sort(gVsRankingEntries.begin(), gVsRankingEntries.end(),
+              [](const VsRankingEntry& a, const VsRankingEntry& b) {
+                  if (a.wins != b.wins) return a.wins > b.wins;
+                  return a.aliveSeconds > b.aliveSeconds;
+              });
+
+    if ((int)gVsRankingEntries.size() > kRankingMaxEntries) {
+        gVsRankingEntries.resize(kRankingMaxEntries);
+        prunedInvalidEntries = true;
+    }
+
+    return prunedInvalidEntries;
 }
 
 static bool saveHistoryRankingEntries()
@@ -836,14 +854,15 @@ static bool saveVsRankingEntries()
 }
 
 // Devuelve el indice de la entrada nueva en el ranking VS, o -1 si no entra en la tabla.
-static int updateVsRankingForCurrentRun(const std::vector<int>& playerScores, int aliveSeconds)
+static int updateVsRankingForCurrentRun(GameMode mode, const std::vector<int>& playerScores, int aliveSeconds, int& outPlayerOwner)
 {
     if (playerScores.empty()) return -1;
 
-    // El ganador es quien tiene mas victorias (scores[i] = wins en VS)
+    // En VS el ranking guarda rondas ganadas por jugadores humanos, no puntuacion.
+    const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
     int bestWins = -1;
     int bestIndex = 0;
-    for (int i = 0; i < (int)playerScores.size(); ++i) {
+    for (int i = 0; i < humanSlots && i < (int)playerScores.size(); ++i) {
         if (playerScores[i] > bestWins) {
             bestWins = playerScores[i];
             bestIndex = i;
@@ -862,6 +881,7 @@ static int updateVsRankingForCurrentRun(const std::vector<int>& playerScores, in
     entry.name = "";
     entry.wins = bestWins;
     entry.aliveSeconds = aliveSeconds;
+    outPlayerOwner = bestIndex + 1;
 
     gVsRankingEntries.push_back(entry);
     std::sort(gVsRankingEntries.begin(), gVsRankingEntries.end(),
@@ -947,7 +967,9 @@ static void refreshRankingData()
 {
     ensureSampleRankingFilesExist();
     loadHistoryRankingEntries();
-    loadVsRankingEntries();
+    if (loadVsRankingEntries()) {
+        saveVsRankingEntries();
+    }
 }
 
 uint32_t getHistoryRankingHighScore()
@@ -2373,11 +2395,12 @@ void Game::enterRankingScreen() {
     const bool vsMode = VersusMode::isVersusMode(mode);
     if (vsMode) {
         // Ranking VS: actualizar con victorias + tiempo vivo acumulado
-        int idx = updateVsRankingForCurrentRun(playerScores, (int)vsAliveSeconds);
+        int owner = 1;
+        int idx = updateVsRankingForCurrentRun(mode, playerScores, (int)vsAliveSeconds, owner);
         if (idx != -1) {
             isEnteringRankingName = true;
             rankingEntryIndex = idx;
-            rankingPlayerOwner = 1; // en VS siempre controla P1 (o el humano ganador)
+            rankingPlayerOwner = owner;
         }
     } else {
         // Ranking Historia
@@ -2954,7 +2977,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         if (preserveLivesAndScore && i < (int)savedLives.size()) {
             p->lives = savedLives[i];
             
-            // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente
+            // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente.
             if (versus && p->lives <= 0) {
                 p->lifeState = PlayerLifeState::DyingByEnemy;
                 p->deathFrame = 7; // Último frame de animación de muerte
@@ -2967,8 +2990,11 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                 p->currentSpriteName = p->spritePrefix + ".abajo.0";
             }
         } else if (versus) {
-            // En VS, cada humano empieza con 4 vidas: si todos caen, se termina la run.
+            // En VS todos los jugadores tienen vidas persistentes; el encuentro termina cuando todos llegan a 0.
             p->lives = 4;
+        } else if (custom) {
+            // En Custom Game hay un solo nivel: cada jugador empieza con 1 vida.
+            p->lives = 1;
         }
 
         gPlayers.push_back(p);
@@ -3079,8 +3105,41 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     gameMap->loadPowerUpTextures();
     // Colocar power-ups usando la lógica de GameMap:
     // Si el nivel define `powerup` se usan esos; si no, se hace colocación aleatoria.
-    // Ejecutar también en modo versus para reutilizar la misma lógica.
-    gameMap->placePowerUps();
+    // En Versus, solo se colocan power-ups (sin items de puntuación).
+    // En Custom, excluir además power-up ExtraLife.
+    gameMap->placePowerUps(versus, custom);
+
+    // En Versus, resetear power-ups de jugadores humanos al inicio de cada ronda.
+    if (versus) {
+        for (int i = 0; i < (int)gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p) continue;
+            const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
+            if (i < humanSlots) {
+                // Jugador humano: resetear power-ups acumulados.
+                p->maxBombs = 1;
+                p->explosionPower = 2;
+                p->baseSpeed = kDefaultPlayerSpeed;
+                p->hasRemoteControl = false;
+            }
+        }
+    }
+
+    // En Versus, resetear power-ups de jugadores humanos al inicio de cada ronda.
+    if (versus) {
+        for (int i = 0; i < (int)gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p) continue;
+            const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
+            if (i < humanSlots) {
+                // Jugador humano: resetear power-ups acumulados.
+                p->maxBombs = 1;
+                p->explosionPower = 2;
+                p->baseSpeed = kDefaultPlayerSpeed;
+                p->hasRemoteControl = false;
+            }
+        }
+    }
 }
 
 // Arranca una partida nueva desde nivel_01 (índice 0).
@@ -3161,13 +3220,7 @@ void Game::advanceToNextLevel() {
     const bool versus = VersusMode::isVersusMode(mode);
 
     if (versus) {
-        // VS: si alguien llega al límite de wins, termina el encuentro (por ahora: volver al menú).
-        if (VersusMode::hasMatchWinner(playerScores)) {
-            returnToMenuFromGame(/*resetRun=*/true);
-            return;
-        }
-
-        // VS arcade: modo infinito -> ciclar rondas.
+        // VS: las wins solo cuentan para HUD/ranking. El encuentro termina al agotar vidas.
         // TODO: Cambiar esto para que la pantalla y audio de carga salga al empezar cada nivel
         versusRoundNumber += 1;
         currentLevelIndex = VersusMode::nextLevelIndex(currentLevelIndex);
@@ -5064,18 +5117,15 @@ void Game::update() {
             const bool noHostileEnemiesAlive = (hostileEnemiesAlive == 0);
             const bool timeUp = (levelTimeRemaining <= 0.0f);
             const bool deathAnimationsFinished = allPlayersDeathAnimationsFinished(gPlayers);
+            const bool vsRunOutOfLives = VersusMode::humansOut(mode, gPlayers);
 
             int aliveHumans = 0;
-            int survivingHumans = 0;
             const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
             for (int i = 0; i < humanSlots && i < (int)gPlayers.size(); ++i) {
                 Player* p = gPlayers[i];
                 if (!p) continue;
                 if (p->isAlive()) {
                     ++aliveHumans;
-                }
-                if (!p->isGameOver()) {
-                    ++survivingHumans;
                 }
             }
 
@@ -5105,10 +5155,10 @@ void Game::update() {
                 } else {
                     evolveVsCpu(/*playerWon=*/false);
                     // Si gana un CPU/rival: derrota de ronda.
-                    // Solo termina la partida si ya no queda ningún humano con vidas.
-                    vsCinematicPostAction = (survivingHumans == 0)
+                    // Solo termina la run si ya no queda ningun jugador humano con vidas.
+                    vsCinematicPostAction = vsRunOutOfLives
                         ? VsCinematicPostAction::ReturnToMenu
-                        : VsCinematicPostAction::RestartCurrentLevel;
+                        : VsCinematicPostAction::AdvanceNextLevel;
                     startVsRoundCinematic(CinematicType::VsDefeat,
                                           resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
                                           /*winnerIndex=*/-1);
@@ -5119,9 +5169,9 @@ void Game::update() {
             // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
             if (deathAnimationsFinished && survivingPlayers == 0 && noHostileEnemiesAlive) {
                 evolveVsCpu(/*playerWon=*/false);
-                vsCinematicPostAction = (survivingHumans == 0)
+                vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::RestartCurrentLevel;
+                    : VsCinematicPostAction::AdvanceNextLevel;
 
                 // Muerte simultánea total siempre se considera empate visualmente,
                 // aunque la post-acción pueda cerrar partida si no quedan vidas.
@@ -5132,14 +5182,14 @@ void Game::update() {
             }
 
             // Sin humanos vivos durante la ronda:
-            // - Si aún les quedan vidas, se reinicia el nivel.
-            // - Si ya no quedan vidas, termina la partida y vuelve al menú.
+            // - Si aun quedan humanos con vidas, se avanza la ronda.
+            // - Si los humanos estan sin vidas, termina la partida y muestra ranking.
             // En ambos casos, la resolución visual de la ronda es derrota.
             if (deathAnimationsFinished && aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
                 evolveVsCpu(/*playerWon=*/false);
-                vsCinematicPostAction = (survivingHumans == 0)
+                vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::RestartCurrentLevel;
+                    : VsCinematicPostAction::AdvanceNextLevel;
 
                 startVsRoundCinematic(CinematicType::VsDefeat,
                                       resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
@@ -5150,11 +5200,11 @@ void Game::update() {
             // Time Up "solo tiempo": empate sin descuento de vidas.
             if (deathAnimationsFinished && timeUp) {
                 evolveVsCpu(/*playerWon=*/false);
-                vsCinematicPostAction = (survivingHumans == 0)
+                vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::RestartCurrentLevel;
-                startVsRoundCinematic((survivingHumans == 0) ? CinematicType::VsDefeat : CinematicType::VsDraw,
-                                      resolveAssetPath((survivingHumans == 0)
+                    : VsCinematicPostAction::AdvanceNextLevel;
+                startVsRoundCinematic(vsRunOutOfLives ? CinematicType::VsDefeat : CinematicType::VsDraw,
+                                      resolveAssetPath(vsRunOutOfLives
                                           ? "resources/video/vsMode/VsModeDefeat.mp4"
                                           : "resources/video/vsMode/VsModeDraw.mp4"),
                                       /*winnerIndex=*/-1);

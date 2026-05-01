@@ -164,7 +164,9 @@ public:
     // Coloca power-ups aleatoriamente debajo de bloques destructibles.
     // stackeables (BombUp, FireUp, SpeedUp): 2 de cada uno
     // no stackeables (ExtraLife, Invincibility, RemoteControl): 1 de cada uno
-    void placePowerUps();
+    // - excludeItemsInVersus: evita colocar items de puntuación en Versus
+    // - excludeExtraLife: evita colocar `ExtraLife` (useful for Custom mode)
+    void placePowerUps(bool excludeItemsInVersus = false, bool excludeExtraLife = false);
 
     // Renderiza los power-ups revelados (bloques destruidos con power-up visible).
     void renderPowerUps(GLuint vao, GLuint uniformModel, GLuint uniformUvRect,
