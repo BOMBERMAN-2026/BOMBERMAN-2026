@@ -31,6 +31,7 @@ extern GameMap* gameMap;
 
 namespace {
 
+// Valor de puntuación de los items coleccionables que no alteran el gameplay.
 int scoreValueForItem(PowerUpType type) {
     switch (type) {
         case PowerUpType::Matches: return 5000;
@@ -122,6 +123,7 @@ Player::~Player() {}
 
 // ============================== Animación ==============================
 
+// Convierte la fase de andar a un frame concreto del sprite de movimiento.
 static int walkPhaseToFrameIndex(int phase)
 {
     switch (phase & 3) {
@@ -134,6 +136,7 @@ static int walkPhaseToFrameIndex(int phase)
 }
 
 void Player::setSpriteFromDirAndFrame(GLint dirKey, int frameIndex)
+// Comprueba si una casilla ya queda bloqueada por una bomba activa.
 {
     std::string dirStr = "abajo";
     this->flipX = 0.0f; // Por defecto no espejar
@@ -227,9 +230,30 @@ void Player::updateDeathAnimation() {
     }
 }
 
+bool Player::isDeathAnimationFinished() const {
+    // Used by Game::update() to wait until the full death animation has played.
+    if (lifeState == PlayerLifeState::Alive || lifeState == PlayerLifeState::Winning) {
+        return true;
+    }
+
+    int lastFrame = 0;
+    switch (lifeState) {
+        case PlayerLifeState::DyingByEnemy:
+            lastFrame = 7;
+            break;
+        case PlayerLifeState::DyingByExplosion:
+            lastFrame = 10;
+            break;
+        default:
+            return true;
+    }
+
+    return deathFrame >= lastFrame;
+}
+
 // ============================== API base ==============================
 
-
+// Activa la animación de victoria y prepara la salida de nivel.
 void Player::startWinning() {
     lifeState = PlayerLifeState::Winning;
     winStartPosition = position;
@@ -248,6 +272,7 @@ void Player::startWinning() {
     winVelocity = glm::normalize(glm::vec2(dx, dy)) * (baseSpeed * 2.5f);
 }
 
+// Avanza la animación de victoria y marca fin cuando completa la secuencia.
 void Player::updateWinningAnimation() {
     winTimer += deltaTime;
 

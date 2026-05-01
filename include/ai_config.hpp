@@ -6,7 +6,7 @@
 namespace CpuBomberman {
 
 namespace {
-    constexpr bool kAiDebugEnabled = false;
+    constexpr bool kAiDebugEnabled = true;
 }
 
 inline float clampFloat(float value, float minValue, float maxValue)

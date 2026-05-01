@@ -2271,6 +2271,17 @@ bool Game::allPlayersOutOfLives() const {
     return true;
 }
 
+static bool allPlayersDeathAnimationsFinished(const std::vector<Player*>& players)
+{
+    for (auto* p : players) {
+        if (!p) continue;
+        if (!p->isDeathAnimationFinished()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool Game::allEnemiesCleared() const {
     if (!currentLevelHadEnemies) return false; // El nivel nunca tuvo enemigos
     for (auto* enemy : gEnemies) {
@@ -3081,8 +3092,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                 p->currentSpriteName = p->spritePrefix + ".abajo.0";
             }
         } else if (versus) {
-            // En VS, los jugadores inician con 4 vidas (vs historia con 3)
-            p->lives = 4;
+            // En VS, cada humano empieza con 1 vida: si todos caen, se termina la run.
+            p->lives = 1;
         }
 
         gPlayers.push_back(p);
@@ -5174,6 +5185,7 @@ void Game::update() {
             const int hostileEnemiesAlive = countHostileEnemiesForPlayers();
             const bool noHostileEnemiesAlive = (hostileEnemiesAlive == 0);
             const bool timeUp = (levelTimeRemaining <= 0.0f);
+            const bool deathAnimationsFinished = allPlayersDeathAnimationsFinished(gPlayers);
 
             int aliveHumans = 0;
             int survivingHumans = 0;
@@ -5190,7 +5202,7 @@ void Game::update() {
             }
 
             // Victoria: queda un único jugador en pie y ya no quedan enemigos.
-            if (survivingPlayers == 1 && noHostileEnemiesAlive) {
+            if (deathAnimationsFinished && survivingPlayers == 1 && noHostileEnemiesAlive) {
                 const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
                 if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
                     playerScores[winnerIndex] += 1;
@@ -5227,7 +5239,7 @@ void Game::update() {
             }
 
             // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
-            if (survivingPlayers == 0 && noHostileEnemiesAlive) {
+            if (deathAnimationsFinished && survivingPlayers == 0 && noHostileEnemiesAlive) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = (survivingHumans == 0)
                     ? VsCinematicPostAction::ReturnToMenu
@@ -5245,7 +5257,7 @@ void Game::update() {
             // - Si aún les quedan vidas, se reinicia el nivel.
             // - Si ya no quedan vidas, termina la partida y vuelve al menú.
             // En ambos casos, la resolución visual de la ronda es derrota.
-            if (aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
+            if (deathAnimationsFinished && aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = (survivingHumans == 0)
                     ? VsCinematicPostAction::ReturnToMenu
@@ -5258,7 +5270,7 @@ void Game::update() {
             }
 
             // Time Up "solo tiempo": empate sin descuento de vidas.
-            if (timeUp) {
+            if (deathAnimationsFinished && timeUp) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = (survivingHumans == 0)
                     ? VsCinematicPostAction::ReturnToMenu
@@ -5276,8 +5288,8 @@ void Game::update() {
                 && customGameMode.isCooperativeMode();
 
             const bool shouldStartContinue = customOnePlayerCpuCoop
-                ? (allPlayersOutOfLives() && !hasAliveAllyCpuAgent())
-                : allPlayersOutOfLives();
+                ? (allPlayersOutOfLives() && allPlayersDeathAnimationsFinished(gPlayers) && !hasAliveAllyCpuAgent())
+                : (allPlayersOutOfLives() && allPlayersDeathAnimationsFinished(gPlayers));
 
             if (shouldStartContinue) {
                 if (!continueSequenceActive) {
@@ -5287,13 +5299,14 @@ void Game::update() {
                 // Si el tiempo se acaba y quedan enemigos: TIME UP.
                 if (!timeUpSequenceActive && !allEnemiesCleared()
                     && levelTimeRemaining <= 0.0f
-                    && !customGameMode.isActive()) {
+                    && !customGameMode.isActive()
+                    && allPlayersDeathAnimationsFinished(gPlayers)) {
                     startTimeUpSequence();
                 }
 
                 // Si se ha completado el nivel, esperamos un momento antes de avanzar.
                 if (!pendingLevelAdvance) {
-                    if (allEnemiesCleared()) {
+                    if (allEnemiesCleared() && allPlayersDeathAnimationsFinished(gPlayers)) {
                         pendingLevelAdvance = true;
                         levelAdvanceTimer = 0.0f;
                         AudioManager::get().playBgm(resolveAssetPath("resources/sounds/04 Stage Clear.mp3"), false);
@@ -6948,7 +6961,26 @@ void Game::render2D() {
 
 void Game::render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glViewport(0, 0, WIDTH, HEIGHT);
+    
+    // Calcular viewport con letterboxing para mantener 16:9
+    const float logicalAspect = (float)WIDTH / (float)HEIGHT;  // 16:9 = 1.777...
+    const float actualAspect = (float)actualWindowWidth / (float)actualWindowHeight;
+    
+    int viewportX = 0, viewportY = 0, viewportW = actualWindowWidth, viewportH = actualWindowHeight;
+    
+    if (actualAspect > logicalAspect) {
+        // Ventana más ancha que 16:9 -> pillarbox (barras laterales)
+        viewportH = actualWindowHeight;
+        viewportW = (int)(actualWindowHeight * logicalAspect);
+        viewportX = (actualWindowWidth - viewportW) / 2;
+    } else if (actualAspect < logicalAspect) {
+        // Ventana más alta que 16:9 -> letterbox (barras arriba/abajo)
+        viewportW = actualWindowWidth;
+        viewportH = (int)(actualWindowWidth / logicalAspect);
+        viewportY = (actualWindowHeight - viewportH) / 2;
+    }
+    
+    glViewport(viewportX, viewportY, viewportW, viewportH);
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
@@ -7298,13 +7330,12 @@ void Game::render() {
 }
 
 void Game::onResize(int width, int height) {
-    WIDTH = std::max(1, width);
-    HEIGHT = std::max(1, height);
-
-    if (gameMap) {
-        float aspect = (float)WIDTH / (float)HEIGHT;
-        gameMap->calculateTileMetrics(aspect);
-    }
+    // Guardar el tamaño real de la ventana para letterboxing
+    actualWindowWidth = std::max(1, width);
+    actualWindowHeight = std::max(1, height);
+    
+    // WIDTH y HEIGHT mantienen la resolución lógica 16:9, no cambian
+    // (el viewport se ajustará con letterboxing en render())
 }
 
 // Cambiar pantalla de fullscreen a windowed (y viceversa)

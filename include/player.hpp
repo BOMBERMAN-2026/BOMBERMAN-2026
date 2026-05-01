@@ -61,7 +61,7 @@ class Player : public Entity {
         bool invincibilityFromPowerUp = false;   // true si viene del power-up "Armadura" (16s)
 
         // Remote Control
-        bool hasRemoteControl = false;
+        bool hasRemoteControl = false; // true si el jugador puede detonar bombas manualmente
 
         // Vida / respawn
         PlayerLifeState lifeState = PlayerLifeState::Alive; // Estado de vida
@@ -71,13 +71,16 @@ class Player : public Entity {
         bool pendingRespawn = false;                      // true si terminó animación y toca respawnear
 
         // Vida y animaciones de victoria
-        bool hasFinishedWinning = false;
-        float winTimer = 0.0f;
+        bool hasFinishedWinning = false; // true cuando terminó la animación de victoria
+        float winTimer = 0.0f; // Temporizador interno de la secuencia de victoria
         int winPhase = 0; // 0 = Creciendo/Pose V, 1 = Girando y saliendo
         float winScale = 1.8f; // Escala dinámica durante la victoria
-        glm::vec2 winVelocity = glm::vec2(0.0f); // Para la dirección aleatoria diagonal
+        glm::vec2 winVelocity = glm::vec2(0.0f); // Dirección aleatoria de salida al ganar
         glm::vec2 winStartPosition = glm::vec2(0.0f); // Posición inicial al ganar para fijar sprites
+        // Activa la animación de victoria y prepara la salida de nivel.
         void startWinning();
+
+        // Avanza la animación de victoria y marca el final cuando termina.
         void updateWinningAnimation();
 
         Player(glm::vec2 pos, glm::vec2 size, GLfloat velocity, int playerId = 0, const std::string& prefix = "jugadorblanco");
@@ -93,9 +96,17 @@ class Player : public Entity {
         // Aplica colisión con el mapa (`GameMap`) y actualiza `position` si se puede mover.
         void UpdateSprite(Move mov, const GameMap* map, float deltaTime);
 
+        // Devuelve true si el jugador está vivo y puede recibir input.
         bool isAlive() const { return lifeState == PlayerLifeState::Alive; }
+
+        // Devuelve true si aún puede colocar otra bomba activa.
         bool canPlaceBomb() const { return activeBombs < maxBombs; }
+
+        // Devuelve true si ya no le quedan vidas.
         bool isGameOver() const { return lives <= 0; }
+
+        // Devuelve true cuando la animación de muerte ya terminó.
+        bool isDeathAnimationFinished() const;
 
         // Aplica un power-up (respeta ArcadeCaps).
         void applyPowerUp(PowerUpType type);

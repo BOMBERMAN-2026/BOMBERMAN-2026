@@ -263,7 +263,9 @@ public:
         InGameMenu inGameMenu;
 
         // Ventana
-        GLint WIDTH, HEIGHT;                 // Tamaño ventana
+        GLint WIDTH, HEIGHT;                 // Tamaño ventana (lógico: mantiene 16:9)
+        int actualWindowWidth = 1920;       // Ancho real del framebuffer (puede variar en windowed)
+        int actualWindowHeight = 1080;      // Alto real del framebuffer (puede variar en windowed)
         int windowedXPos = 100;
         int windowedYPos = 100;             // Posición de la ventana en modo windowed (para restaurar al salir de fullscreen)  
         GLFWwindow* window;                  // GLFW window
@@ -276,7 +278,7 @@ public:
     
 
     Game(GLFWwindow* window, GLuint width, GLuint height)
-        : state(GAME_INTRO), WIDTH(width), HEIGHT(height), window(window) {}
+        : state(GAME_INTRO), WIDTH(width), HEIGHT(height), actualWindowWidth(width), actualWindowHeight(height), window(window) {}
     ~Game();
 
     void setMode(GameMode m) { mode = m; }

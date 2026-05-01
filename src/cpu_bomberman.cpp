@@ -26,6 +26,7 @@ extern std::vector<Enemy*> gEnemies;
 
 namespace CpuBomberman {
 
+// Estado interno por CPU: movimiento, perfiles y temporizadores.
 struct CpuState {
     Move currentMove = MOVE_NONE;
     float moveLockSeconds = 0.0f;
@@ -47,18 +48,21 @@ static std::array<DeathReason, 4> gRoundDeathByPlayerId = {
 };
 static std::array<bool, 4> gCpuControlledByPlayerId = {false, false, false, false};
 
+// Generador aleatorio único para decisiones de la IA.
 static std::mt19937& rng()
 {
     static std::mt19937 gen{std::random_device{}()};
     return gen;
 }
 
+// Devuelve un flotante uniforme en [0,1].
 static float rand01()
 {
     std::uniform_real_distribution<float> dist(0.0f, 1.0f);
     return dist(rng());
 }
 
+// Índice del primer CPU según el modo de juego.
 static int firstCpuIndex(GameMode mode)
 {
     // VS 1P: players[0] es humano => CPU desde 1.
@@ -67,12 +71,14 @@ static int firstCpuIndex(GameMode mode)
     return 1;
 }
 
+// Lee la dificultad asignada al playerId concreto.
 static Difficulty difficultyFor(const Settings& settings, int playerId)
 {
     if (playerId < 0 || playerId >= 4) return Difficulty::Medium;
     return settings.difficultyByPlayerId[(size_t)playerId];
 }
 
+// Nombre corto de la dificultad para logs.
 static const char* difficultyToString(Difficulty difficulty)
 {
     switch (difficulty) {
@@ -83,6 +89,7 @@ static const char* difficultyToString(Difficulty difficulty)
     }
 }
 
+// Convierte la causa de muerte en texto para debug.
 static const char* deathReasonToString(DeathReason reason)
 {
     switch (reason) {
@@ -94,6 +101,7 @@ static const char* deathReasonToString(DeathReason reason)
     }
 }
 
+// Serializa un perfil de IA para logs de inicialización y evolución.
 static std::string profileToString(const AiProfile& profile)
 {
     std::ostringstream out;
@@ -105,6 +113,7 @@ static std::string profileToString(const AiProfile& profile)
     return out.str();
 }
 
+// Serializa los caps evolutivos de un perfil.
 static std::string capsToString(const AiEvolutionCaps& caps)
 {
     std::ostringstream out;
@@ -116,6 +125,7 @@ static std::string capsToString(const AiEvolutionCaps& caps)
     return out.str();
 }
 
+// Etiqueta legible de la dificultad para el prefijo de CPU.
 static const char* cpuLabelForDifficulty(Difficulty difficulty)
 {
     switch (difficulty) {
@@ -126,15 +136,40 @@ static const char* cpuLabelForDifficulty(Difficulty difficulty)
     }
 }
 
+// Formatea una línea de cambio de perfil para debug.
 static std::string formatProfileLine(const char* label, float beforeValue, float afterValue)
 {
     std::ostringstream out;
+    const float delta = afterValue - beforeValue;
     out << "\t" << label << ": "
         << std::fixed << std::setprecision(2)
-        << beforeValue << " --> " << afterValue;
+        << beforeValue << " --> " << afterValue
+        << " (" << (delta >= 0.0f ? "+" : "") << delta << ")";
     return out.str();
 }
 
+static const char* roundOutcomeSummary(bool playerWon)
+{
+    return playerWon
+        ? "victoria de la CPU: sube ofensiva, busqueda y lectura del mapa"
+        : "derrota de la CPU: mejora ligera para no cambiar demasiado de golpe";
+}
+
+static const char* deathReasonSummary(DeathReason reason)
+{
+    switch (reason) {
+        case DeathReason::EnemyContact:
+            return "muerte por contacto: empuja a mejorar el trazado de ruta";
+        case DeathReason::ExplosionOther:
+            return "muerte por explosion ajena: sube la prudencia frente a bombas";
+        case DeathReason::ExplosionSelfBomb:
+            return "muerte por propia bomba: penaliza agresividad y refuerza la aversion al peligro";
+        default:
+            return "sin causa clara: aplica ajuste suave de confianza";
+    }
+}
+
+// Log de arranque de perfil evolutivo.
 static void logCpuProfileInit(int playerId,
                               Difficulty difficulty,
                               const AiProfile& profile,
@@ -148,17 +183,21 @@ static void logCpuProfileInit(int playerId,
               << std::endl;
 }
 
+// Log de una evolución de perfil tras la ronda.
 static void logCpuProfileEvolution(int playerId,
                                    Difficulty difficulty,
                                    const AiProfile& before,
                                    const AiProfile& after,
                                    const AiEvolutionCaps& caps,
+                                   bool playerWon,
                                    DeathReason reason)
 {
     if (!kAiDebugEnabled) return;
 
     std::cout << "[CPU-AI] CPU " << (playerId + 1) << " (" << cpuLabelForDifficulty(difficulty) << ")"
+              << "\n\tResultado: " << roundOutcomeSummary(playerWon)
               << "\n\tMotivo: " << deathReasonToString(reason)
+              << "\n\tLectura: " << deathReasonSummary(reason)
               << formatProfileLine("agresividad", before.aggressiveness, after.aggressiveness)
               << formatProfileLine("dangerAversion", before.dangerAversion, after.dangerAversion)
               << formatProfileLine("itemClairvoyance", before.itemClairvoyance, after.itemClairvoyance)
@@ -167,6 +206,7 @@ static void logCpuProfileEvolution(int playerId,
               << std::endl;
 }
 
+// Obtiene o reinicia el perfil runtime según la dificultad asignada.
 static AiProfile& runtimeProfileFor(const Settings& settings, int playerId)
 {
     static AiProfile fallback = configForDifficulty(Difficulty::Medium).initialProfile;
@@ -185,6 +225,7 @@ static AiProfile& runtimeProfileFor(const Settings& settings, int playerId)
     return st.runtimeProfile;
 }
 
+// Borra el estado persistente de evolución entre partidas completas.
 void resetEvolutionState()
 {
     for (int i = 0; i < 4; ++i) {
@@ -194,6 +235,7 @@ void resetEvolutionState()
     }
 }
 
+// Borra solo las muertes registradas de la ronda actual.
 void resetRoundDeathTracking()
 {
     for (int i = 0; i < 4; ++i) {
@@ -201,6 +243,7 @@ void resetRoundDeathTracking()
     }
 }
 
+// Registra la causa de muerte de la CPU indicada, si está controlada por IA.
 void recordCpuDeath(int playerId, DeathReason reason)
 {
     if (playerId < 0 || playerId >= 4) return;
@@ -210,6 +253,7 @@ void recordCpuDeath(int playerId, DeathReason reason)
     }
 }
 
+// Copia y consume las causas de muerte acumuladas durante la ronda.
 std::vector<DeathReason> consumeRoundDeathReasons()
 {
     std::vector<DeathReason> out(gRoundDeathByPlayerId.begin(), gRoundDeathByPlayerId.end());
@@ -217,6 +261,7 @@ std::vector<DeathReason> consumeRoundDeathReasons()
     return out;
 }
 
+// Ajusta los perfiles de las CPUs según el resultado de la ronda.
 void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths)
 {
     for (int playerId = 0; playerId < 4; ++playerId) {
@@ -256,7 +301,7 @@ void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths)
 
         st.runtimeProfile = clampProfile(st.runtimeProfile, st.profileCaps);
 
-        logCpuProfileEvolution(playerId, diff, before, st.runtimeProfile, st.profileCaps, reason);
+        logCpuProfileEvolution(playerId, diff, before, st.runtimeProfile, st.profileCaps, playerWon, reason);
     }
 }
 

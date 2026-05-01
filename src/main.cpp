@@ -25,6 +25,7 @@ Game* bomberman;
 extern int menuSelection;
 
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
+void window_focus_callback(GLFWwindow* window, int focused);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 
@@ -74,6 +75,7 @@ int main() {
     }
 
     glfwSetKeyCallback(mainWindow, key_callback);
+    glfwSetWindowFocusCallback(mainWindow, window_focus_callback);
     glfwSetScrollCallback(mainWindow, scroll_callback);
 
     // OpenGL configuration
@@ -164,10 +166,23 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
     }
 }
 
+// Limpia el estado de teclas al perder foco para evitar entradas "pegadas".
+void window_focus_callback(GLFWwindow* window, int focused) {
+    if (focused || bomberman == nullptr) {
+        return;
+    }
+
+    for (std::map<GLint, GLint>::iterator it = bomberman->keys.begin(); it != bomberman->keys.end(); ++it) {
+        it->second = GLFW_RELEASE;
+    }
+
+    bomberman->lastDirKey = GLFW_KEY_UNKNOWN;
+    bomberman->lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+}
+
 // Ajusta el viewport cuando cambia el tamaño de la ventana.
 void framebuffer_size_callback(GLFWwindow* window, int width, int height) {
-    glViewport(0, 0, width, height);
-
+    // El viewport sera calculado en render() con letterboxing para mantener 16:9
     if (bomberman != nullptr) {
         bomberman->onResize(width, height);
     }
