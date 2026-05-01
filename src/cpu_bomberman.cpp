@@ -1624,6 +1624,23 @@ static bool canHitTargetWithBombForAgent(const GameMap& map,
     return clearLineWalkable(map, selfRow, selfCol, targetRow, targetCol);
 }
 
+static bool hasAdjacentDestructibleForAgent(const GameMap& map, const Agent& self)
+{
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+
+    const int rr[4] = {sr - 1, sr + 1, sr, sr};
+    const int cc[4] = {sc, sc, sc - 1, sc + 1};
+    for (int k = 0; k < 4; ++k) {
+        if (map.isDestructible(rr[k], cc[k])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool isHostileToAgent(const Agent& bot, const Player* player)
 {
     if (!player) return false;
@@ -1759,6 +1776,7 @@ void Agent::Update()
     int tr = -1;
     int tc = -1;
     bool hasTarget = findNearestHostileTarget(*this, sr, sc, tr, tc);
+    const bool adjacentDestructible = hasAdjacentDestructibleForAgent(*gameMap, *this);
 
     auto moveIsStillValid = [&](Move m) {
         if (m == MOVE_NONE) return false;
@@ -1767,7 +1785,13 @@ void Agent::Update()
 
     Move desired = MOVE_NONE;
     if (difficulty == Difficulty::Easy) {
-        desired = pickRandomMove(moves);
+        if (selfDanger || moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
+            desired = pickRandomMove(moves);
+            currentMove = desired;
+            moveLockSeconds = 0.45f + rand01() * 0.55f;
+        } else {
+            desired = currentMove;
+        }
     } else if (selfDanger) {
         desired = pickRandomMove(moves);
     } else if (hasTarget) {
@@ -1789,9 +1813,30 @@ void Agent::Update()
         }
     }
 
+    if (adjacentDestructible && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
+        const float breakBlockPerSecond = 0.38f + 0.65f * agentProfile.aggressiveness;
+        if (rand01() < breakBlockPerSecond * std::max(0.0f, deltaTime) &&
+            cellHasAnyBomb(sr, sc) == false &&
+            canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
+            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
+                                  sr,
+                                  sc,
+                                  /*owner=*/nullptr,
+                                  /*power=*/bombPower,
+                                  /*remote=*/false);
+            bomb->ownerIndex = -1;
+            bomb->ownerLeftTile = true;
+            gBombs.push_back(bomb);
+            ownedBombTiles.push_back(glm::ivec2(sr, sc));
+            bombCooldownSeconds = 0.75f;
+        }
+    }
+
     if (difficulty == Difficulty::Easy && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const float perSecond = 0.20f;
-        if (rand01() < perSecond * std::max(0.0f, deltaTime) && cellHasAnyBomb(sr, sc) == false) {
+        const float perSecond = 0.28f;
+        if (rand01() < perSecond * std::max(0.0f, deltaTime) &&
+            cellHasAnyBomb(sr, sc) == false &&
+            canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
             Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
                                   sr,
                                   sc,
@@ -1809,7 +1854,7 @@ void Agent::Update()
     if (hasTarget && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
         const bool inRange = canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
         if (inRange) {
-            const float perSecond = isAlly() ? 0.32f : 0.26f;
+            const float perSecond = isAlly() ? 0.46f : 0.40f;
             const bool trigger = (rand01() < perSecond * std::max(0.0f, deltaTime));
             if (trigger && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
                 if (!cellHasAnyBomb(sr, sc)) {
