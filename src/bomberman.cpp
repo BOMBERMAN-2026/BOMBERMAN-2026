@@ -2967,8 +2967,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                 p->currentSpriteName = p->spritePrefix + ".abajo.0";
             }
         } else if (versus) {
-            // En VS, cada humano empieza con 1 vida: si todos caen, se termina la run.
-            p->lives = 1;
+            // En VS, cada humano empieza con 4 vidas: si todos caen, se termina la run.
+            p->lives = 4;
         }
 
         gPlayers.push_back(p);
