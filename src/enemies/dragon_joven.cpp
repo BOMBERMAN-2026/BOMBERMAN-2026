@@ -182,7 +182,7 @@ void DragonJoven::Update() {
         EnemyDirection fireDir = checkLineOfSight();
         if (fireDir != EnemyDirection::NONE) {
             isCharging = true;
-            chargeTimer = 0.5f; // Medio segundo de parpadeo rojo como advertencia
+            chargeTimer = 0.9f; // 0.9 segundos de parpadeo rojo como advertencia antes de disparar
             fireCooldown = fireCooldownMax;
             facing = fireDir;
             

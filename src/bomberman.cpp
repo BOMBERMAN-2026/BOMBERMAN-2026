@@ -522,7 +522,7 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
     if (!map) return false;
     // AABB simple alrededor del centro del tile. Ajustable.
     const float halfTile = map->getTileSize() / 2.0f;
-    const float r = halfTile * 0.70f;
+    const float r = halfTile * 0.95f;
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
@@ -531,8 +531,8 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
 static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
     if (!map || !bomb) return false;
     
-    // Asumimos un radio de colisi├│n del 45% del tile para la entidad
-    float entityRadius = map->getTileSize() * 0.45f;
+    // Radio de colision ajustado al cuerpo jugable, no al sprite visual completo.
+    float entityRadius = map->getTileSize() * 0.25f;
     float tileHalf = map->getTileSize() * 0.5f;
 
     for (const auto& seg : bomb->explosionSegments) {
@@ -3020,31 +3020,31 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
             Enemy* enemy = nullptr;
             switch (s.type) {
                 case EnemySpawnType::Leon: {
-                    auto* e = new Leon(pos, kDefaultPlayerSize, /*speed=*/0.10f);
+                    auto* e = new Leon(pos, kDefaultPlayerSize, /*speed=*/0.18f);
                     e->currentSpriteName = "leon.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::Babosa: {
-                    auto* e = new Babosa(pos, kDefaultPlayerSize, /*speed=*/0.06f);
+                    auto* e = new Babosa(pos, kDefaultPlayerSize, /*speed=*/0.13f);
                     e->currentSpriteName = "babosa.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::BebeLloron: {
-                    auto* e = new BebeLloron(pos, kDefaultPlayerSize, /*speed=*/0.08f);
+                    auto* e = new BebeLloron(pos, kDefaultPlayerSize, /*speed=*/0.16f);
                     e->currentSpriteName = "bebe.derecha.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::FantasmaMortal: {
-                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize, /*speed=*/0.11f);
+                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize, /*speed=*/0.20f);
                     e->currentSpriteName = "fantasma.derecha.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::SolPervertido: {
-                    auto* e = new SolPervertido(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    auto* e = new SolPervertido(pos, kDefaultPlayerSize, /*speed=*/0.15f);
                     e->currentSpriteName = "sol.grande.0";
                     enemy = e;
                     break;
@@ -3056,31 +3056,31 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                     break;
                 }
                 case EnemySpawnType::DronRosa: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronrosa.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronVerde: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronverde.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronAmarillo: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronamarillo.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronAzul: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronazul.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DragonJoven: {
-                    auto* e = new DragonJoven(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    auto* e = new DragonJoven(pos, kDefaultPlayerSize, /*speed=*/0.15f);
                     e->currentSpriteName = "dragon.abajo.0";
                     enemy = e;
                     break;
