@@ -3916,6 +3916,10 @@ void Game::processInput() {
         if (this->inGameMenu.controlsMenu.showControlsMenu) {
             // TODO, cambiar el lastkey
             this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+
+            lastDirKey = GLFW_KEY_UNKNOWN;
+            lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+
             return;
         }
 
@@ -3949,6 +3953,8 @@ void Game::processInput() {
 
         lastDirKey = GLFW_KEY_UNKNOWN;
         lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+        keys[inGameMenu.controlsMenu.leftKey_P1] = GLFW_REPEAT;
+        keys[inGameMenu.controlsMenu.rightKey_P1] = GLFW_REPEAT;
 
         return; 
     }
@@ -4159,10 +4165,10 @@ void Game::processInput() {
                     case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
                 }
                 if (keyToUse == GLFW_KEY_UNKNOWN) {
-                    if (up) keyToUse = GLFW_KEY_UP;
-                    else if (down) keyToUse = GLFW_KEY_DOWN;
-                    else if (left) keyToUse = GLFW_KEY_LEFT;
-                    else if (right) keyToUse = GLFW_KEY_RIGHT;
+                    if (this->lastDirKey == inGameMenu.controlsMenu.upKey_P1) keyToUse = GLFW_KEY_UP;
+                    else if (this->lastDirKey == inGameMenu.controlsMenu.downKey_P1) keyToUse = GLFW_KEY_DOWN;
+                    else if (this->lastDirKey == inGameMenu.controlsMenu.leftKey_P1) keyToUse = GLFW_KEY_LEFT;
+                    else if (this->lastDirKey == inGameMenu.controlsMenu.rightKey_P1) keyToUse = GLFW_KEY_RIGHT;
                 }
             }
 
@@ -4238,10 +4244,10 @@ void Game::processInput() {
                         case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
                     }
                     if (keyToUse2 == GLFW_KEY_UNKNOWN) {
-                        if (up2) keyToUse2 = GLFW_KEY_W;
-                        else if (down2) keyToUse2 = GLFW_KEY_S;
-                        else if (left2) keyToUse2 = GLFW_KEY_A;
-                        else if (right2) keyToUse2 = GLFW_KEY_D;
+                        if (this->lastDirKeyP2 == inGameMenu.controlsMenu.upKey_P2) keyToUse2 = GLFW_KEY_W;
+                        else if (this->lastDirKeyP2 == inGameMenu.controlsMenu.downKey_P2) keyToUse2 = GLFW_KEY_S;
+                        else if (this->lastDirKeyP2 == inGameMenu.controlsMenu.leftKey_P2) keyToUse2 = GLFW_KEY_A;
+                        else if (this->lastDirKeyP2 == inGameMenu.controlsMenu.rightKey_P2) keyToUse2 = GLFW_KEY_D;
                     }
                 }
 
