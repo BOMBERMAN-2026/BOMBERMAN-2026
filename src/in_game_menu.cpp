@@ -5,6 +5,8 @@
 #include <string>
 #include <cctype>
 
+extern void PlayMenuSelectSound();
+
 // ============================== GLOBAL VARIABLES ==============================
 
 static constexpr float scaleUsualHud = 0.0015f;
@@ -192,15 +194,18 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
 
     if (keys[controlsMenu.downKey_P1] == GLFW_PRESS) {
         posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
+        PlayMenuSelectSound();
         keys[controlsMenu.downKey_P1] = GLFW_REPEAT;
     }
     
     if (keys[controlsMenu.upKey_P1] == GLFW_PRESS) {
         posSeleccion <= 0 ? posSeleccion = inGameMenuOptions.size() - 1 : posSeleccion -= 1;
+        PlayMenuSelectSound();
         keys[controlsMenu.upKey_P1] = GLFW_REPEAT;
     }
 
     if (keys[controlsMenu.selectKey] == GLFW_PRESS) {
+        PlayMenuSelectSound();
         
         // Comportamiento condicionado al indice en el vector currentOptionsSelected 
         switch (posSeleccion) {

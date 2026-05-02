@@ -43,6 +43,33 @@ void PlayExplosionSound() {
     AudioManager::get().playVfx(VfxSound::Explosion);
 }
 
+// Llamada desde Dragon Joven cuando escupe fuego
+void PlayDragonFireSound() {
+    AudioManager::get().playVfx(VfxSound::Explosion);
+}
+
+// Llamada desde King Bomber cuando emite su ataque especial de explosión distorsionada
+void PlayKingBomberDistortedExplosionSound() {
+    // Reproducir el sonido de explosión dos veces con pequeño delay para simular distorsión
+    AudioManager::get().playVfx(VfxSound::Explosion);
+    // Segunda reproducción ligeramente desfasada para efecto de distorsión
+    static float distortionDelayTimer = 0.0f;
+    // Nota: esto es una aproximación; una mejor solución sería usar un timer en el AudioManager
+    // Por ahora reproducimos dos veces casi simultáneamente para efecto de solapamiento
+    AudioManager::get().playVfx(VfxSound::Explosion);
+}
+
+// Llamada desde Dron Bombardero cuando dispara sus bolas de fuego - MUY distorsionado
+void PlayDronDistortedFireSound() {
+    // Reproducir el sonido de explosión de robots distorsionado
+    AudioManager::get().playVfx(VfxSound::ExplosionRobots);
+}
+
+// Llamada desde menús al moverse entre opciones
+void PlayMenuSelectSound() {
+    AudioManager::get().playVfx(VfxSound::Select);
+}
+
 // Llamada desde constructor de Bomb en bomb.cpp
 void PlayPlaceBombSound() {
     AudioManager::get().playVfx(VfxSound::PlaceBomb);
@@ -5514,7 +5541,7 @@ void Game::update() {
 
             GLint btnUp    = (rankingPlayerOwner == 2) ? GLFW_KEY_W   : GLFW_KEY_UP;
             GLint btnDown  = (rankingPlayerOwner == 2) ? GLFW_KEY_S   : GLFW_KEY_DOWN;
-            GLint btnEnter = (rankingPlayerOwner == 2) ? GLFW_KEY_R   : GLFW_KEY_ENTER;
+            GLint btnEnter = (rankingPlayerOwner == 2) ? GLFW_KEY_R   : inGameMenu.controlsMenu.selectKey;
             GLint btnSpace = (rankingPlayerOwner == 2) ? GLFW_KEY_X   : GLFW_KEY_SPACE;
 
             bool movedUp     = false;
@@ -5695,7 +5722,8 @@ void Game::update() {
             } else if (currentCinematicType == CinematicType::HistoryStart) {
                 startNewRun(mode); // Actualiza el state a GAME_PLAYING e inicia la partida con el modo seleccionado previamente.
             } else if (currentCinematicType == CinematicType::HistoryEnd) {
-                // Ultima cinematica de historia: ir al ranking.
+                // Ultima cinematica de historia: reproducir musica de ending y luego ir al ranking.
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/07 Normal Game ~ Ending.mp3"), /*loop=*/false, 0.60f);
                 enterRankingScreen();
             } else if (currentCinematicType == CinematicType::LevelStart) {
                 // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
