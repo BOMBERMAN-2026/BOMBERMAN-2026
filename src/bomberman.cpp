@@ -4732,7 +4732,7 @@ void Game::update() {
 
             GLint btnUp    = (rankingPlayerOwner == 2) ? GLFW_KEY_W   : GLFW_KEY_UP;
             GLint btnDown  = (rankingPlayerOwner == 2) ? GLFW_KEY_S   : GLFW_KEY_DOWN;
-            GLint btnEnter = (rankingPlayerOwner == 2) ? GLFW_KEY_R   : GLFW_KEY_ENTER;
+            GLint btnEnter = (rankingPlayerOwner == 2) ? GLFW_KEY_R   : inGameMenu.controlsMenu.selectKey;
             GLint btnSpace = (rankingPlayerOwner == 2) ? GLFW_KEY_X   : GLFW_KEY_SPACE;
 
             bool movedUp     = false;
