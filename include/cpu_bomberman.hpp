@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 
+#include "ai_config.hpp"
 #include "bomberman.hpp" // GameMode
 #include "cpu_bomberman_difficulty.hpp"
 #include "enemy.hpp"     // Enemy
@@ -24,7 +25,7 @@ enum class TeamAffiliation {
 // Parámetros de contexto (lo que la CPU puede “saber” del match).
 // Se pasan desde Game para poder usar ronda, stage, etc.
 struct Context {
-    int versusRoundNumber = 1;
+    int versusRoundNumber = 1; // Ronda actual dentro del encuentro VS.
 };
 
 struct Settings {
@@ -36,6 +37,13 @@ struct Settings {
         Difficulty::Medium,  // CPU #2
         Difficulty::Hard     // CPU #3
     };
+};
+
+enum class DeathReason {
+    Unknown,
+    EnemyContact,
+    ExplosionOther,
+    ExplosionSelfBomb
 };
 
 // Bomberman controlado por IA pero gestionado como enemigo del mapa (gEnemies).
@@ -62,21 +70,26 @@ public:
     const std::string& getSpritePrefix() const { return botSpritePrefix; }
 
 private:
-    TeamAffiliation affiliation;
-    Difficulty difficulty;
-    std::string botSpritePrefix;
+    TeamAffiliation affiliation; // Lado del agente: aliado o rival.
+    Difficulty difficulty; // Dificultad base de comportamiento.
+    std::string botSpritePrefix; // Prefijo del atlas para este agente.
 
-    Move currentMove = MOVE_NONE;
-    float moveLockSeconds = 0.0f;
-    float bombCooldownSeconds = 0.0f;
+    Move currentMove = MOVE_NONE; // Dirección actual que intenta mantener.
+    float moveLockSeconds = 0.0f; // Tiempo restante antes de recalcular movimiento.
+    float bombCooldownSeconds = 0.0f; // Enfriamiento entre colocaciones de bomba.
 
-    int bombPower = 2;
-    int maxOwnedBombs = 2;
-    std::vector<glm::ivec2> ownedBombTiles;
+    int bombPower = 2; // Potencia de explosión de las bombas propias.
+    int maxOwnedBombs = 2; // Límite de bombas que puede controlar a la vez.
+    std::vector<glm::ivec2> ownedBombTiles; // Casillas ocupadas por bombas remotas activas.
 };
 
+// Devuelve true si el puntero apunta a un agente CPU.
 bool isAgent(const Enemy* enemy);
+
+// Devuelve true si el agente pertenece al bando aliado.
 bool isAllyAgent(const Enemy* enemy);
+
+// Devuelve true si el agente pertenece al bando enemigo.
 bool isEnemyAgent(const Enemy* enemy);
 
 // Actualiza los Bomberman controlados por CPU (movimiento + bombas).
@@ -86,6 +99,21 @@ void updateCpuPlayers(GameMode mode,
                       float deltaTime,
                       const Context& context,
                       const Settings& settings);
+
+// Reinicia el estado evolutivo de la IA entre partidas completas.
+void resetEvolutionState();
+
+// Limpia el tracking de muertes de la ronda actual.
+void resetRoundDeathTracking();
+
+// Registra la causa de muerte de una CPU concreta.
+void recordCpuDeath(int playerId, DeathReason reason);
+
+// Consume las causas de muerte acumuladas durante la ronda.
+std::vector<DeathReason> consumeRoundDeathReasons();
+
+// Ajusta los perfiles de CPU al cierre de cada ronda.
+void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths);
 
 } // namespace CpuBomberman
 

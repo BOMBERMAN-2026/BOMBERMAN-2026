@@ -27,6 +27,25 @@ FantasmaMortal::FantasmaMortal(glm::vec2 pos, glm::vec2 size, float speed)
 
 FantasmaMortal::~FantasmaMortal() {}
 
+float FantasmaMortal::movementStepForDirection(EnemyDirection dir) const {
+    float step = speed * deltaTime;
+    if (!gameMap) return step;
+
+    int currentR = 0;
+    int currentC = 0;
+    gameMap->ndcToGrid(position, currentR, currentC);
+
+    // Solo se ralentiza si SU CENTRO está actualmente dentro de un bloque destructible,
+    // o si el bloque hacia el que se mueve está destructible Y ya está invadiendo su espacio de colisión.
+    // Para simplificar y evitar que se ralentice estando en un pasillo libre,
+    // comprobamos solo la celda en la que está el fantasma.
+    if (gameMap->isDestructible(currentR, currentC)) {
+        step *= 0.35f;
+    }
+
+    return step;
+}
+
 EnemyDirection FantasmaMortal::findPathToPlayer() const {
     if (!gameMap) return EnemyDirection::NONE;
 
@@ -104,7 +123,7 @@ void FantasmaMortal::notifyBombNearby(glm::vec2 bombPos) {
     if (bombTurnCooldown > 0.0f) return;
 
     lastBombPos = bombPos;
-    bombAvoidTimer = 1.35f;
+    bombAvoidTimer = 1.85f;
 
     // Elegir una dirección cardinal estable alejándose de la bomba.
     glm::vec2 away = position - bombPos;
@@ -170,14 +189,12 @@ void FantasmaMortal::Update() {
         animFrame ^= 1;
     }
 
-    float step = speed * deltaTime;
-
     // Durante una ventana corta tras ver bomba, mantener la dirección elegida
     // para evitar oscilación izquierda-derecha.
     if (bombTurnCooldown > 0.0f && bombEscapeDir != EnemyDirection::NONE) {
         facing = bombEscapeDir;
         // Durante la ventana de reacción no se recalcula ruta, solo intenta avanzar en esa dirección.
-        tryMove(facing, step);
+        tryMove(facing, movementStepForDirection(facing));
 
         switch (facing) {
             case EnemyDirection::LEFT:
@@ -221,7 +238,7 @@ void FantasmaMortal::Update() {
 
         if (bestDir != EnemyDirection::NONE && bestGain >= -0.0001f) {
             facing = bestDir;
-            tryMove(facing, step);
+            tryMove(facing, movementStepForDirection(facing));
 
             switch (facing) {
                 case EnemyDirection::LEFT:
@@ -244,7 +261,7 @@ void FantasmaMortal::Update() {
     EnemyDirection toPlayer = findPathToPlayer();
 
     if (toPlayer != EnemyDirection::NONE) {
-        if (!tryMove(toPlayer, step)) {
+        if (!tryMove(toPlayer, movementStepForDirection(toPlayer))) {
             // Intentar dirección secundaria (eje perpendicular)
             float d;
             glm::vec2 targetPos = getClosestPlayerPos(d);
@@ -255,7 +272,7 @@ void FantasmaMortal::Update() {
             } else {
                 alt = (diff.x > 0.0f) ? EnemyDirection::RIGHT : EnemyDirection::LEFT;
             }
-            tryMove(alt, step);
+            tryMove(alt, movementStepForDirection(alt));
         }
     }
 

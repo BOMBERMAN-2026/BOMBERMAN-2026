@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -18,13 +18,24 @@
 #include "cpu_bomberman.hpp"
 #include "score_popup.hpp"
 
-
+#include <chrono>
+#include <thread>
 
 // ============================================================
 // Wrappers de audio — delegan al AudioManager (miniaudio)
 // ============================================================
 #include "audio_manager.hpp"
 
+// Para la carga asincrona de modelos 3d
+struct PendingModel {
+    std::string key;
+    std::string path;
+    TexturedMeshData meshData;
+    GLuint* vao; GLuint* vbo; GLuint* ebo; GLsizei* ic; GLuint* tex;
+};
+
+// Para la carga asincrona de modelos 3d
+std::vector<PendingModel> loadingQueue;
 
 
 // Llamada desde Bomb::detonate() en bomb.cpp
@@ -91,6 +102,8 @@ SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
 SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
 SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
+SpriteAtlas gBombRcAtlas;
+GLuint bombRcTexture = 0;
 SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
 SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
@@ -128,6 +141,7 @@ static const std::vector<std::string> kRankingVocab = {
 };
 
 static constexpr int kRankingMaxEntries = 7;
+static constexpr int kVsRankingMaxReasonableWins = 99;
 static const char* kHistoryRankingRelativePath = "resources/rankings/history_ranking.txt";
 static const char* kVsRankingRelativePath = "resources/rankings/vs_ranking.txt";
 static std::vector<HistoryRankingEntry> gHistoryRankingEntries;
@@ -598,7 +612,7 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
     if (!map) return false;
     // AABB simple alrededor del centro del tile. Ajustable.
     const float halfTile = map->getTileSize() / 2.0f;
-    const float r = halfTile * 0.70f;
+    const float r = halfTile * 0.95f;
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
@@ -607,8 +621,8 @@ static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, c
 static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
     if (!map || !bomb) return false;
     
-    // Asumimos un radio de colisi├│n del 45% del tile para la entidad
-    float entityRadius = map->getTileSize() * 0.45f;
+    // Radio de colision ajustado al cuerpo jugable, no al sprite visual completo.
+    float entityRadius = map->getTileSize() * 0.25f;
     float tileHalf = map->getTileSize() * 0.5f;
 
     for (const auto& seg : bomb->explosionSegments) {
@@ -647,6 +661,17 @@ static int countHostileEnemiesForPlayers() {
         ++count;
     }
     return count;
+}
+
+static bool hasAliveAllyCpuAgent() {
+    for (auto* enemy : gEnemies) {
+        if (!enemy) continue;
+        if (enemy->lifeState != EnemyLifeState::Alive) continue;
+        if (CpuBomberman::isAllyAgent(enemy)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 static bool isVsResolutionCinematic(CinematicType type) {
@@ -732,13 +757,13 @@ static void ensureSampleRankingFilesExist()
         std::ofstream vsOut(vsPath.c_str(), std::ios::trunc);
         if (vsOut.is_open()) {
             vsOut
-                << "NOVA;7;365\n"
-                << "RAY;6;341\n"
-                << "LUX;6;319\n"
-                << "ARGO;5;287\n"
-                << "KIRA;4;244\n"
-                << "ORBIT;3;208\n"
-                << "ION;3;193\n";
+                << "NOVA;3;365\n"
+                << "RAY;3;341\n"
+                << "LUX;3;319\n"
+                << "ARGO;2;287\n"
+                << "KIRA;2;244\n"
+                << "ORBIT;1;208\n"
+                << "ION;1;193\n";
         }
     }
 }
@@ -822,14 +847,15 @@ static void loadHistoryRankingEntries()
               });
 }
 
-static void loadVsRankingEntries()
+static bool loadVsRankingEntries()
 {
     gVsRankingEntries.clear();
+    bool prunedInvalidEntries = false;
 
     const std::string path = resolveAssetPath(kVsRankingRelativePath);
     std::ifstream file(path.c_str(), std::ios::binary);
     if (!file.is_open()) {
-        return;
+        return false;
     }
 
     std::string line;
@@ -857,14 +883,30 @@ static void loadVsRankingEntries()
             entry.wins = std::max(0, std::stoi(trimAscii(winsPart)));
             entry.aliveSeconds = std::max(0, std::stoi(trimAscii(aliveMsPart)));
         } catch (...) {
+            prunedInvalidEntries = true;
+            continue;
+        }
+
+        if (entry.wins <= 0 || entry.wins > kVsRankingMaxReasonableWins) {
+            prunedInvalidEntries = true;
             continue;
         }
 
         gVsRankingEntries.push_back(entry);
-        if ((int)gVsRankingEntries.size() >= kRankingMaxEntries) {
-            break;
-        }
     }
+
+    std::sort(gVsRankingEntries.begin(), gVsRankingEntries.end(),
+              [](const VsRankingEntry& a, const VsRankingEntry& b) {
+                  if (a.wins != b.wins) return a.wins > b.wins;
+                  return a.aliveSeconds > b.aliveSeconds;
+              });
+
+    if ((int)gVsRankingEntries.size() > kRankingMaxEntries) {
+        gVsRankingEntries.resize(kRankingMaxEntries);
+        prunedInvalidEntries = true;
+    }
+
+    return prunedInvalidEntries;
 }
 
 static bool saveHistoryRankingEntries()
@@ -902,14 +944,15 @@ static bool saveVsRankingEntries()
 }
 
 // Devuelve el indice de la entrada nueva en el ranking VS, o -1 si no entra en la tabla.
-static int updateVsRankingForCurrentRun(const std::vector<int>& playerScores, int aliveSeconds)
+static int updateVsRankingForCurrentRun(GameMode mode, const std::vector<int>& playerScores, int aliveSeconds, int& outPlayerOwner)
 {
     if (playerScores.empty()) return -1;
 
-    // El ganador es quien tiene mas victorias (scores[i] = wins en VS)
+    // En VS el ranking guarda rondas ganadas por jugadores humanos, no puntuacion.
+    const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
     int bestWins = -1;
     int bestIndex = 0;
-    for (int i = 0; i < (int)playerScores.size(); ++i) {
+    for (int i = 0; i < humanSlots && i < (int)playerScores.size(); ++i) {
         if (playerScores[i] > bestWins) {
             bestWins = playerScores[i];
             bestIndex = i;
@@ -928,6 +971,7 @@ static int updateVsRankingForCurrentRun(const std::vector<int>& playerScores, in
     entry.name = "";
     entry.wins = bestWins;
     entry.aliveSeconds = aliveSeconds;
+    outPlayerOwner = bestIndex + 1;
 
     gVsRankingEntries.push_back(entry);
     std::sort(gVsRankingEntries.begin(), gVsRankingEntries.end(),
@@ -1013,7 +1057,9 @@ static void refreshRankingData()
 {
     ensureSampleRankingFilesExist();
     loadHistoryRankingEntries();
-    loadVsRankingEntries();
+    if (loadVsRankingEntries()) {
+        saveVsRankingEntries();
+    }
 }
 
 uint32_t getHistoryRankingHighScore()
@@ -1459,22 +1505,15 @@ void CreateSphere()
     sphereIndexCount = sphereMesh->indexCount;
 }
 
-static bool createTexturedGlbModel(const std::string& meshCacheKey,
-                                   const std::string& modelPath,
-                                   GLuint& outVao,
-                                   GLuint& outVbo,
-                                   GLuint& outEbo,
-                                   GLsizei& outIndexCount,
-                                   GLuint& outTexture)
+static bool completeTexturedGlbModel(TexturedMeshData& meshData,
+                                    const std::string& meshCacheKey,
+                                    const std::string& modelPath,
+                                    GLuint& outVao,
+                                    GLuint& outVbo,
+                                    GLuint& outEbo,
+                                    GLsizei& outIndexCount,
+                                    GLuint& outTexture)
 {
-    TexturedMeshData meshData;
-    std::string loadError;
-    if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
-        std::cerr << "[Render] Aviso: no se pudo cargar GLB ('" << modelPath
-                  << "'): " << loadError << "\n";
-        return false;
-    }
-
     if (meshData.vertices.empty() || meshData.indices.empty()) {
         std::cerr << "[Render] Aviso: GLB sin datos renderizables: " << modelPath << "\n";
         return false;
@@ -1546,6 +1585,28 @@ static bool createTexturedGlbModel(const std::string& meshCacheKey,
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     return true;
+}
+
+void asyncLoadTask(const std::string& meshCacheKey,
+                    const std::string& modelPath,
+                    GLuint* outVao,
+                    GLuint* outVbo,
+                    GLuint* outEbo,
+                    GLsizei* outIndexCount,
+                    GLuint* outTexture) 
+{
+    TexturedMeshData meshData;
+    std::string loadError;
+    if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
+        std::cerr << "[Render] Aviso: no se pudo cargar GLB ('" << modelPath
+                  << "'): " << loadError << "\n";
+        return;
+    }
+
+    loadingQueue.push_back( {
+        meshCacheKey, modelPath, std::move(meshData),
+        outVao, outVbo, outEbo, outIndexCount, outTexture
+    } );
 }
 
 void CreateActorGlbModel(const std::string& modelPath)
@@ -1866,6 +1927,7 @@ void CreateDragonGlbModel(const std::string& modelPath)
                                  dragonGlbIndexCount,
                                  dragonGlbTexture);
 }
+
 
 void Compile3DShaders()
 {
@@ -2440,7 +2502,57 @@ void Game::ensureRenderResources() {
     CreateCube();
     CreateFloorVAO();
     CreateSphere();
+        auto start = std::chrono::high_resolution_clock::now();
 
+    std::thread t1 (asyncLoadTask, "actorGLB", resolveAssetPath(kPlayerGlbPath), &actorGlbVAO, &actorGlbVBO, &actorGlbEBO, &actorGlbIndexCount, &actorGlbTexture);
+    std::thread t2 (asyncLoadTask, "redActorGLB", resolveAssetPath(kRedPlayerGlbPath), &redActorGlbVAO, &redActorGlbVBO, &redActorGlbEBO, &redActorGlbIndexCount, &redActorGlbTexture);
+    std::thread t3 (asyncLoadTask, "leonGLB", resolveAssetPath(kLeonGlbPath), &leonGlbVAO, &leonGlbVBO, &leonGlbEBO, &leonGlbIndexCount, &leonGlbTexture);
+    std::thread t4 (asyncLoadTask, "fantasmaGLB", resolveAssetPath(kFantasmaGlbPath), &fantasmaGlbVAO, &fantasmaGlbVBO, &fantasmaGlbEBO, &fantasmaGlbIndexCount, &fantasmaGlbTexture);
+
+    std::thread t5 (asyncLoadTask, "bebeGLB", resolveAssetPath(kBebeGlbPath), &bebeGlbVAO, &bebeGlbVBO, &bebeGlbEBO, &bebeGlbIndexCount, &bebeGlbTexture);
+    std::thread t6 (asyncLoadTask, "babosaGLB", resolveAssetPath(kBabosaGlbPath), &babosaGlbVAO, &babosaGlbVBO, &babosaGlbEBO, &babosaGlbIndexCount, &babosaGlbTexture);
+    std::thread t7 (asyncLoadTask, "bombGLB", resolveAssetPath(kBombGlbPath), &bombGlbVAO, &bombGlbVBO, &bombGlbEBO, &bombGlbIndexCount, &bombGlbTexture);
+    std::thread t8 (asyncLoadTask, "flameGLB", resolveAssetPath(kFlameGlbPath), &flameGlbVAO, &flameGlbVBO, &flameGlbEBO, &flameGlbIndexCount, &flameGlbTexture);
+
+    std::thread t9 (asyncLoadTask, "flamePowerUpGLB", resolveAssetPath(kFlamePowerUpGlbPath), &flamePowerUpGlbVAO, &flamePowerUpGlbVBO, &flamePowerUpGlbEBO, &flamePowerUpGlbIndexCount, &flamePowerUpGlbTexture);
+    std::thread t10 (asyncLoadTask, "speedPowerUpGLB", resolveAssetPath(kSpeedPowerUpGlbPath), &speedPowerUpGlbVAO, &speedPowerUpGlbVBO, &speedPowerUpGlbEBO, &speedPowerUpGlbIndexCount, &speedPowerUpGlbTexture);
+    std::thread t11 (asyncLoadTask, "kingBomberGLB", resolveAssetPath(kKingBomberGlbPath), &kingBomberGlbVAO, &kingBomberGlbVBO, &kingBomberGlbEBO, &kingBomberGlbIndexCount, &kingBomberGlbTexture);
+    std::thread t12 (asyncLoadTask, "dronAzulGLB", resolveAssetPath(kDronAzulGlbPath), &dronAzulGlbVAO, &dronAzulGlbVBO, &dronAzulGlbEBO, &dronAzulGlbIndexCount, &dronAzulGlbTexture);
+
+    std::thread t13 (asyncLoadTask, "dronRosaGLB", resolveAssetPath(kFlamePowerUpGlbPath), &dronRosaGlbVAO, &dronRosaGlbVBO, &dronRosaGlbEBO, &dronRosaGlbIndexCount, &dronRosaGlbTexture);
+    std::thread t14 (asyncLoadTask, "dronVerdeGLB", resolveAssetPath(kSpeedPowerUpGlbPath), &dronVerdeGlbVAO, &dronVerdeGlbVBO, &dronVerdeGlbEBO, &dronVerdeGlbIndexCount, &dronVerdeGlbTexture);
+    std::thread t15 (asyncLoadTask, "dronAmarilloGLB", resolveAssetPath(kKingBomberGlbPath), &dronAmarilloGlbVAO, &dronAmarilloGlbVBO, &dronAmarilloGlbEBO, &dronAmarilloGlbIndexCount, &dronAmarilloGlbTexture);
+    std::thread t16 (asyncLoadTask, "solGLB", resolveAssetPath(kDronAzulGlbPath), &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
+
+    std::thread t17 (asyncLoadTask, "dragonGLB", resolveAssetPath(kDragonGlbPath), &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
+
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+
+    t5.join();
+    t6.join();
+    t7.join();
+    t8.join();
+
+    t9.join();
+    t10.join();
+    t11.join();
+    t12.join();
+
+    t13.join();
+    t14.join();
+    t15.join();
+    t16.join();
+
+    t17.join();
+
+    auto end = std::chrono::high_resolution_clock::now();
+
+    std::chrono::duration<float, std::milli> duration = end - start;
+
+    std::cout << "Tiempo total de carga de modelos: " << duration.count() << " ms" << std::endl;
     // --- Inicialización del Shadow Map FBO ---
     if (shadowMapFBO == 0) {
         const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
@@ -2490,6 +2602,7 @@ void Game::ensureRenderResources() {
     CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
     CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
     CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
+
     Compile3DShaders();
     Compile3DTexturedShaders();
     ensureOverlayWhiteTexture();
@@ -2650,6 +2763,17 @@ bool Game::allPlayersOutOfLives() const {
     for (auto* p : gPlayers) {
         if (!p) continue;
         if (p->lives > 0) return false;
+    }
+    return true;
+}
+
+static bool allPlayersDeathAnimationsFinished(const std::vector<Player*>& players)
+{
+    for (auto* p : players) {
+        if (!p) continue;
+        if (!p->isDeathAnimationFinished()) {
+            return false;
+        }
     }
     return true;
 }
@@ -2870,11 +2994,12 @@ void Game::enterRankingScreen() {
     const bool vsMode = VersusMode::isVersusMode(mode);
     if (vsMode) {
         // Ranking VS: actualizar con victorias + tiempo vivo acumulado
-        int idx = updateVsRankingForCurrentRun(playerScores, (int)vsAliveSeconds);
+        int owner = 1;
+        int idx = updateVsRankingForCurrentRun(mode, playerScores, (int)vsAliveSeconds, owner);
         if (idx != -1) {
             isEnteringRankingName = true;
             rankingEntryIndex = idx;
-            rankingPlayerOwner = 1; // en VS siempre controla P1 (o el humano ganador)
+            rankingPlayerOwner = owner;
         }
     } else {
         // Ranking Historia
@@ -3313,6 +3438,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     lastDirKey = GLFW_KEY_UNKNOWN;
     lastDirKeyP2 = GLFW_KEY_UNKNOWN;
 
+    CpuBomberman::resetRoundDeathTracking();
+
     // Guardar progreso a preservar (Historia y VS; en Custom se reinicia siempre).
     std::vector<int> savedLives;
     if (preserveLivesAndScore && !custom) {
@@ -3330,6 +3457,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     levelAdvanceTimer = 0.0f;
     timeUpSequenceActive = false;
     timeUpTimer = 0.0f;
+    fastMusicActive = false;
+    AudioManager::get().setBgmPitch(1.0f);
 
     // Cargar / recargar mapa.
     if (!gameMap) gameMap = new GameMap();
@@ -3388,6 +3517,14 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json");
     if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
         std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+    }
+
+    std::string bombRcAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasRadioBomb.json");
+    if (!loadSpriteAtlasMinimal(bombRcAtlasPath, gBombRcAtlas)) {
+        std::cerr << "Error cargando atlas radio bomb." << std::endl;
+    }
+    if (bombRcTexture == 0) {
+        bombRcTexture = LoadTexture(resolveAssetPath("resources/sprites/bomba_radio_control.png").c_str());
     }
 
     if (!gameMap->loadFromFile(mapLevelPath)) {
@@ -3457,16 +3594,24 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         if (preserveLivesAndScore && i < (int)savedLives.size()) {
             p->lives = savedLives[i];
             
-            // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente
+            // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente.
             if (versus && p->lives <= 0) {
                 p->lifeState = PlayerLifeState::DyingByEnemy;
                 p->deathFrame = 7; // Último frame de animación de muerte
                 p->currentSpriteName = p->spritePrefix + ".muerto.7";
                 p->isWalking = false;
+            } else if (versus && p->lives > 0) {
+                // Resetear a Alive si el jugador aún tiene vidas (nueva ronda en VS)
+                p->lifeState = PlayerLifeState::Alive;
+                p->isWalking = false;
+                p->currentSpriteName = p->spritePrefix + ".abajo.0";
             }
         } else if (versus) {
-            // En VS, los jugadores inician con 4 vidas (vs historia con 3)
+            // En VS todos los jugadores tienen vidas persistentes; el encuentro termina cuando todos llegan a 0.
             p->lives = 4;
+        } else if (custom) {
+            // En Custom Game hay un solo nivel: cada jugador empieza con 1 vida.
+            p->lives = 1;
         }
 
         gPlayers.push_back(p);
@@ -3492,31 +3637,31 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
             Enemy* enemy = nullptr;
             switch (s.type) {
                 case EnemySpawnType::Leon: {
-                    auto* e = new Leon(pos, kDefaultPlayerSize, /*speed=*/0.10f);
+                    auto* e = new Leon(pos, kDefaultPlayerSize, /*speed=*/0.18f);
                     e->currentSpriteName = "leon.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::Babosa: {
-                    auto* e = new Babosa(pos, kDefaultPlayerSize, /*speed=*/0.06f);
+                    auto* e = new Babosa(pos, kDefaultPlayerSize, /*speed=*/0.13f);
                     e->currentSpriteName = "babosa.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::BebeLloron: {
-                    auto* e = new BebeLloron(pos, kDefaultPlayerSize, /*speed=*/0.08f);
+                    auto* e = new BebeLloron(pos, kDefaultPlayerSize, /*speed=*/0.16f);
                     e->currentSpriteName = "bebe.derecha.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::FantasmaMortal: {
-                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize, /*speed=*/0.11f);
+                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize, /*speed=*/0.20f);
                     e->currentSpriteName = "fantasma.derecha.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::SolPervertido: {
-                    auto* e = new SolPervertido(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    auto* e = new SolPervertido(pos, kDefaultPlayerSize, /*speed=*/0.15f);
                     e->currentSpriteName = "sol.grande.0";
                     enemy = e;
                     break;
@@ -3528,31 +3673,31 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                     break;
                 }
                 case EnemySpawnType::DronRosa: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronrosa.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronVerde: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronverde.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronAmarillo: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronamarillo.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronAzul: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.09f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
                     e->currentSpriteName = "dronazul.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DragonJoven: {
-                    auto* e = new DragonJoven(pos, kDefaultPlayerSize, /*speed=*/0.07f);
+                    auto* e = new DragonJoven(pos, kDefaultPlayerSize, /*speed=*/0.15f);
                     e->currentSpriteName = "dragon.abajo.0";
                     enemy = e;
                     break;
@@ -3575,8 +3720,42 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     // Power-Ups (texturas: se cargan una vez por instancia de GameMap)
     gameMap->loadPowerUpTextures();
-    if (!versus) {
-        gameMap->placePowerUps();
+    // Colocar power-ups usando la lógica de GameMap:
+    // Si el nivel define `powerup` se usan esos; si no, se hace colocación aleatoria.
+    // En Versus, solo se colocan power-ups (sin items de puntuación).
+    // En Custom, excluir además power-up ExtraLife.
+    gameMap->placePowerUps(versus, custom);
+
+    // En Versus, resetear power-ups de jugadores humanos al inicio de cada ronda.
+    if (versus) {
+        for (int i = 0; i < (int)gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p) continue;
+            const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
+            if (i < humanSlots) {
+                // Jugador humano: resetear power-ups acumulados.
+                p->maxBombs = 1;
+                p->explosionPower = 2;
+                p->baseSpeed = kDefaultPlayerSpeed;
+                p->hasRemoteControl = false;
+            }
+        }
+    }
+
+    // En Versus, resetear power-ups de jugadores humanos al inicio de cada ronda.
+    if (versus) {
+        for (int i = 0; i < (int)gPlayers.size(); ++i) {
+            Player* p = gPlayers[i];
+            if (!p) continue;
+            const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
+            if (i < humanSlots) {
+                // Jugador humano: resetear power-ups acumulados.
+                p->maxBombs = 1;
+                p->explosionPower = 2;
+                p->baseSpeed = kDefaultPlayerSpeed;
+                p->hasRemoteControl = false;
+            }
+        }
     }
 }
 
@@ -3584,6 +3763,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 void Game::startNewRun(GameMode newMode) {
     customGameMode.deactivate();
     mode = newMode;
+    CpuBomberman::resetEvolutionState();
     currentLevelIndex = 0;
     versusRoundNumber = 1;
     currentLevelHadEnemies = false;
@@ -3657,13 +3837,7 @@ void Game::advanceToNextLevel() {
     const bool versus = VersusMode::isVersusMode(mode);
 
     if (versus) {
-        // VS: si alguien llega al límite de wins, termina el encuentro (por ahora: volver al menú).
-        if (VersusMode::hasMatchWinner(playerScores)) {
-            returnToMenuFromGame(/*resetRun=*/true);
-            return;
-        }
-
-        // VS arcade: modo infinito -> ciclar rondas.
+        // VS: las wins solo cuentan para HUD/ranking. El encuentro termina al agotar vidas.
         // TODO: Cambiar esto para que la pantalla y audio de carga salga al empezar cada nivel
         versusRoundNumber += 1;
         currentLevelIndex = VersusMode::nextLevelIndex(currentLevelIndex);
@@ -4448,6 +4622,10 @@ void Game::processInput() {
         if (this->inGameMenu.controlsMenu.showControlsMenu) {
             // TODO, cambiar el lastkey
             this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+
+            lastDirKey = GLFW_KEY_UNKNOWN;
+            lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+
             return;
         }
 
@@ -4481,6 +4659,8 @@ void Game::processInput() {
 
         lastDirKey = GLFW_KEY_UNKNOWN;
         lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+        keys[inGameMenu.controlsMenu.leftKey_P1] = GLFW_REPEAT;
+        keys[inGameMenu.controlsMenu.rightKey_P1] = GLFW_REPEAT;
 
         return; 
     }
@@ -5612,11 +5792,19 @@ void Game::update() {
             for (auto* p : gPlayers) {
                 if (!p || !p->isAlive()) continue;
                 if (explosionHitsEntity(gameMap, b, p->position)) {
+                    CpuBomberman::DeathReason deathReason = CpuBomberman::DeathReason::ExplosionOther;
+                    if (b && b->ownerIndex == p->playerId) {
+                        deathReason = CpuBomberman::DeathReason::ExplosionSelfBomb;
+                    }
+                    CpuBomberman::recordCpuDeath(p->playerId, deathReason);
                     p->killByExplosion();
                 }
             }
             for (auto* enemy : gEnemies) {
                 if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
+                if (b && b->ownerIndex == kBombOwnerKingBomberSpecial && dynamic_cast<KingBomber*>(enemy) != nullptr) {
+                    continue;
+                }
 
                 const bool hostileEnemy = isHostileEnemyForPlayers(enemy);
                 if (!hostileEnemy && b && b->ownerIndex >= 0) {
@@ -5634,7 +5822,11 @@ void Game::update() {
                             int pointsEarned = enemy->scoreValue * multiplier;
                             b->enemiesKilled++;
 
-                            playerScores[b->ownerIndex] += pointsEarned;
+                            // En modo Versus `playerScores` representa wins (no puntos),
+                            // por lo que no debemos sumar puntos de enemigos aquí.
+                            if (!VersusMode::isVersusMode(mode)) {
+                                playerScores[b->ownerIndex] += pointsEarned;
+                            }
                             ScorePopup::spawn(enemy->position, enemy->scoreValue, multiplier, enemy->isBoss);
                         }
                     }
@@ -5667,6 +5859,7 @@ void Game::update() {
         for (auto* p : gPlayers) {
             if (!p || !p->isAlive()) continue;
             if (overlapsEnemyPlayer(gameMap, enemy->position, p->position)) {
+                CpuBomberman::recordCpuDeath(p->playerId, CpuBomberman::DeathReason::EnemyContact);
                 p->killByEnemy();
             }
         }
@@ -5675,13 +5868,18 @@ void Game::update() {
     // ========== Transiciones: Game Over / Next Level ==========
     if (this->state == GAME_PLAYING) {
         if (VersusMode::isVersusMode(mode)) {
+            auto evolveVsCpu = [&](bool playerWon) {
+                CpuBomberman::evolveCpuPlayers(playerWon, CpuBomberman::consumeRoundDeathReasons());
+            };
+
             const int survivingPlayers = VersusMode::countPlayersStillInMatch(gPlayers);
             const int hostileEnemiesAlive = countHostileEnemiesForPlayers();
             const bool noHostileEnemiesAlive = (hostileEnemiesAlive == 0);
             const bool timeUp = (levelTimeRemaining <= 0.0f);
+            const bool deathAnimationsFinished = allPlayersDeathAnimationsFinished(gPlayers);
+            const bool vsRunOutOfLives = VersusMode::humansOut(mode, gPlayers);
 
             int aliveHumans = 0;
-            int survivingHumans = 0;
             const int humanSlots = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
             for (int i = 0; i < humanSlots && i < (int)gPlayers.size(); ++i) {
                 Player* p = gPlayers[i];
@@ -5689,13 +5887,10 @@ void Game::update() {
                 if (p->isAlive()) {
                     ++aliveHumans;
                 }
-                if (!p->isGameOver()) {
-                    ++survivingHumans;
-                }
             }
 
             // Victoria: queda un único jugador en pie y ya no quedan enemigos.
-            if (survivingPlayers == 1 && noHostileEnemiesAlive) {
+            if (deathAnimationsFinished && survivingPlayers == 1 && noHostileEnemiesAlive) {
                 const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
                 if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
                     playerScores[winnerIndex] += 1;
@@ -5706,6 +5901,7 @@ void Game::update() {
                     (mode == GameMode::VsTwoPlayers && winnerIndex == 1);
 
                 if (winnerIsHuman) {
+                    evolveVsCpu(/*playerWon=*/true);
                     vsCinematicPostAction = VsCinematicPostAction::AdvanceNextLevel;
 
                     const bool winnerIsP2 = (winnerIndex == 1);
@@ -5717,11 +5913,12 @@ void Game::update() {
                                           cinematicPath,
                                           winnerIndex);
                 } else {
+                    evolveVsCpu(/*playerWon=*/false);
                     // Si gana un CPU/rival: derrota de ronda.
-                    // Solo termina la partida si ya no queda ningún humano con vidas.
-                    vsCinematicPostAction = (survivingHumans == 0)
+                    // Solo termina la run si ya no queda ningun jugador humano con vidas.
+                    vsCinematicPostAction = vsRunOutOfLives
                         ? VsCinematicPostAction::ReturnToMenu
-                        : VsCinematicPostAction::RestartCurrentLevel;
+                        : VsCinematicPostAction::AdvanceNextLevel;
                     startVsRoundCinematic(CinematicType::VsDefeat,
                                           resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
                                           /*winnerIndex=*/-1);
@@ -5730,10 +5927,11 @@ void Game::update() {
             }
 
             // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
-            if (survivingPlayers == 0 && noHostileEnemiesAlive) {
-                vsCinematicPostAction = (survivingHumans == 0)
+            if (deathAnimationsFinished && survivingPlayers == 0 && noHostileEnemiesAlive) {
+                evolveVsCpu(/*playerWon=*/false);
+                vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::RestartCurrentLevel;
+                    : VsCinematicPostAction::AdvanceNextLevel;
 
                 // Muerte simultánea total siempre se considera empate visualmente,
                 // aunque la post-acción pueda cerrar partida si no quedan vidas.
@@ -5744,13 +5942,14 @@ void Game::update() {
             }
 
             // Sin humanos vivos durante la ronda:
-            // - Si aún les quedan vidas, se reinicia el nivel.
-            // - Si ya no quedan vidas, termina la partida y vuelve al menú.
+            // - Si aun quedan humanos con vidas, se avanza la ronda.
+            // - Si los humanos estan sin vidas, termina la partida y muestra ranking.
             // En ambos casos, la resolución visual de la ronda es derrota.
-            if (aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
-                vsCinematicPostAction = (survivingHumans == 0)
+            if (deathAnimationsFinished && aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
+                evolveVsCpu(/*playerWon=*/false);
+                vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::RestartCurrentLevel;
+                    : VsCinematicPostAction::AdvanceNextLevel;
 
                 startVsRoundCinematic(CinematicType::VsDefeat,
                                       resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
@@ -5759,19 +5958,28 @@ void Game::update() {
             }
 
             // Time Up "solo tiempo": empate sin descuento de vidas.
-            if (timeUp) {
-                vsCinematicPostAction = (survivingHumans == 0)
+            if (deathAnimationsFinished && timeUp) {
+                evolveVsCpu(/*playerWon=*/false);
+                vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::RestartCurrentLevel;
-                startVsRoundCinematic((survivingHumans == 0) ? CinematicType::VsDefeat : CinematicType::VsDraw,
-                                      resolveAssetPath((survivingHumans == 0)
+                    : VsCinematicPostAction::AdvanceNextLevel;
+                startVsRoundCinematic(vsRunOutOfLives ? CinematicType::VsDefeat : CinematicType::VsDraw,
+                                      resolveAssetPath(vsRunOutOfLives
                                           ? "resources/video/vsMode/VsModeDefeat.mp4"
                                           : "resources/video/vsMode/VsModeDraw.mp4"),
                                       /*winnerIndex=*/-1);
                 return;
             }
         } else {
-            if (allPlayersOutOfLives()) {
+            const bool customOnePlayerCpuCoop = customGameMode.isActive()
+                && customGameMode.isOnePlayerPlusCpu()
+                && customGameMode.isCooperativeMode();
+
+            const bool shouldStartContinue = customOnePlayerCpuCoop
+                ? (allPlayersOutOfLives() && allPlayersDeathAnimationsFinished(gPlayers) && !hasAliveAllyCpuAgent())
+                : (allPlayersOutOfLives() && allPlayersDeathAnimationsFinished(gPlayers));
+
+            if (shouldStartContinue) {
                 if (!continueSequenceActive) {
                     startContinueSequence();
                 }
@@ -5779,13 +5987,14 @@ void Game::update() {
                 // Si el tiempo se acaba y quedan enemigos: TIME UP.
                 if (!timeUpSequenceActive && !allEnemiesCleared()
                     && levelTimeRemaining <= 0.0f
-                    && !customGameMode.isActive()) {
+                    && !customGameMode.isActive()
+                    && allPlayersDeathAnimationsFinished(gPlayers)) {
                     startTimeUpSequence();
                 }
 
                 // Si se ha completado el nivel, esperamos un momento antes de avanzar.
                 if (!pendingLevelAdvance) {
-                    if (allEnemiesCleared()) {
+                    if (allEnemiesCleared() && allPlayersDeathAnimationsFinished(gPlayers)) {
                         pendingLevelAdvance = true;
                         levelAdvanceTimer = 0.0f;
                         AudioManager::get().playBgm(resolveAssetPath("resources/sounds/04 Stage Clear.mp3"), false);
@@ -5819,6 +6028,16 @@ void Game::update() {
     if (!(customGameMode.isActive() && customGameMode.isInfiniteTime())) {
         levelTimeRemaining -= deltaTime;
         if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
+
+        // Aceleración de música si queda 1 minuto o menos
+        if (this->state == GAME_PLAYING && levelTimeRemaining <= 60.0f) {
+            fastMusicActive = true;
+            AudioManager::get().setBgmPitch(1.25f); // Forzar siempre si el tiempo es bajo (corrige desmuteo)
+        } else if (this->state == GAME_PLAYING && fastMusicActive) {
+            // Si el tiempo vuelve a ser > 60 (p.ej. por un reset), volver a la normalidad
+            fastMusicActive = false;
+            AudioManager::get().setBgmPitch(1.0f);
+        }
     }
 
     // Actualizar secuencia TIME UP si esta activa.
@@ -7899,8 +8118,15 @@ void Game::render2D() {
 void Game::render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glViewport(0, 0, WIDTH, HEIGHT);
+    
+    if (loadingQueue.size() > 0) {
+        auto it = loadingQueue.begin();
+        completeTexturedGlbModel(it->meshData, it->key, it->path, *(it->vao), *(it->vbo), *(it->ebo), *(it->ic), *(it->tex));
+        std::cout << "Modelo cargado y subido a GPU: " << it->path << std::endl;
+        it = loadingQueue.erase(it); // Quitar de la cola
+    }
 
-    // ========== MENU ==========
+        // ========== MENU ==========
     if (this->state == GAME_MENU) {
         // Menú siempre se dibuja en 2D puro: limpiar buffers y desactivar estados heredados de 3D.
         glDisable(GL_SCISSOR_TEST);

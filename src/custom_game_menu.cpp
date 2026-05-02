@@ -20,7 +20,7 @@ constexpr float kCanvasWidth = 1920.0f;
 constexpr float kCanvasHeight = 1080.0f;
 
 constexpr int kMenu1Rows = 5;
-constexpr int kEnemyTypeCount = 9;
+constexpr int kEnemyTypeCount = 11;
 constexpr int kEnemyTotalMax = 12;
 
 const std::array<float, kMenu1Rows> kMenu1ArrowXPixels = {
@@ -43,15 +43,17 @@ const std::array<float, kMenu1Rows> kMenu1ArrowYPixels = {
 constexpr float kMenuBombSizePixels = 108.0f;
 
 const std::array<glm::vec2, kEnemyTypeCount> kEnemyCounterCenters = {
-    glm::vec2(560.0f, 340.0f),
-    glm::vec2(1010.0f, 340.0f),
-    glm::vec2(1450.0f, 340.0f),
-    glm::vec2(560.0f, 555.0f),
-    glm::vec2(1010.0f, 555.0f),
-    glm::vec2(1450.0f, 555.0f),
-    glm::vec2(560.0f, 765.0f),
-    glm::vec2(1010.0f, 765.0f),
-    glm::vec2(1450.0f, 765.0f)
+    glm::vec2(360.0f, 340.0f),
+    glm::vec2(810.0f, 340.0f),
+    glm::vec2(1250.0f, 340.0f),
+    glm::vec2(1690.0f, 340.0f),
+    glm::vec2(360.0f, 555.0f),
+    glm::vec2(810.0f, 555.0f),
+    glm::vec2(1250.0f, 555.0f),
+    glm::vec2(1690.0f, 555.0f),
+    glm::vec2(360.0f, 765.0f),
+    glm::vec2(810.0f, 765.0f),
+    glm::vec2(1250.0f, 765.0f)
 };
 
 const std::array<std::string, 5> kMapSpriteNames = {
@@ -107,7 +109,7 @@ CustomGameMenu::CustomGameMenu()
     menu2ArrowAnimTimer(0.0f),
     menu2SelectedWaitTimer(0.0f),
       enemyTypeSelection(0),
-      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0}),
+      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       shouldGoToMenu2(false),
       shouldReturnToMainMenu(false),
       shouldStartCustomGame(false),
@@ -156,7 +158,7 @@ void CustomGameMenu::resetToDefaults() {
     menu2ArrowAnimTimer = 0.0f;
     menu2SelectedWaitTimer = 0.0f;
     enemyTypeSelection = 0;
-    enemyCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0};
+    enemyCounts = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
     resetFlowFlags();
 }
@@ -219,7 +221,7 @@ void CustomGameMenu::initMenu2() {
     resetFlowFlags();
 
     if (menu2BackgroundTexture == 0) {
-        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame.jpg").c_str());
+        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame-v3.jpg").c_str());
         if (menu2BackgroundTexture == 0) {
             std::cerr << "Error cargando Menu2CustomGame.jpg\n";
         }
@@ -548,11 +550,13 @@ void CustomGameMenu::processInputMenu1(std::map<int, int>& keys, ControlsMenu& c
 
                 if (settings.players == CustomPlayersOption::OnePlayer) {
                     settings.teamMode = CustomTeamModeOption::Versus;
+                } else if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
+                    settings.teamMode = CustomTeamModeOption::Cooperative;
                 }
                 break;
             }
             case 1: {
-                if (settings.players != CustomPlayersOption::OnePlayer) {
+                if (settings.players == CustomPlayersOption::TwoPlayers) {
                     settings.teamMode = (settings.teamMode == CustomTeamModeOption::Versus)
                         ? CustomTeamModeOption::Cooperative
                         : CustomTeamModeOption::Versus;
@@ -731,16 +735,19 @@ void CustomGameMenu::renderMenu1(GLuint VAO,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX, whiteColor);
 
     // Grupo versus/cooperativo.
-    const bool modeEditable = (settings.players != CustomPlayersOption::OnePlayer);
+    const bool modeEditable = (settings.players == CustomPlayersOption::TwoPlayers);
     const bool vsSelected = modeEditable && (settings.teamMode == CustomTeamModeOption::Versus);
-    const bool coopSelected = modeEditable && (settings.teamMode == CustomTeamModeOption::Cooperative);
+    const bool coopSelected = (settings.teamMode == CustomTeamModeOption::Cooperative);
+    const glm::vec4 disabledTint(0.65f, 0.65f, 0.65f, 1.0f);
+    const glm::vec4 vsTint = modeEditable ? whiteColor : disabledTint;
+    const glm::vec4 coopTint = (modeEditable || is1PComp) ? whiteColor : disabledTint;
 
     drawAtlasSprite(vsSelected ? "Vs_Ama" : "Vs_Bla", 800.0f, 365.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX,
-                    modeEditable ? whiteColor : glm::vec4(0.65f, 0.65f, 0.65f, 1.0f));
+                    vsTint);
     drawAtlasSprite(coopSelected ? "Coop_Ama" : "Coop_Bla", 1240.0f, 365.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX,
-                    modeEditable ? whiteColor : glm::vec4(0.65f, 0.65f, 0.65f, 1.0f));
+                    coopTint);
 
     // Grupo de tiempo limite.
     const bool t1 = (settings.timeLimit == CustomTimeLimitOption::OneMinute);

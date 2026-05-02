@@ -52,7 +52,7 @@ int clampMapIndex(int index) {
 CustomGameMode::CustomGameMode()
     : active(false),
       settings(),
-      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0}),
+      enemyCounts({0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
       playerCount(1),
       mapIndex(0),
       stageNumber(1),
@@ -63,8 +63,13 @@ CustomGameMode::CustomGameMode()
 }
 
 void CustomGameMode::activate(const CustomGameSettings& inSettings,
-                              const std::array<int, 9>& inEnemyCounts) {
+                              const std::array<int, 11>& inEnemyCounts) {
     settings = inSettings;
+
+    if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
+        settings.teamMode = CustomTeamModeOption::Cooperative;
+    }
+
     enemyCounts = inEnemyCounts;
 
     mapIndex = clampMapIndex(settings.mapIndex);
@@ -179,17 +184,21 @@ std::vector<CustomGameMode::CustomEnemyKind> CustomGameMode::buildEnemyQueue() c
     queue.reserve(kMaxEnemySlots);
 
     // Orden solicitado en Menu2:
-    // 1) Bomberman enemigo
-    // 2) Leon
-    // 3) Bebe lloron
-    // 4) Babosa
-    // 5) Fantasma
-    // 6) Sol
-    // 7) Dragon
-    // 8) Drones
-    // 9) KingBomberman
-    const std::array<CustomEnemyKind, 9> indexToKind = {
-        CustomEnemyKind::BombermanEnemy,
+    // 1) Bomberman facil
+    // 2) Bomberman medio
+    // 3) Bomberman dificil
+    // 4) Leon
+    // 5) Bebe lloron
+    // 6) Babosa
+    // 7) Fantasma
+    // 8) Sol
+    // 9) Dragon
+    // 10) Drones
+    // 11) KingBomberman
+    const std::array<CustomEnemyKind, 11> indexToKind = {
+        CustomEnemyKind::BombermanEasy,
+        CustomEnemyKind::BombermanMedium,
+        CustomEnemyKind::BombermanHard,
         CustomEnemyKind::Leon,
         CustomEnemyKind::BebeLloron,
         CustomEnemyKind::Babosa,
@@ -217,54 +226,58 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
                                            const glm::vec2& position,
                                            const glm::vec2& enemySize,
                                            float defaultPlayerSpeed,
-                                           int& bomberDifficultyCursor,
                                            int& droneColorCursor) const {
+    auto createBomberEnemy = [&](CpuBomberman::Difficulty difficulty, const std::string& prefixOverride = "jugadoramarillo") -> Enemy* {
+        const std::string prefix = prefixOverride;
+        const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
+
+        CpuBomberman::Agent* enemy = new CpuBomberman::Agent(position,
+                                                              enemySize,
+                                                              bomberSpeed,
+                                                              CpuBomberman::TeamAffiliation::Enemy,
+                                                              difficulty,
+                                                              prefix);
+        enemy->currentSpriteName = prefix + ".abajo.0";
+        return enemy;
+    };
+
     switch (kind) {
-        case CustomEnemyKind::BombermanEnemy: {
-            const std::string prefix = "jugadoramarillo";
-
-            const size_t difficultyIndex = std::min<size_t>(settings.enemyBombermanDifficulties.size() - 1,
-                                                            static_cast<size_t>(std::max(0, bomberDifficultyCursor)));
-            const CpuBomberman::Difficulty difficulty = settings.enemyBombermanDifficulties[difficultyIndex];
-            bomberDifficultyCursor += 1;
-
-            const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
-            CpuBomberman::Agent* enemy = new CpuBomberman::Agent(position,
-                                                                  enemySize,
-                                                                  bomberSpeed,
-                                                                  CpuBomberman::TeamAffiliation::Enemy,
-                                                                  difficulty,
-                                                                  prefix);
-            enemy->currentSpriteName = prefix + ".abajo.0";
-            return enemy;
-        }
+        case CustomEnemyKind::BombermanEasy:
+            // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Easy);
+            return createBomberEnemy(CpuBomberman::Difficulty::Easy, "jugadorrojo");
+        case CustomEnemyKind::BombermanMedium:
+            // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Medium);
+            return createBomberEnemy(CpuBomberman::Difficulty::Medium, "jugadoramarillo");
+        case CustomEnemyKind::BombermanHard:
+            // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Hard);
+            return createBomberEnemy(CpuBomberman::Difficulty::Hard, "jugadorazul");
         case CustomEnemyKind::Leon: {
-            Leon* enemy = new Leon(position, enemySize, 0.10f);
+            Leon* enemy = new Leon(position, enemySize, 0.18f);
             enemy->currentSpriteName = "leon.abajo.0";
             return enemy;
         }
         case CustomEnemyKind::BebeLloron: {
-            BebeLloron* enemy = new BebeLloron(position, enemySize, 0.08f);
+            BebeLloron* enemy = new BebeLloron(position, enemySize, 0.16f);
             enemy->currentSpriteName = "bebe.derecha.0";
             return enemy;
         }
         case CustomEnemyKind::Babosa: {
-            Babosa* enemy = new Babosa(position, enemySize, 0.06f);
+            Babosa* enemy = new Babosa(position, enemySize, 0.13f);
             enemy->currentSpriteName = "babosa.abajo.0";
             return enemy;
         }
         case CustomEnemyKind::Fantasma: {
-            FantasmaMortal* enemy = new FantasmaMortal(position, enemySize, 0.11f);
+            FantasmaMortal* enemy = new FantasmaMortal(position, enemySize, 0.20f);
             enemy->currentSpriteName = "fantasma.derecha.0";
             return enemy;
         }
         case CustomEnemyKind::Sol: {
-            SolPervertido* enemy = new SolPervertido(position, enemySize, 0.07f);
+            SolPervertido* enemy = new SolPervertido(position, enemySize, 0.15f);
             enemy->currentSpriteName = "sol.grande.0";
             return enemy;
         }
         case CustomEnemyKind::Dragon: {
-            DragonJoven* enemy = new DragonJoven(position, enemySize, 0.07f);
+            DragonJoven* enemy = new DragonJoven(position, enemySize, 0.15f);
             enemy->currentSpriteName = "dragon.abajo.0";
             return enemy;
         }
@@ -276,7 +289,7 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
                 "dronazul.abajo.0"
             };
 
-            DronBombardero* enemy = new DronBombardero(position, enemySize, 0.09f);
+            DronBombardero* enemy = new DronBombardero(position, enemySize, 0.17f);
             enemy->currentSpriteName = kDroneSprites[droneColorCursor % 4];
             droneColorCursor += 1;
             return enemy;
@@ -302,17 +315,12 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
 
     // 1P+Comp: crea Bomberman rojo CPU como segundo jugador no humano.
     if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
-        const bool cooperative = (settings.teamMode == CustomTeamModeOption::Cooperative);
-        const CpuBomberman::TeamAffiliation affiliation = cooperative
-            ? CpuBomberman::TeamAffiliation::Ally
-            : CpuBomberman::TeamAffiliation::Enemy;
-
         const glm::vec2 cpuSpawnPos = gameMap->getSpawnPosition(1);
         const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
         CpuBomberman::Agent* companion = new CpuBomberman::Agent(cpuSpawnPos,
                                                                   enemySize,
                                                                   bomberSpeed,
-                                                                  affiliation,
+                                                                  CpuBomberman::TeamAffiliation::Ally,
                                                                   settings.allyCpuDifficulty,
                                                                   "jugadorazul");
         companion->currentSpriteName = "jugadorazul.abajo.0";
@@ -332,7 +340,6 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
     }
 
     const int spawnCount = std::min(static_cast<int>(slots.size()), static_cast<int>(queue.size()));
-    int bomberDifficultyCursor = 0;
     int droneColorCursor = 0;
 
     for (int i = 0; i < spawnCount; ++i) {
@@ -349,7 +356,6 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
                                            pos,
                                            enemySize,
                                            defaultPlayerSpeed,
-                                           bomberDifficultyCursor,
                                            droneColorCursor);
         if (!enemy) {
             continue;

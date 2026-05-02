@@ -28,6 +28,10 @@ enum class BombState {
     DONE       // Explosión terminada, lista para eliminar.
 };
 
+static const int kBombOwnerNone = -1;
+static const int kBombOwnerKingBomber = -2;
+static const int kBombOwnerKingBomberSpecial = -3;
+
 struct ExplosionSegment {
     glm::vec2 pos;          // Centro del tile en NDC
     std::string baseName;   // "explosion", "explosion_mid", "explosion_end"
@@ -54,7 +58,7 @@ public:
     float explodeInterval;  // Tiempo entre frames de explosión
     std::string currentSpriteName; // Sprite actual en el atlas
 
-    int ownerIndex;         // Índice del jugador que la colocó (0 o 1)
+    int ownerIndex;         // Índice del jugador que la colocó (0 o 1), -1 si no tiene dueño.
     int enemiesKilled;      // Contador de enemigos muertos por esta bomba para los multiplicadores
 
     // Bloqueo de paso (tile-based).

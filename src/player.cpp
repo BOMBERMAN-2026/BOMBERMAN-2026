@@ -31,6 +31,7 @@ extern GameMap* gameMap;
 
 namespace {
 
+// Valor de puntuación de los items coleccionables que no alteran el gameplay.
 int scoreValueForItem(PowerUpType type) {
     switch (type) {
         case PowerUpType::Matches: return 5000;
@@ -122,6 +123,7 @@ Player::~Player() {}
 
 // ============================== Animación ==============================
 
+// Convierte la fase de andar a un frame concreto del sprite de movimiento.
 static int walkPhaseToFrameIndex(int phase)
 {
     switch (phase & 3) {
@@ -134,6 +136,7 @@ static int walkPhaseToFrameIndex(int phase)
 }
 
 void Player::setSpriteFromDirAndFrame(GLint dirKey, int frameIndex)
+// Comprueba si una casilla ya queda bloqueada por una bomba activa.
 {
     std::string dirStr = "abajo";
     this->flipX = 0.0f; // Por defecto no espejar
@@ -254,8 +257,7 @@ void Player::updateDeathAnimation() {
         // Si no quedan vidas, nunca se respawnea.
         // Importante: fijar el sprite al último frame de muerte para no caer en el
         // sprite anterior (p.ej. mirando abajo) si el deltaTime hace saltar frames.
-        const bool disableRespawnForVs =
-            (bomberman != nullptr) && VersusMode::isVersusMode(bomberman->mode);
+        const bool disableRespawnForVs = (bomberman != nullptr) && VersusMode::isVersusMode(bomberman->mode);
         if (lives <= 0 || disableRespawnForVs) {
             pendingRespawn = false;
             deathFrame = lastFrame;
@@ -267,6 +269,7 @@ void Player::updateDeathAnimation() {
             return;
         }
 
+        // Fuera de Versus (Historia), respawnear inmediatamente si quedan vidas.
         respawn();
         return;
     }
@@ -278,9 +281,30 @@ void Player::updateDeathAnimation() {
     }
 }
 
+bool Player::isDeathAnimationFinished() const {
+    // Used by Game::update() to wait until the full death animation has played.
+    if (lifeState == PlayerLifeState::Alive || lifeState == PlayerLifeState::Winning) {
+        return true;
+    }
+
+    int lastFrame = 0;
+    switch (lifeState) {
+        case PlayerLifeState::DyingByEnemy:
+            lastFrame = 7;
+            break;
+        case PlayerLifeState::DyingByExplosion:
+            lastFrame = 10;
+            break;
+        default:
+            return true;
+    }
+
+    return deathFrame >= lastFrame;
+}
+
 // ============================== API base ==============================
 
-
+// Activa la animación de victoria y prepara la salida de nivel.
 void Player::startWinning() {
     lifeState = PlayerLifeState::Winning;
     winStartPosition = position;
@@ -306,6 +330,7 @@ void Player::startWinning() {
     winVelocity = glm::normalize(glm::vec2(dx, dy)) * (baseSpeed * 2.5f);
 }
 
+// Avanza la animación de victoria y marca fin cuando completa la secuencia.
 void Player::updateWinningAnimation() {
     winTimer += deltaTime;
 
@@ -571,8 +596,8 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     // --- Sondas de colisión ---
     {
         int r, c;
-        const float eFront = halfTile;
-        const float eSide  = halfTile * 0.60f;
+        const float eFront = halfTile * 0.82f;
+        const float eSide  = halfTile * 0.48f;
 
         if (mov == MOVE_UP) {
             bool hitLeft = false;
@@ -766,9 +791,19 @@ void Player::applyPowerUp(PowerUpType type) {
     }
 
     switch (type) {
-        case PowerUpType::ExtraLife:
+        case PowerUpType::ExtraLife: {
+            // En Versus, las CPUs no deben ganar vidas extra (solo humanos).
+            if (bomberman && VersusMode::isVersusMode(bomberman->mode)) {
+                const int humanSlots = (bomberman->mode == GameMode::VsTwoPlayers) ? 2 : 1;
+                if (playerId >= 0 && playerId >= humanSlots) {
+                    // CPU en Versus: ignorar ExtraLife
+                    break;
+                }
+            }
+
             lives += 1;
             break;
+        }
 
         case PowerUpType::BombUp:
             maxBombs = std::min(maxBombs + 1, ArcadeCaps::MAX_BOMBS);
