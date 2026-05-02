@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -2390,70 +2390,58 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
         drawQuadNdc(x, y + yOffset, halfW, halfH, texId, uvRect, glm::vec4(1.0f), actorFlipX);
     };
 
-    // Enemigos: usar siempre el sprite estático frontal (abajo.0) en el minimapa.
+    // Items: Power-ups y puntuación revelados en el mapa.
+    if (map) {
+        const auto& grid = map->getGrid();
+        for (int r = 0; r < rows; ++r) {
+            for (int c = 0; c < cols; ++c) {
+                const auto& block = grid[r][c];
+                if (block.hasPowerUp && block.powerUpRevealed && !block.powerUpCollected) {
+                    GLuint itemTex = map->getPowerUpTexture(block.powerUpType, map->getPowerUpAnimFrame());
+                    if (itemTex != 0) {
+                        float x = 0.0f;
+                        float y = 0.0f;
+                        glm::vec2 ndcPos = map->gridToNDC(r, c);
+                        if (ndcToMiniMap(ndcPos, x, y)) {
+                            // Los items son más pequeños que los actores, ocupando máximo un bloque.
+                            float halfW = panelTileW * 0.45f;
+                            float halfH = panelTileH * 0.45f;
+                            drawQuadNdc(x, y, halfW, halfH, itemTex, glm::vec4(0, 0, 1, 1), glm::vec4(1.0f), 0.0f);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Enemigos: sprites dinámicos y fluidos conforme se mueven.
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive || enemyTexture == 0) {
             continue;
         }
 
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        std::string chosenSprite;
-
-        // Obtener el base del sprite del enemigo.
-        std::string base = enemy->spriteBaseId;
-        if (base.empty() && !enemy->currentSpriteName.empty()) {
-            const std::size_t dotPos = enemy->currentSpriteName.find('.');
-            base = (dotPos == std::string::npos)
-                ? enemy->currentSpriteName
-                : enemy->currentSpriteName.substr(0, dotPos);
-        }
-
-        if (!base.empty()) {
-            const std::string frontName = base + ".abajo.0";
-            const std::string frontAlt = base + ".frente.0";
-            const std::string sideName = base + ".derecha.0";
-
-            if (getUvRectForSprite(gEnemyAtlas, frontName, uvRect)) {
-                chosenSprite = frontName;
-            } else if (getUvRectForSprite(gEnemyAtlas, frontAlt, uvRect)) {
-                chosenSprite = frontAlt;
-            } else if (getUvRectForSprite(gEnemyAtlas, sideName, uvRect)) {
-                chosenSprite = sideName;
-            }
-        }
-
-        if (chosenSprite.empty()) {
+        if (enemy->currentSpriteName.empty() || !getUvRectForSprite(gEnemyAtlas, enemy->currentSpriteName, uvRect)) {
             continue;
         }
 
         drawMiniActor(enemy->position, enemyTexture, uvRect,
-                      spriteAspect(gEnemyAtlas, chosenSprite), 0.0f);
+                      spriteAspect(gEnemyAtlas, enemy->currentSpriteName), enemy->flipX);
     }
 
-    // Jugadores: usar siempre el sprite estático frontal (abajo.0) en el minimapa.
+    // Jugadores: sprites dinámicos y fluidos conforme se mueven.
     for (Player* player : gPlayers) {
         if (!player || !player->isAlive() || texture == 0) {
             continue;
         }
 
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        std::string chosenSprite;
-
-        // Siempre usar el sprite frontal estático.
-        const std::string frontName = player->spritePrefix + ".abajo.0";
-        if (getUvRectForSprite(gPlayerAtlas, frontName, uvRect)) {
-            chosenSprite = frontName;
-        } else {
-            const std::string sideName = player->spritePrefix + ".derecha.0";
-            if (getUvRectForSprite(gPlayerAtlas, sideName, uvRect)) {
-                chosenSprite = sideName;
-            } else {
-                continue;
-            }
+        if (player->currentSpriteName.empty() || !getUvRectForSprite(gPlayerAtlas, player->currentSpriteName, uvRect)) {
+            continue;
         }
 
         drawMiniActor(player->position, texture, uvRect,
-                      spriteAspect(gPlayerAtlas, chosenSprite), 0.0f);
+                      spriteAspect(gPlayerAtlas, player->currentSpriteName), player->flipX);
     }
 
     if (hasValidScissor) {
