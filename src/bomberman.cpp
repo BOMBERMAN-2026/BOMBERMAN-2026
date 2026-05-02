@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -7707,13 +7707,13 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 if (!isSolEnemy) continue;
 
                 float modelScale = 1.12f;
-                float hoverHeight = 1.62f;
+                float hoverHeight = 1.22f;
                 if (enemy->currentSpriteName.size() >= 12 && enemy->currentSpriteName.compare(0, 12, "sol.mediano.") == 0) {
                     modelScale = 0.90f;
-                    hoverHeight = 1.48f;
+                    hoverHeight = 1.22f;
                 } else if (enemy->currentSpriteName.size() >= 9 && enemy->currentSpriteName.compare(0, 9, "sol.peque") == 0) {
                     modelScale = 0.72f;
-                    hoverHeight = 1.34f;
+                    hoverHeight = 1.22f;
                 }
 
                 modelScale *= 2.0f;
