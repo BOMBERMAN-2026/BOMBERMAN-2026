@@ -18,6 +18,7 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 extern std::vector<Enemy*> gEnemies;
+extern void PlayDronDistortedFireSound();
 
 class SlowFireball : public Enemy {
 public:
@@ -178,6 +179,7 @@ void DronBombardero::shootSlowFireball(EnemyDirection dir) {
 }
 
 void DronBombardero::shootBurstFireballs() {
+    PlayDronDistortedFireSound();
     const std::array<EnemyDirection, 4> dirs = {
         EnemyDirection::UP,
         EnemyDirection::LEFT,

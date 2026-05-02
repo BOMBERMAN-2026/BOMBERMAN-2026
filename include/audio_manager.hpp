@@ -22,7 +22,8 @@ struct ma_engine;
 enum class VfxSound {
     PlaceBomb,
     Explosion,
-    Pickup
+    Pickup,
+    ExplosionRobots
 };
 
 class AudioManager {

@@ -18,6 +18,7 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 extern std::vector<Enemy*> gEnemies;
+extern void PlayKingBomberDistortedExplosionSound();
 
 namespace {
 bool gKingPreBattleLockActive = false;
@@ -539,68 +540,72 @@ void KingBomber::emitSpecialCrossExplosion(int stepDist) {
         glm::radians(-90.0f)
     };
 
-    // Draw center tile on step 1
+    // Reproducir sonido de explosión distorsionada al emitir el ataque (solo una vez)
     if (stepDist == 1) {
+        PlayKingBomberDistortedExplosionSound();
+    }
+
+    // Generar explosión completa de una sola vez en stepDist == 1
+    if (stepDist == 1) {
+        // Centro
         auto* centerFire = new Bomb(gameMap->gridToNDC(r, c), r, c, nullptr, 0, false);
         centerFire->ownerIndex = kBombOwnerKingBomberSpecial;
         centerFire->fuseTime = 0.0f;
         centerFire->detonate();
         gBombs.push_back(centerFire);
-    }
 
-    for (int d = 0; d < 4; ++d) {
-        bool blocked = false;
-        for (int i = 1; i <= stepDist; ++i) {
-            int checkR = r + dr[d] * i;
-            int checkC = c + dc[d] * i;
-            if (!gameMap->isWalkable(checkR, checkC)) {
-                blocked = true;
-                break;
-            }
-        }
-        if (blocked) continue;
-
-        int nr = r + dr[d] * stepDist;
-        int nc = c + dc[d] * stepDist;
-
-        for (auto* p : *playersList) {
-            if (!p || !p->isAlive()) continue;
-            int pr = 0, pc = 0;
-            gameMap->ndcToGrid(p->position, pr, pc);
-            if (pr == nr && pc == nc) {
-                p->killByExplosion();
-            }
-        }
-
-        for (auto* b : gBombs) {
-            if (!b || b->state != BombState::FUSE) continue;
-            if (b->gridRow == nr && b->gridCol == nc) {
-                b->detonate();
-            }
-        }
-
-        // Crear bomba fake que detone inmediatamente para mostrar fuego visual.
-        // Luego se ajusta el segmento para usar mid/end con orientacion correcta.
-        auto* visualFire = new Bomb(gameMap->gridToNDC(nr, nc), nr, nc, nullptr, 0, false);
-        visualFire->ownerIndex = kBombOwnerKingBomberSpecial;
-        visualFire->fuseTime = 0.0f;
-        visualFire->detonate();
-
-        if (!visualFire->explosionSegments.empty()) {
-            bool isLast = (stepDist >= 4);
-            if (!isLast) {
-                int nextR = nr + dr[d];
-                int nextC = nc + dc[d];
-                if (!gameMap->isWalkable(nextR, nextC)) {
-                    isLast = true;
+        // Expandir en 4 direcciones con máximo rango de 4
+        for (int d = 0; d < 4; ++d) {
+            for (int dist = 1; dist <= 4; ++dist) {
+                int checkR = r + dr[d] * dist;
+                int checkC = c + dc[d] * dist;
+                
+                if (!gameMap->isWalkable(checkR, checkC)) {
+                    break; // Bloqueado, parar en esta dirección
                 }
+
+                // Daño a jugadores
+                for (auto* p : *playersList) {
+                    if (!p || !p->isAlive()) continue;
+                    int pr = 0, pc = 0;
+                    gameMap->ndcToGrid(p->position, pr, pc);
+                    if (pr == checkR && pc == checkC) {
+                        p->killByExplosion();
+                    }
+                }
+
+                // Detonar bombas
+                for (auto* b : gBombs) {
+                    if (!b || b->state != BombState::FUSE) continue;
+                    if (b->gridRow == checkR && b->gridCol == checkC) {
+                        b->detonate();
+                    }
+                }
+
+                // Determinar si es el último segmento visible
+                bool isLast = (dist >= 4);
+                if (!isLast) {
+                    int nextR = checkR + dr[d];
+                    int nextC = checkC + dc[d];
+                    if (!gameMap->isWalkable(nextR, nextC)) {
+                        isLast = true;
+                    }
+                }
+
+                // Crear bomba fake con el segmento correcto
+                auto* visualFire = new Bomb(gameMap->gridToNDC(checkR, checkC), checkR, checkC, nullptr, 0, false);
+                visualFire->ownerIndex = kBombOwnerKingBomberSpecial;
+                visualFire->fuseTime = 0.0f;
+                visualFire->detonate();
+
+                if (!visualFire->explosionSegments.empty()) {
+                    visualFire->explosionSegments[0].baseName = isLast ? "explosion_end" : "explosion_mid";
+                    visualFire->explosionSegments[0].rotation = segmentRot[d];
+                }
+
+                gBombs.push_back(visualFire);
             }
-
-            visualFire->explosionSegments[0].baseName = isLast ? "explosion_end" : "explosion_mid";
-            visualFire->explosionSegments[0].rotation = segmentRot[d];
         }
-
-        gBombs.push_back(visualFire);
     }
 }
 
@@ -624,6 +629,7 @@ void KingBomber::updateSpecialAttack(float dt) {
             glm::vec2 tp;
             if (tryFindTeleportNearPlayer(tp)) {
                 position = tp;
+                position.y -= 0.05f; // 5 píxeles más abajo tras teletransporte
                 this->movingToTarget = false; // Resetear movimiento por tiles despues de teleport
             }
             specialState = SpecialAttackState::TeleportDelay;
@@ -642,26 +648,36 @@ void KingBomber::updateSpecialAttack(float dt) {
             specialBlastFrame = 1;
             specialBlastFrameTimer = 0.0f;
             currentSpriteName = phaseBase() + ".fuego.1";
+            // Emitir la explosión se hará con delay en BlastSequence
         }
         return;
     }
 
     if (specialState == SpecialAttackState::BlastSequence) {
         specialBlastFrameTimer += dt;
-        while (specialBlastFrameTimer >= specialBlastFrameInterval) {
-            specialBlastFrameTimer -= specialBlastFrameInterval;
-            
-            // Generate fire outward step by step
-            emitSpecialCrossExplosion(specialBlastFrame);
-            
-            ++specialBlastFrame;
-            if (specialBlastFrame > 4) {
-                specialState = SpecialAttackState::Idle;
-                specialBombLockAfterTimer = specialBombLockAfterDuration;
-                return;
-            }
+        
+        // Emitir la explosión completa con un pequeño delay (0.15 segundos)
+        if (specialBlastFrameTimer >= 0.15f && specialBlastFrame == 1) {
+            emitSpecialCrossExplosion(1);
+            specialBlastFrame = 2; // Incrementar para que solo se llame una vez
         }
-        currentSpriteName = phaseBase() + ".fuego." + std::to_string(std::max(1, std::min(4, specialBlastFrame)));
+        
+        if (specialBlastFrameTimer >= specialBlastFrameInterval * 7) {
+            // Animación completada después de 7 intervalos (1→2→3→4→3→2→1, sincronizado con explosión)
+            specialState = SpecialAttackState::Idle;
+            specialBombLockAfterTimer = specialBombLockAfterDuration;
+            return;
+        }
+        // Animar sprite del King Bomber durante la explosión: 1→2→3→4→3→2→1
+        int frameIndex = (int)(specialBlastFrameTimer / specialBlastFrameInterval);
+        int spriteFrame;
+        if (frameIndex <= 3) {
+            spriteFrame = frameIndex + 1; // 1, 2, 3, 4
+        } else {
+            spriteFrame = 7 - frameIndex; // 3, 2, 1 (frames 4, 5, 6)
+        }
+        spriteFrame = std::max(1, std::min(4, spriteFrame));
+        currentSpriteName = phaseBase() + ".fuego." + std::to_string(spriteFrame);
     }
 }
 

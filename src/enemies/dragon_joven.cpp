@@ -18,6 +18,7 @@ extern SpriteAtlas gEnemyAtlas;
 extern SpriteAtlas gBombAtlas;
 extern GLuint mapTexture;
 extern GLuint enemyTexture;
+extern void PlayDragonFireSound();
 
 DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size, float speed)
     : Enemy(pos, size, speed, /*hp=*/1, /*score=*/400),
@@ -123,6 +124,7 @@ void DragonJoven::Update() {
             isFiring = true;
             fireAnimTimer = 10 * 0.04f; // 10 frames de fuego a 0.04s
             fireAnimFrame = 0;
+            PlayDragonFireSound(); // Reproducir sonido de explosión/fuego
             // Ojo, hemos inicializado fireSegments abajo, aquí solo empezamos la fase 2
         }
         return; // No se mueve mientras carga
