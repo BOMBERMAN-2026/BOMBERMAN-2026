@@ -281,7 +281,7 @@ void AudioManager::playVfx(VfxSound sfx) {
             break;
         case VfxSound::Select:
             fireFromPool(&impl->engine, &impl->sfxSelect,
-                         impl->pickupPool, impl->vfxVolume);
+                         impl->pickupPool, 0.25);
             break;
         case VfxSound::Pickup:
             fireFromPool(&impl->engine, &impl->sfxPickup,
