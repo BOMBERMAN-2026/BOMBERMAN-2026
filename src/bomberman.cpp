@@ -3215,6 +3215,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     // Crear jugadores según el modo.
     const int numPlayers = custom ? customGameMode.getPlayerCount()
                                   : (versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1));
+    const int versusHumanCount = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
     if (versus) {
         // En VS, playerScores representa wins y debe persistir entre rondas.
         if ((int)playerScores.size() < numPlayers) playerScores.resize(numPlayers, 0);
@@ -3263,23 +3264,37 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/i, prefix);
 
         if (preserveLivesAndScore && i < (int)savedLives.size()) {
-            p->lives = savedLives[i];
-            
-            // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente.
-            if (versus && p->lives <= 0) {
-                p->lifeState = PlayerLifeState::DyingByEnemy;
-                p->deathFrame = 7; // Último frame de animación de muerte
-                p->currentSpriteName = p->spritePrefix + ".muerto.7";
-                p->isWalking = false;
-            } else if (versus && p->lives > 0) {
-                // Resetear a Alive si el jugador aún tiene vidas (nueva ronda en VS)
+            if (versus && i >= versusHumanCount) {
+                // Las CPUs siempre reinician la ronda con una sola vida.
+                p->lives = 1;
                 p->lifeState = PlayerLifeState::Alive;
                 p->isWalking = false;
+                p->deathTimer = 0.0f;
+                p->deathFrame = 0;
+                p->pendingRespawn = false;
                 p->currentSpriteName = p->spritePrefix + ".abajo.0";
+            } else {
+                p->lives = savedLives[i];
+                
+                // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente.
+                if (versus && p->lives <= 0) {
+                    p->lifeState = PlayerLifeState::DyingByEnemy;
+                    p->deathFrame = 7; // Último frame de animación de muerte
+                    p->currentSpriteName = p->spritePrefix + ".muerto.7";
+                    p->isWalking = false;
+                } else if (versus) {
+                    // Resetear a Alive si el jugador aún tiene vidas (misma ronda reintentada en VS)
+                    p->lifeState = PlayerLifeState::Alive;
+                    p->isWalking = false;
+                    p->deathTimer = 0.0f;
+                    p->deathFrame = 0;
+                    p->pendingRespawn = false;
+                    p->currentSpriteName = p->spritePrefix + ".abajo.0";
+                }
             }
         } else if (versus) {
-            // En VS todos los jugadores tienen vidas persistentes; el encuentro termina cuando todos llegan a 0.
-            p->lives = 4;
+            // Humanos: vidas de la run VS. CPUs: una sola vida por ronda.
+            p->lives = (i < versusHumanCount) ? 4 : 1;
         } else if (custom) {
             // En Custom Game hay un solo nivel: cada jugador empieza con 1 vida.
             p->lives = 1;
@@ -5601,7 +5616,7 @@ void Game::update() {
                     // Solo termina la run si ya no queda ningun jugador humano con vidas.
                     vsCinematicPostAction = vsRunOutOfLives
                         ? VsCinematicPostAction::ReturnToMenu
-                        : VsCinematicPostAction::AdvanceNextLevel;
+                        : VsCinematicPostAction::RestartCurrentLevel;
                     startVsRoundCinematic(CinematicType::VsDefeat,
                                           resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
                                           /*winnerIndex=*/-1);
@@ -5614,7 +5629,7 @@ void Game::update() {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::AdvanceNextLevel;
+                    : VsCinematicPostAction::RestartCurrentLevel;
 
                 // Muerte simultánea total siempre se considera empate visualmente,
                 // aunque la post-acción pueda cerrar partida si no quedan vidas.
@@ -5632,7 +5647,7 @@ void Game::update() {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::AdvanceNextLevel;
+                    : VsCinematicPostAction::RestartCurrentLevel;
 
                 startVsRoundCinematic(CinematicType::VsDefeat,
                                       resolveAssetPath("resources/video/vsMode/VsModeDefeat.mp4"),
@@ -5645,7 +5660,7 @@ void Game::update() {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
-                    : VsCinematicPostAction::AdvanceNextLevel;
+                    : VsCinematicPostAction::RestartCurrentLevel;
                 startVsRoundCinematic(vsRunOutOfLives ? CinematicType::VsDefeat : CinematicType::VsDraw,
                                       resolveAssetPath(vsRunOutOfLives
                                           ? "resources/video/vsMode/VsModeDefeat.mp4"
