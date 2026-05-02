@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <thread>
+#include <mutex>
 
 // ============================================================
 // Wrappers de audio — delegan al AudioManager (miniaudio)
@@ -36,6 +37,7 @@ struct PendingModel {
 
 // Para la carga asincrona de modelos 3d
 std::vector<PendingModel> loadingQueue;
+std::mutex loadingMutex;
 
 
 // Llamada desde Bomb::detonate() en bomb.cpp
@@ -1636,6 +1638,7 @@ void asyncLoadTask(const std::string& meshCacheKey,
         return;
     }
 
+    std::lock_guard<std::mutex> lock(loadingMutex);
     loadingQueue.push_back( {
         meshCacheKey, modelPath, std::move(meshData),
         outVao, outVbo, outEbo, outIndexCount, outTexture
@@ -2566,59 +2569,68 @@ void Game::ensureRenderResources() {
     CreateCube();
     CreateFloorVAO();
     CreateSphere();
-        auto start = std::chrono::high_resolution_clock::now();
+    auto start = std::chrono::high_resolution_clock::now();
 
-    std::thread t1 (asyncLoadTask, "actorGLB", resolveAssetPath(kPlayerGlbPath), &actorGlbVAO, &actorGlbVBO, &actorGlbEBO, &actorGlbIndexCount, &actorGlbTexture);
-    std::thread t2 (asyncLoadTask, "redActorGLB", resolveAssetPath(kRedPlayerGlbPath), &redActorGlbVAO, &redActorGlbVBO, &redActorGlbEBO, &redActorGlbIndexCount, &redActorGlbTexture);
-    std::thread t3 (asyncLoadTask, "leonGLB", resolveAssetPath(kLeonGlbPath), &leonGlbVAO, &leonGlbVBO, &leonGlbEBO, &leonGlbIndexCount, &leonGlbTexture);
-    std::thread t4 (asyncLoadTask, "fantasmaGLB", resolveAssetPath(kFantasmaGlbPath), &fantasmaGlbVAO, &fantasmaGlbVBO, &fantasmaGlbEBO, &fantasmaGlbIndexCount, &fantasmaGlbTexture);
+    std::vector<std::thread> loadingThreads;
+    auto addTask = [&](const std::string& key, const std::string& path, GLuint* vao, GLuint* vbo, GLuint* ebo, GLsizei* ic, GLuint* tex) {
+        loadingThreads.emplace_back(asyncLoadTask, key, resolveAssetPath(path), vao, vbo, ebo, ic, tex);
+    };
 
-    std::thread t5 (asyncLoadTask, "bebeGLB", resolveAssetPath(kBebeGlbPath), &bebeGlbVAO, &bebeGlbVBO, &bebeGlbEBO, &bebeGlbIndexCount, &bebeGlbTexture);
-    std::thread t6 (asyncLoadTask, "babosaGLB", resolveAssetPath(kBabosaGlbPath), &babosaGlbVAO, &babosaGlbVBO, &babosaGlbEBO, &babosaGlbIndexCount, &babosaGlbTexture);
-    std::thread t7 (asyncLoadTask, "bombGLB", resolveAssetPath(kBombGlbPath), &bombGlbVAO, &bombGlbVBO, &bombGlbEBO, &bombGlbIndexCount, &bombGlbTexture);
-    std::thread t8 (asyncLoadTask, "flameGLB", resolveAssetPath(kFlameGlbPath), &flameGlbVAO, &flameGlbVBO, &flameGlbEBO, &flameGlbIndexCount, &flameGlbTexture);
+    addTask("actorGLB", kPlayerGlbPath, &actorGlbVAO, &actorGlbVBO, &actorGlbEBO, &actorGlbIndexCount, &actorGlbTexture);
+    addTask("redActorGLB", kRedPlayerGlbPath, &redActorGlbVAO, &redActorGlbVBO, &redActorGlbEBO, &redActorGlbIndexCount, &redActorGlbTexture);
+    addTask("blueActorGLB", kBluePlayerGlbPath, &blueActorGlbVAO, &blueActorGlbVBO, &blueActorGlbEBO, &blueActorGlbIndexCount, &blueActorGlbTexture);
+    addTask("yellowActorGLB", kYellowPlayerGlbPath, &yellowActorGlbVAO, &yellowActorGlbVBO, &yellowActorGlbEBO, &yellowActorGlbIndexCount, &yellowActorGlbTexture);
+    
+    addTask("leonGLB", kLeonGlbPath, &leonGlbVAO, &leonGlbVBO, &leonGlbEBO, &leonGlbIndexCount, &leonGlbTexture);
+    addTask("fantasmaGLB", kFantasmaGlbPath, &fantasmaGlbVAO, &fantasmaGlbVBO, &fantasmaGlbEBO, &fantasmaGlbIndexCount, &fantasmaGlbTexture);
+    addTask("bebeGLB", kBebeGlbPath, &bebeGlbVAO, &bebeGlbVBO, &bebeGlbEBO, &bebeGlbIndexCount, &bebeGlbTexture);
+    addTask("babosaGLB", kBabosaGlbPath, &babosaGlbVAO, &babosaGlbVBO, &babosaGlbEBO, &babosaGlbIndexCount, &babosaGlbTexture);
+    
+    addTask("bombGLB", kBombGlbPath, &bombGlbVAO, &bombGlbVBO, &bombGlbEBO, &bombGlbIndexCount, &bombGlbTexture);
+    addTask("bombRcGLB", kBombRcGlbPath, &bombRcGlbVAO, &bombRcGlbVBO, &bombRcGlbEBO, &bombRcGlbIndexCount, &bombRcGlbTexture);
+    addTask("nextLevelBombGLB", kNextLevelBombGlbPath, &nextLevelBombGlbVAO, &nextLevelBombGlbVBO, &nextLevelBombGlbEBO, &nextLevelBombGlbIndexCount, &nextLevelBombGlbTexture);
+    
+    addTask("flameGLB", kFlameGlbPath, &flameGlbVAO, &flameGlbVBO, &flameGlbEBO, &flameGlbIndexCount, &flameGlbTexture);
+    addTask("flamePowerUpGLB", kFlamePowerUpGlbPath, &flamePowerUpGlbVAO, &flamePowerUpGlbVBO, &flamePowerUpGlbEBO, &flamePowerUpGlbIndexCount, &flamePowerUpGlbTexture);
+    addTask("speedPowerUpGLB", kSpeedPowerUpGlbPath, &speedPowerUpGlbVAO, &speedPowerUpGlbVBO, &speedPowerUpGlbEBO, &speedPowerUpGlbIndexCount, &speedPowerUpGlbTexture);
+    addTask("extraLifePowerUpGLB", kExtraLifePowerUpGlbPath, &extraLifePowerUpGlbVAO, &extraLifePowerUpGlbVBO, &extraLifePowerUpGlbEBO, &extraLifePowerUpGlbIndexCount, &extraLifePowerUpGlbTexture);
+    addTask("remoteControlPowerUpGLB", kRemoteControlPowerUpGlbPath, &remoteControlPowerUpGlbVAO, &remoteControlPowerUpGlbVBO, &remoteControlPowerUpGlbEBO, &remoteControlPowerUpGlbIndexCount, &remoteControlPowerUpGlbTexture);
+    addTask("invincibilityPowerUpGLB", kInvincibilityPowerUpGlbPath, &invincibilityPowerUpGlbVAO, &invincibilityPowerUpGlbVBO, &invincibilityPowerUpGlbEBO, &invincibilityPowerUpGlbIndexCount, &invincibilityPowerUpGlbTexture);
+    
+    addTask("matchesItemGLB", kMatchesItemGlbPath, &matchesItemGlbVAO, &matchesItemGlbVBO, &matchesItemGlbEBO, &matchesItemGlbIndexCount, &matchesItemGlbTexture);
+    addTask("canItemGLB", kCanItemGlbPath, &canItemGlbVAO, &canItemGlbVBO, &canItemGlbEBO, &canItemGlbIndexCount, &canItemGlbTexture);
+    addTask("lighterItemGLB", kLighterItemGlbPath, &lighterItemGlbVAO, &lighterItemGlbVBO, &lighterItemGlbEBO, &lighterItemGlbIndexCount, &lighterItemGlbTexture);
+    addTask("batteryItemGLB", kBatteryItemGlbPath, &batteryItemGlbVAO, &batteryItemGlbVBO, &batteryItemGlbEBO, &batteryItemGlbIndexCount, &batteryItemGlbTexture);
+    addTask("dragonflyItemGLB", kDragonflyItemGlbPath, &dragonflyItemGlbVAO, &dragonflyItemGlbVBO, &dragonflyItemGlbEBO, &dragonflyItemGlbIndexCount, &dragonflyItemGlbTexture);
+    addTask("hudsonBeeItemGLB", kHudsonBeeItemGlbPath, &hudsonBeeItemGlbVAO, &hudsonBeeItemGlbVBO, &hudsonBeeItemGlbEBO, &hudsonBeeItemGlbIndexCount, &hudsonBeeItemGlbTexture);
+    
+    addTask("kingBomberGLB", kKingBomberGlbPath, &kingBomberGlbVAO, &kingBomberGlbVBO, &kingBomberGlbEBO, &kingBomberGlbIndexCount, &kingBomberGlbTexture);
+    addTask("dronAzulGLB", kDronAzulGlbPath, &dronAzulGlbVAO, &dronAzulGlbVBO, &dronAzulGlbEBO, &dronAzulGlbIndexCount, &dronAzulGlbTexture);
+    addTask("dronRosaGLB", kDronRosaGlbPath, &dronRosaGlbVAO, &dronRosaGlbVBO, &dronRosaGlbEBO, &dronRosaGlbIndexCount, &dronRosaGlbTexture);
+    addTask("dronVerdeGLB", kDronVerdeGlbPath, &dronVerdeGlbVAO, &dronVerdeGlbVBO, &dronVerdeGlbEBO, &dronVerdeGlbIndexCount, &dronVerdeGlbTexture);
+    addTask("dronAmarilloGLB", kDronAmarilloGlbPath, &dronAmarilloGlbVAO, &dronAmarilloGlbVBO, &dronAmarilloGlbEBO, &dronAmarilloGlbIndexCount, &dronAmarilloGlbTexture);
+    
+    addTask("solGLB", kSolGlbPath, &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
+    addTask("dragonGLB", kDragonGlbPath, &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
 
-    std::thread t9 (asyncLoadTask, "flamePowerUpGLB", resolveAssetPath(kFlamePowerUpGlbPath), &flamePowerUpGlbVAO, &flamePowerUpGlbVBO, &flamePowerUpGlbEBO, &flamePowerUpGlbIndexCount, &flamePowerUpGlbTexture);
-    std::thread t10 (asyncLoadTask, "speedPowerUpGLB", resolveAssetPath(kSpeedPowerUpGlbPath), &speedPowerUpGlbVAO, &speedPowerUpGlbVBO, &speedPowerUpGlbEBO, &speedPowerUpGlbIndexCount, &speedPowerUpGlbTexture);
-    std::thread t11 (asyncLoadTask, "kingBomberGLB", resolveAssetPath(kKingBomberGlbPath), &kingBomberGlbVAO, &kingBomberGlbVBO, &kingBomberGlbEBO, &kingBomberGlbIndexCount, &kingBomberGlbTexture);
-    std::thread t12 (asyncLoadTask, "dronAzulGLB", resolveAssetPath(kDronAzulGlbPath), &dronAzulGlbVAO, &dronAzulGlbVBO, &dronAzulGlbEBO, &dronAzulGlbIndexCount, &dronAzulGlbTexture);
+    for (auto& t : loadingThreads) {
+        if (t.joinable()) t.join();
+    }
 
-    std::thread t13 (asyncLoadTask, "dronRosaGLB", resolveAssetPath(kFlamePowerUpGlbPath), &dronRosaGlbVAO, &dronRosaGlbVBO, &dronRosaGlbEBO, &dronRosaGlbIndexCount, &dronRosaGlbTexture);
-    std::thread t14 (asyncLoadTask, "dronVerdeGLB", resolveAssetPath(kSpeedPowerUpGlbPath), &dronVerdeGlbVAO, &dronVerdeGlbVBO, &dronVerdeGlbEBO, &dronVerdeGlbIndexCount, &dronVerdeGlbTexture);
-    std::thread t15 (asyncLoadTask, "dronAmarilloGLB", resolveAssetPath(kKingBomberGlbPath), &dronAmarilloGlbVAO, &dronAmarilloGlbVBO, &dronAmarilloGlbEBO, &dronAmarilloGlbIndexCount, &dronAmarilloGlbTexture);
-    std::thread t16 (asyncLoadTask, "solGLB", resolveAssetPath(kDronAzulGlbPath), &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
-
-    std::thread t17 (asyncLoadTask, "dragonGLB", resolveAssetPath(kDragonGlbPath), &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
-    std::thread t18 (asyncLoadTask, "bombRcGLB", resolveAssetPath(kBombRcGlbPath), &bombRcGlbVAO, &bombRcGlbVBO, &bombRcGlbEBO, &bombRcGlbIndexCount, &bombRcGlbTexture);
-
-    t1.join();
-    t2.join();
-    t3.join();
-    t4.join();
-
-    t5.join();
-    t6.join();
-    t7.join();
-    t8.join();
-
-    t9.join();
-    t10.join();
-    t11.join();
-    t12.join();
-
-    t13.join();
-    t14.join();
-    t15.join();
-    t16.join();
-
-    t17.join();
-    t18.join();
+    // Procesar toda la cola de carga (subida a GPU) de una vez para que el juego esté listo tras el join.
+    {
+        std::lock_guard<std::mutex> lock(loadingMutex);
+        while (!loadingQueue.empty()) {
+            auto& item = loadingQueue.front();
+            completeTexturedGlbModel(item.meshData, item.key, item.path, *(item.vao), *(item.vbo), *(item.ebo), *(item.ic), *(item.tex));
+            loadingQueue.erase(loadingQueue.begin());
+        }
+    }
 
     auto end = std::chrono::high_resolution_clock::now();
-
     std::chrono::duration<float, std::milli> duration = end - start;
+    std::cout << "Tiempo total de carga PARALELA de modelos: " << duration.count() << " ms" << std::endl;
 
-    std::cout << "Tiempo total de carga de modelos: " << duration.count() << " ms" << std::endl;
     // --- Inicialización del Shadow Map FBO ---
     if (shadowMapFBO == 0) {
         const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
@@ -2639,36 +2651,6 @@ void Game::ensureRenderResources() {
         glReadBuffer(GL_NONE);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
     }
-    CreateActorGlbModel(resolveAssetPath(kPlayerGlbPath));
-    CreateRedActorGlbModel(resolveAssetPath(kRedPlayerGlbPath));
-    CreateBlueActorGlbModel(resolveAssetPath(kBluePlayerGlbPath));
-    CreateYellowActorGlbModel(resolveAssetPath(kYellowPlayerGlbPath));
-    CreateLeonGlbModel(resolveAssetPath(kLeonGlbPath));
-    CreateFantasmaGlbModel(resolveAssetPath(kFantasmaGlbPath));
-    CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
-    CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
-    CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
-    CreateBombRcGlbModel(resolveAssetPath(kBombRcGlbPath));
-    CreateNextLevelBombGlbModel(resolveAssetPath(kNextLevelBombGlbPath));
-    CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
-    CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
-    CreateSpeedPowerUpGlbModel(resolveAssetPath(kSpeedPowerUpGlbPath));
-    CreateExtraLifePowerUpGlbModel(resolveAssetPath(kExtraLifePowerUpGlbPath));
-    CreateRemoteControlPowerUpGlbModel(resolveAssetPath(kRemoteControlPowerUpGlbPath));
-    CreateInvincibilityPowerUpGlbModel(resolveAssetPath(kInvincibilityPowerUpGlbPath));
-    CreateMatchesItemGlbModel(resolveAssetPath(kMatchesItemGlbPath));
-    CreateCanItemGlbModel(resolveAssetPath(kCanItemGlbPath));
-    CreateLighterItemGlbModel(resolveAssetPath(kLighterItemGlbPath));
-    CreateBatteryItemGlbModel(resolveAssetPath(kBatteryItemGlbPath));
-    CreateDragonflyItemGlbModel(resolveAssetPath(kDragonflyItemGlbPath));
-    CreateHudsonBeeItemGlbModel(resolveAssetPath(kHudsonBeeItemGlbPath));
-    CreateKingBomberGlbModel(resolveAssetPath(kKingBomberGlbPath));
-    CreateDronAzulGlbModel(resolveAssetPath(kDronAzulGlbPath));
-    CreateDronRosaGlbModel(resolveAssetPath(kDronRosaGlbPath));
-    CreateDronVerdeGlbModel(resolveAssetPath(kDronVerdeGlbPath));
-    CreateDronAmarilloGlbModel(resolveAssetPath(kDronAmarilloGlbPath));
-    CreateSolGlbModel(resolveAssetPath(kSolGlbPath));
-    CreateDragonGlbModel(resolveAssetPath(kDragonGlbPath));
 
     Compile3DShaders();
     Compile3DTexturedShaders();
@@ -8254,11 +8236,14 @@ void Game::render() {
     glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
     glViewport(0, 0, WIDTH, HEIGHT);
     
-    if (loadingQueue.size() > 0) {
-        auto it = loadingQueue.begin();
-        completeTexturedGlbModel(it->meshData, it->key, it->path, *(it->vao), *(it->vbo), *(it->ebo), *(it->ic), *(it->tex));
-        std::cout << "Modelo cargado y subido a GPU: " << it->path << std::endl;
-        it = loadingQueue.erase(it); // Quitar de la cola
+    {
+        std::lock_guard<std::mutex> lock(loadingMutex);
+        if (loadingQueue.size() > 0) {
+            auto it = loadingQueue.begin();
+            completeTexturedGlbModel(it->meshData, it->key, it->path, *(it->vao), *(it->vbo), *(it->ebo), *(it->ic), *(it->tex));
+            std::cout << "Modelo cargado y subido a GPU: " << it->path << std::endl;
+            loadingQueue.erase(it); // Quitar de la cola
+        }
     }
 
         // ========== MENU ==========
