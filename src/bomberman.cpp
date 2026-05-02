@@ -4942,11 +4942,20 @@ void Game::processInput() {
                 if (primaryKey != GLFW_KEY_UNKNOWN) {
                     this->lastDirKey = primaryKey;
                     const GLint facingDir = remapDirectionFor3DCamera(this, primaryKey);
-                    if (!p1->isWalking || p1->facingDirKey != facingDir) {
-                        p1->walkTimer = 0.0f;
-                        p1->walkPhase = 0;
+                    // Only change facing mid-tile if close to tile center or not walking to avoid "peonza".
+                    int ctr = 0, ctc = 0;
+                    gameMap->ndcToGrid(p1->position, ctr, ctc);
+                    const glm::vec2 centerPos = gameMap->gridToNDC(ctr, ctc);
+                    const float halfTile = gameMap->getTileSize() * 0.5f;
+                    const float nearCenterThreshold = halfTile * 0.30f;
+                    const float distToCenter = glm::length(centerPos - p1->position);
+                    if (!p1->isWalking || distToCenter <= nearCenterThreshold) {
+                        if (!p1->isWalking || p1->facingDirKey != facingDir) {
+                            p1->walkTimer = 0.0f;
+                            p1->walkPhase = 0;
+                        }
+                        p1->facingDirKey = facingDir;
                     }
-                    p1->facingDirKey = facingDir;
                 }
                 p1->isWalking = movedAny;
             } else {
@@ -4982,11 +4991,20 @@ void Game::processInput() {
                         const GLint facingDir = keepScreenFacingForCameraRelative3D
                             ? keyToUse
                             : mappedDir;
-                        if (!p1->isWalking || p1->facingDirKey != facingDir) {
-                            p1->walkTimer = 0.0f;
-                            p1->walkPhase = 0;
+                        // Only change facing mid-tile if close to tile center or not walking to avoid "peonza".
+                        int ctr = 0, ctc = 0;
+                        gameMap->ndcToGrid(p1->position, ctr, ctc);
+                        const glm::vec2 centerPos = gameMap->gridToNDC(ctr, ctc);
+                        const float halfTile = gameMap->getTileSize() * 0.5f;
+                        const float nearCenterThreshold = halfTile * 0.30f;
+                        const float distToCenter = glm::length(centerPos - p1->position);
+                        if (!p1->isWalking || distToCenter <= nearCenterThreshold) {
+                            if (!p1->isWalking || p1->facingDirKey != facingDir) {
+                                p1->walkTimer = 0.0f;
+                                p1->walkPhase = 0;
+                            }
+                            p1->facingDirKey = facingDir;
                         }
-                        p1->facingDirKey = facingDir;
                         p1->isWalking = moved;
                     } else {
                         p1->isWalking = false;

@@ -32,6 +32,7 @@ struct CpuState {
     float moveLockSeconds = 0.0f;
 
     float bombCooldownSeconds = 0.0f;
+    float remoteBombArmedSeconds = -1.0f;
 
     AiProfile runtimeProfile{};
     AiEvolutionCaps profileCaps{};
@@ -619,6 +620,18 @@ static bool tryPlaceBomb(Player& self, const GameMap& map)
     gBombs.push_back(bomb);
     self.activeBombs++;
     return true;
+}
+
+static Bomb* findOwnedRemoteBomb(const Player& self)
+{
+    for (auto* b : gBombs) {
+        if (!b) continue;
+        if (b->state != BombState::FUSE) continue;
+        if (!b->remoteControlled) continue;
+        if (b->ownerIndex != self.playerId) continue;
+        return b;
+    }
+    return nullptr;
 }
 
 static Move bfsNextStepToEscapeBlast(const GameMap& map,
@@ -1219,6 +1232,15 @@ void updateCpuPlayers(GameMode mode,
             }
         }
 
+        Bomb* ownedRemoteBomb = findOwnedRemoteBomb(*p);
+        if (ownedRemoteBomb) {
+            st.remoteBombArmedSeconds = (st.remoteBombArmedSeconds < 0.0f)
+                ? 0.0f
+                : (st.remoteBombArmedSeconds + deltaTime);
+        } else {
+            st.remoteBombArmedSeconds = -1.0f;
+        }
+
         const bool adjDestr = hasAdjacentDestructible(*map, *p);
         const bool canUseClairvoyance = (rand01() < profile.itemClairvoyance);
         const bool adjHidden = canUseClairvoyance ? hasAdjacentHiddenPowerUp(*map, *p) : false;
@@ -1331,7 +1353,11 @@ void updateCpuPlayers(GameMode mode,
             st.bombCooldownSeconds = 0.65f;
             const bool placed = tryPlaceBomb(*p, *map);
             if (placed) {
-                // Tras plantar, priorizar una ruta de escape inmediata.
+                if (p->hasRemoteControl) {
+                    st.remoteBombArmedSeconds = 0.0f;
+                }
+
+                // Tras plantar, SIEMPRE priorizar una ruta de escape inmediata.
                 int br = 0, bc = 0;
                 map->ndcToGrid(p->position, br, bc);
 
@@ -1344,14 +1370,57 @@ void updateCpuPlayers(GameMode mode,
                     holdPosition = false;
                     st.currentMove = escapeMove;
                     st.moveLockSeconds = 0.0f;
+                } else {
+                    // Si no hay ruta segura, intentar salir de todas formas.
+                    const std::vector<Move> emergencyMoves = validMoves(*map, ownBlast, *p, /*avoidDanger=*/false);
+                    if (!emergencyMoves.empty()) {
+                        desired = pickRandomMove(emergencyMoves);
+                        holdPosition = false;
+                        st.currentMove = desired;
+                        st.moveLockSeconds = 0.0f;
+                    }
                 }
             }
         }
 
-        // Remote Control: si tiene bombas "remotas", detonarlas cuando sea seguro.
-        {
-            const float perSecond = 0.35f + 1.15f * profile.aggressiveness;
-            (void)tryDetonateRemoteBombIfSafe(*p, *map, deltaTime, perSecond);
+        // Remote Control: una vez fuera del blast, detonar sin dejar la bomba colgada.
+        if (ownedRemoteBomb) {
+            int br = 0, bc = 0;
+            map->ndcToGrid(p->position, br, bc);
+
+            std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
+            markBlastArea(*map, ownedRemoteBomb->gridRow, ownedRemoteBomb->gridCol, ownedRemoteBomb->power, blast, rows, cols);
+
+            const size_t selfIdx = (size_t)br * (size_t)cols + (size_t)bc;
+            const bool selfInBlast = (selfIdx < blast.size() && blast[selfIdx] != 0);
+
+            // Si está fuera del blast, detonar apenas alcance 0.15 segundos.
+            if (!selfInBlast) {
+                if (st.remoteBombArmedSeconds >= 0.15f) {
+                    ownedRemoteBomb->detonate();
+                    st.remoteBombArmedSeconds = -1.0f;
+                    continue;
+                }
+            } else {
+                // Si sigue dentro del blast, intentar escapar continuamente.
+                // Si ya ha pasado demasiado tiempo atrapado (0.85s), fuerza detonación para no quedarse quieta.
+                if (st.remoteBombArmedSeconds >= 0.85f) {
+                    ownedRemoteBomb->detonate();
+                    st.remoteBombArmedSeconds = -1.0f;
+                    continue;
+                }
+                
+                // Mantener la prioridad de escape si está atrapado.
+                if (desired == MOVE_NONE || holdPosition) {
+                    const Move escapeMove = bfsNextStepToEscapeBlast(*map, *p, blast);
+                    if (escapeMove != MOVE_NONE) {
+                        desired = escapeMove;
+                        holdPosition = false;
+                        st.currentMove = escapeMove;
+                        st.moveLockSeconds = 0.0f;
+                    }
+                }
+            }
         }
 
         // Refrescar peligro tras posibles cambios de bombas en este mismo ciclo.
@@ -1792,15 +1861,20 @@ void Agent::Update()
         } else {
             desired = currentMove;
         }
-    } else if (selfDanger) {
-        desired = pickRandomMove(moves);
-    } else if (hasTarget) {
-        desired = bfsNextStepToTargetCellForAgent(*gameMap,
-                                                  danger,
-                                                  *this,
-                                                  tr,
-                                                  tc,
-                                                  /*avoidDanger=*/true);
+    } else {
+        // Dificultades Medium/Hard: estar alerta incluso bajo peligro.
+        if (selfDanger) {
+            // Si hay peligro, intentar escapar en cualquier caso.
+            desired = pickRandomMove(moves);
+        } else if (hasTarget) {
+            // Si no hay peligro y hay objetivo hostil, perseguirlo activamente.
+            desired = bfsNextStepToTargetCellForAgent(*gameMap,
+                                                      danger,
+                                                      *this,
+                                                      tr,
+                                                      tc,
+                                                      /*avoidDanger=*/true);
+        }
     }
 
     if (desired == MOVE_NONE) {
@@ -1851,10 +1925,11 @@ void Agent::Update()
         }
     }
 
+    // Combate contra targets hostiles (Medium/Hard).
     if (hasTarget && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
         const bool inRange = canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
         if (inRange) {
-            const float perSecond = isAlly() ? 0.46f : 0.40f;
+            const float perSecond = isAlly() ? 0.50f : 0.45f;
             const bool trigger = (rand01() < perSecond * std::max(0.0f, deltaTime));
             if (trigger && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
                 if (!cellHasAnyBomb(sr, sc)) {
@@ -1870,6 +1945,24 @@ void Agent::Update()
                     ownedBombTiles.push_back(glm::ivec2(sr, sc));
                     bombCooldownSeconds = 0.75f;
                 }
+            }
+        } else if (difficulty != Difficulty::Easy) {
+            // Medium/Hard: incluso si no está en rango, considera bombardear para control territorial.
+            const float controlPerSecond = 0.18f + 0.25f * agentProfile.aggressiveness;
+            if (rand01() < controlPerSecond * std::max(0.0f, deltaTime) &&
+                !cellHasAnyBomb(sr, sc) &&
+                canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
+                Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
+                                      sr,
+                                      sc,
+                                      /*owner=*/nullptr,
+                                      /*power=*/bombPower,
+                                      /*remote=*/false);
+                bomb->ownerIndex = -1;
+                bomb->ownerLeftTile = true;
+                gBombs.push_back(bomb);
+                ownedBombTiles.push_back(glm::ivec2(sr, sc));
+                bombCooldownSeconds = 0.75f;
             }
         }
     }
