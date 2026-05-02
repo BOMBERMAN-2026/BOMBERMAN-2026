@@ -503,7 +503,17 @@ static void cpuContinueTileMove(Player& self, const GameMap& map, CpuState& st, 
         self.isWalking = true;
     }
 
-    self.facingDirKey = moveToFacingDirKey(st.currentMove);
+    // Solo cambiar facing si estamos cerca del centro del tile o no caminando (evita "peonza").
+    int ctr = 0, ctc = 0;
+    map.ndcToGrid(self.position, ctr, ctc);
+    const glm::vec2 centerPos = map.gridToNDC(ctr, ctc);
+    const float halfTile = map.getTileSize() * 0.5f;
+    const float nearCenterThreshold = halfTile * 0.30f;
+    const float distToCenter = glm::length(centerPos - self.position);
+    
+    if (!self.isWalking || distToCenter <= nearCenterThreshold) {
+        self.facingDirKey = moveToFacingDirKey(st.currentMove);
+    }
 }
 
 static void cpuStartTileMove(Player& self, const GameMap& map, CpuState& st, Move desired, float deltaTime)
