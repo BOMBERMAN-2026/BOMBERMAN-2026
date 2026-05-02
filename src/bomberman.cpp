@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -180,6 +180,7 @@ static const char* kFantasmaGlbPath = "models/3D/ghost character 3d model.glb";
 static const char* kBebeGlbPath = "models/3D/cartoon creature 3d model.glb";
 static const char* kBabosaGlbPath = "models/3D/poop character 3d model.glb";
 static const char* kBombGlbPath = "models/3D/bomb 3d model.glb";
+static const char* kBombRcGlbPath = "models/3D/bombaRadioControl.glb";
 static const char* kNextLevelBombGlbPath = "models/3D/bombaNextLevel.glb";
 static const char* kFlameGlbPath = "models/3D/fiery flame 3d model.glb";
 static const char* kFlamePowerUpGlbPath = "models/3D/fireball 3d model.glb";
@@ -263,6 +264,11 @@ GLuint bombGlbVBO = 0;
 GLuint bombGlbEBO = 0;
 GLsizei bombGlbIndexCount = 0;
 GLuint bombGlbTexture = 0;
+GLuint bombRcGlbVAO = 0;
+GLuint bombRcGlbVBO = 0;
+GLuint bombRcGlbEBO = 0;
+GLsizei bombRcGlbIndexCount = 0;
+GLuint bombRcGlbTexture = 0;
 GLuint nextLevelBombGlbVAO = 0;
 GLuint nextLevelBombGlbVBO = 0;
 GLuint nextLevelBombGlbEBO = 0;
@@ -1609,6 +1615,24 @@ void asyncLoadTask(const std::string& meshCacheKey,
     } );
 }
 
+static bool createTexturedGlbModel(const std::string& meshCacheKey,
+                                   const std::string& modelPath,
+                                   GLuint& outVao,
+                                   GLuint& outVbo,
+                                   GLuint& outEbo,
+                                   GLsizei& outIndexCount,
+                                   GLuint& outTexture)
+{
+    TexturedMeshData meshData;
+    std::string loadError;
+    if (!loadGlbTexturedMesh(modelPath, meshData, &loadError)) {
+        std::cerr << "[Render] Aviso: no se pudo cargar GLB ('" << modelPath
+                  << "'): " << loadError << "\n";
+        return false;
+    }
+    return completeTexturedGlbModel(meshData, meshCacheKey, modelPath, outVao, outVbo, outEbo, outIndexCount, outTexture);
+}
+
 void CreateActorGlbModel(const std::string& modelPath)
 {
     (void)createTexturedGlbModel("actorGLB",
@@ -1706,6 +1730,17 @@ void CreateBombGlbModel(const std::string& modelPath)
                                  bombGlbEBO,
                                  bombGlbIndexCount,
                                  bombGlbTexture);
+}
+
+void CreateBombRcGlbModel(const std::string& modelPath)
+{
+    (void)createTexturedGlbModel("bombRcGLB",
+                                 modelPath,
+                                 bombRcGlbVAO,
+                                 bombRcGlbVBO,
+                                 bombRcGlbEBO,
+                                 bombRcGlbIndexCount,
+                                 bombRcGlbTexture);
 }
 
 void CreateNextLevelBombGlbModel(const std::string& modelPath)
@@ -2525,6 +2560,7 @@ void Game::ensureRenderResources() {
     std::thread t16 (asyncLoadTask, "solGLB", resolveAssetPath(kDronAzulGlbPath), &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
 
     std::thread t17 (asyncLoadTask, "dragonGLB", resolveAssetPath(kDragonGlbPath), &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
+    std::thread t18 (asyncLoadTask, "bombRcGLB", resolveAssetPath(kBombRcGlbPath), &bombRcGlbVAO, &bombRcGlbVBO, &bombRcGlbEBO, &bombRcGlbIndexCount, &bombRcGlbTexture);
 
     t1.join();
     t2.join();
@@ -2547,6 +2583,7 @@ void Game::ensureRenderResources() {
     t16.join();
 
     t17.join();
+    t18.join();
 
     auto end = std::chrono::high_resolution_clock::now();
 
@@ -2582,6 +2619,7 @@ void Game::ensureRenderResources() {
     CreateBebeGlbModel(resolveAssetPath(kBebeGlbPath));
     CreateBabosaGlbModel(resolveAssetPath(kBabosaGlbPath));
     CreateBombGlbModel(resolveAssetPath(kBombGlbPath));
+    CreateBombRcGlbModel(resolveAssetPath(kBombRcGlbPath));
     CreateNextLevelBombGlbModel(resolveAssetPath(kNextLevelBombGlbPath));
     CreateFlameGlbModel(resolveAssetPath(kFlameGlbPath));
     CreateFlamePowerUpGlbModel(resolveAssetPath(kFlamePowerUpGlbPath));
@@ -4199,6 +4237,10 @@ Game::~Game() {
         glDeleteTextures(1, &bombGlbTexture);
         bombGlbTexture = 0;
     }
+    if (bombRcGlbTexture != 0) {
+        glDeleteTextures(1, &bombRcGlbTexture);
+        bombRcGlbTexture = 0;
+    }
     if (flameGlbTexture != 0) {
         glDeleteTextures(1, &flameGlbTexture);
         flameGlbTexture = 0;
@@ -4312,6 +4354,9 @@ Game::~Game() {
     bombGlbVAO = bombGlbVBO = bombGlbEBO = 0;
     bombGlbIndexCount = 0;
     bombGlbTexture = 0;
+    bombRcGlbVAO = bombRcGlbVBO = bombRcGlbEBO = 0;
+    bombRcGlbIndexCount = 0;
+    bombRcGlbTexture = 0;
     flameGlbVAO = flameGlbVBO = flameGlbEBO = 0;
     flameGlbIndexCount = 0;
     flameGlbTexture = 0;
@@ -6464,6 +6509,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     const GLsizei fuseMeshIndexCount = sphereOrCubeIndexCount;
     const bool canRenderBombGlb =
         (bombGlbVAO != 0 && bombGlbIndexCount > 0 && bombGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderBombRcGlb =
+        (bombRcGlbVAO != 0 && bombRcGlbIndexCount > 0 && bombRcGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderAnyBombGlb = canRenderBombGlb || canRenderBombRcGlb;
     const bool canRenderNextLevelBombGlb =
         (nextLevelBombGlbVAO != 0 && nextLevelBombGlbIndexCount > 0 && nextLevelBombGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderFlameGlb =
@@ -6569,7 +6617,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         if (!b || b->state == BombState::DONE) continue;
 
         if (b->state == BombState::FUSE) {
-            if (canRenderBombGlb) {
+            if (canRenderAnyBombGlb) {
                 const glm::vec3 feet = ndcToWorld3D(gameMap, b->position, 0.02f);
                 drawMesh3D(sphereOrCubeVAO,
                            sphereOrCubeIndexCount,
@@ -6927,7 +6975,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         return false;
     };
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || (floor3DTexture != 0)) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderBombRcGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || (floor3DTexture != 0)) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -6969,14 +7017,24 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             }
         }
 
-        if (canRenderBombGlb) {
+        if (canRenderAnyBombGlb) {
             glActiveTexture(GL_TEXTURE0);
-            glBindTexture(GL_TEXTURE_2D, bombGlbTexture);
 
             for (auto* b : gBombs) {
                 if (!b || b->state != BombState::FUSE) {
                     continue;
                 }
+
+                const bool useRcModel = b->remoteControlled && canRenderBombRcGlb;
+                if (!useRcModel && !canRenderBombGlb) {
+                    continue;
+                }
+
+                const GLuint bombVao = useRcModel ? bombRcGlbVAO : bombGlbVAO;
+                const GLsizei bombIndexCount = useRcModel ? bombRcGlbIndexCount : bombGlbIndexCount;
+                const GLuint bombTexture = useRcModel ? bombRcGlbTexture : bombGlbTexture;
+
+                glBindTexture(GL_TEXTURE_2D, bombTexture);
 
                 const float animT = b->remoteControlled
                     ? ((float)b->animStep * 0.55f)
@@ -6990,8 +7048,8 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 model = glm::scale(model, glm::vec3(0.76f * pulse, 0.76f * pulse, 0.76f * pulse));
 
                 glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                glBindVertexArray(bombGlbVAO);
-                glDrawElements(GL_TRIANGLES, bombGlbIndexCount, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(bombVao);
+                glDrawElements(GL_TRIANGLES, bombIndexCount, GL_UNSIGNED_INT, 0);
             }
         }
 

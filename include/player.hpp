@@ -90,6 +90,16 @@ class Player : public Entity {
         float winScale = 1.8f; // Escala dinámica durante la victoria
         glm::vec2 winVelocity = glm::vec2(0.0f); // Para la dirección aleatoria diagonal
         glm::vec2 winStartPosition = glm::vec2(0.0f); // Posición inicial al ganar para fijar sprites
+        
+        // 3D Victoria variables
+        bool winUse3DCelebration = false;
+        glm::vec2 winAnchorPosition = glm::vec2(0.0f);
+        float win3DHeight = 0.0f;
+        float win3DSpin = 0.0f;
+        float win3DScale = 1.0f;
+        float win3DGlitterTimer = -1.0f;
+        bool win3DGlitterBurst = false;
+
         // Activa la animación de victoria y prepara la salida de nivel.
         void startWinning();
 
