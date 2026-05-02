@@ -52,6 +52,7 @@ struct AudioManager::Impl {
     ma_sound sfxPlaceNormal;
     ma_sound sfxPlaceSpecial;
     ma_sound sfxPickup;
+    ma_sound sfxSelect;
     bool sfxReady = false;
     bool placeSpecialReady = false;
     bool useSpecialPlaceBombSound = false;
@@ -190,6 +191,7 @@ bool AudioManager::init(const std::string& basePath) {
     ok &= loadSfx(impl->sfxExplosionRobots,   "resources/sounds/VFX/explosionrobots.wav");
     ok &= loadSfx(impl->sfxPlaceNormal,       "resources/sounds/VFX/ponerbomba.wav");
     ok &= loadSfx(impl->sfxPickup,            "resources/sounds/VFX/cogerpowerup.wav");
+    ok &= loadSfx(impl->sfxSelect,            "resources/sounds/seleccionar.mp3");
     impl->placeSpecialReady = loadSfx(impl->sfxPlaceSpecial, "resources/sounds/Voicy_allah akbar.mp3");
 
     impl->sfxReady = ok;
@@ -230,6 +232,7 @@ void AudioManager::shutdown() {
         ma_sound_uninit(&impl->sfxExplosionRobots);
         ma_sound_uninit(&impl->sfxPlaceNormal);
         ma_sound_uninit(&impl->sfxPickup);
+        ma_sound_uninit(&impl->sfxSelect);
         impl->sfxReady = false;
     }
     if (impl->placeSpecialReady) {
@@ -275,6 +278,10 @@ void AudioManager::playVfx(VfxSound sfx) {
         case VfxSound::ExplosionRobots:
             fireFromPool(&impl->engine, &impl->sfxExplosionRobots,
                          impl->explosionPool, impl->vfxVolume);
+            break;
+        case VfxSound::Select:
+            fireFromPool(&impl->engine, &impl->sfxSelect,
+                         impl->pickupPool, impl->vfxVolume);
             break;
         case VfxSound::Pickup:
             fireFromPool(&impl->engine, &impl->sfxPickup,

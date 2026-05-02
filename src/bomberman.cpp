@@ -65,6 +65,11 @@ void PlayDronDistortedFireSound() {
     AudioManager::get().playVfx(VfxSound::ExplosionRobots);
 }
 
+// Llamada desde menús al moverse entre opciones
+void PlayMenuSelectSound() {
+    AudioManager::get().playVfx(VfxSound::Select);
+}
+
 // Llamada desde constructor de Bomb en bomb.cpp
 void PlayPlaceBombSound() {
     AudioManager::get().playVfx(VfxSound::PlaceBomb);

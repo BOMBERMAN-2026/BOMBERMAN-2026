@@ -23,7 +23,8 @@ enum class VfxSound {
     PlaceBomb,
     Explosion,
     Pickup,
-    ExplosionRobots
+    ExplosionRobots,
+    Select
 };
 
 class AudioManager {
