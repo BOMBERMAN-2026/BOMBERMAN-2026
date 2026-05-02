@@ -1,0 +1,49 @@
+{
+  "ruta_imagen": "resources/sprites/bomba_radio_control.png",
+  "tamano_imagen": {
+    "ancho": 897,
+    "alto": 527
+  },
+  "color_transparente": {
+    "colores": [
+      {
+        "r": 255,
+        "g": 0,
+        "b": 255
+      }
+    ],
+    "tolerancia": 0
+  },
+  "sprites": {
+    "bomb.rc.1": {
+      "x": 178,
+      "y": 159,
+      "w": 48,
+      "h": 48
+    },
+    "bomb.rc.2": {
+      "x": 178,
+      "y": 211,
+      "w": 48,
+      "h": 48
+    },
+    "bomb.rc.3": {
+      "x": 179,
+      "y": 263,
+      "w": 48,
+      "h": 48
+    },
+    "bomb.rc.4": {
+      "x": 230,
+      "y": 211,
+      "w": 48,
+      "h": 48
+    },
+    "bomb.rc.5": {
+      "x": 230,
+      "y": 263,
+      "w": 48,
+      "h": 48
+    }
+  }
+}

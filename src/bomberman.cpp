@@ -102,6 +102,8 @@ SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
 SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
 SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
+SpriteAtlas gBombRcAtlas;
+GLuint bombRcTexture = 0;
 SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
 SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
@@ -2908,6 +2910,14 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     std::string bombAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasStage" + stageNumStr + ".json");
     if (!loadSpriteAtlasMinimal(bombAtlasPath, gBombAtlas)) {
         std::cerr << "Error cargando atlas bombas: " << bombAtlasPath << std::endl;
+    }
+
+    std::string bombRcAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasRadioBomb.json");
+    if (!loadSpriteAtlasMinimal(bombRcAtlasPath, gBombRcAtlas)) {
+        std::cerr << "Error cargando atlas radio bomb." << std::endl;
+    }
+    if (bombRcTexture == 0) {
+        bombRcTexture = LoadTexture(resolveAssetPath("resources/sprites/bomba_radio_control.png").c_str());
     }
 
     if (!gameMap->loadFromFile(mapLevelPath)) {

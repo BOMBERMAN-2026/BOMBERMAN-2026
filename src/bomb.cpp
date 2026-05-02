@@ -14,8 +14,10 @@ extern GLuint uniformUvRect;
 extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern GLuint mapTexture;
+extern GLuint bombRcTexture;
 extern GameMap* gameMap;
 extern SpriteAtlas gBombAtlas;
+extern SpriteAtlas gBombRcAtlas;
 extern void PlayExplosionSound();
 extern void PlayPlaceBombSound();
 extern void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled);
@@ -93,16 +95,29 @@ bool Bomb::Update(float deltaTime) {
             }
         }
 
-        // Animación de mecha: secuencia 1,2,1,0,1,2,1,0
+        // Animación de mecha:
         animTimer += deltaTime;
         if (animTimer >= animInterval) {
             animTimer -= animInterval;
 
-            static const int sequence[] = {1, 2, 1, 0, 1, 2, 1, 0};
-            animStep = (animStep + 1) % 8;
-            animFrame = sequence[animStep];
+            if (remoteControlled) {
+                // Secuencia Radio Control:
+                // 1 -> 2 -> 3 -> 2 -> 1 -> 4 -> 5 -> 4 (el bucle vuelve a empezar en 1)
+                static const int sequenceRc[] = {1, 2, 3, 2, 1, 4, 5, 4};
+                animStep = (animStep + 1) % 8;
+                animFrame = sequenceRc[animStep];
+                currentSpriteName = "bomb.rc." + std::to_string(animFrame);
+            } else {
+                static const int sequence[] = {1, 2, 1, 0, 1, 2, 1, 0};
+                animStep = (animStep + 1) % 8;
+                animFrame = sequence[animStep];
+                currentSpriteName = "bomb." + std::to_string(animFrame);
+            }
         }
-        currentSpriteName = "bomb." + std::to_string(animFrame);
+        
+        if (remoteControlled && currentSpriteName.find("bomb.rc.") == std::string::npos) {
+            currentSpriteName = "bomb.rc.1";
+        } // Initial state if just placed
 
     } else if (state == BombState::EXPLODING) {
         // --- Explosión: 4 hacerse grande y 4 volverse pequeño (total 8) ---
@@ -207,12 +222,22 @@ void Bomb::Draw() {
         model = glm::scale(model, glm::vec3(halfTile, halfTile, 1.0f));
 
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        getUvRectForSprite(gBombAtlas, currentSpriteName, uvRect);
+        if (remoteControlled) {
+            getUvRectForSprite(gBombRcAtlas, currentSpriteName, uvRect);
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, bombRcTexture);
+        } else {
+            getUvRectForSprite(gBombAtlas, currentSpriteName, uvRect);
+        }
 
         glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
         glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
+        if (remoteControlled) {
+            // Restore map texture
+            glBindTexture(GL_TEXTURE_2D, mapTexture);
+        }
     } else if (state == BombState::EXPLODING) {
         // Renderizar todos los segmentos de la explosión
         for (const auto& seg : explosionSegments) {
