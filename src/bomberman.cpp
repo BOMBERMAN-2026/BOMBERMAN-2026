@@ -2080,6 +2080,8 @@ static glm::mat4 renderShadowPass(GameMap* gameMap, const glm::vec3& lightPos)
 
     glViewport(0, 0, 2048, 2048);
     glBindFramebuffer(GL_FRAMEBUFFER, shadowMapFBO);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
     glClear(GL_DEPTH_BUFFER_BIT);
     glUseProgram(shaderShadow);
     glUniformMatrix4fv(uniformShadowLightSpaceMatrix, 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
@@ -7004,17 +7006,33 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             glBindTexture(GL_TEXTURE_2D, floor3DTexture);
             glBindVertexArray(floorVAO); // Usamos el floorVAO que tiene UVs correctas
 
+            // Suelo más pulido/realista para el phong shading
+            glUniform1f(uniform3DTexturedAmbientStrength, 0.35f);
+            glUniform1f(uniform3DTexturedSpecularStrength, 0.55f);
+            glUniform1f(uniform3DTexturedShininess, 32.0f);
+
             for (int r = 0; r < gameMap->getRows(); ++r) {
                 for (int c = 0; c < gameMap->getCols(); ++c) {
-                    if (gameMap->isWalkable(r, c)) {
-                        glm::mat4 model(1.0f);
-                        model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.001f)); // Casi a nivel de suelo
-                        model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // Tamaño normal de tile
-                        glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
-                        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-                    }
+                    // Dibujamos el suelo en todas las celdas para que no haya huecos bajo los bloques
+                    // y así las sombras caigan correctamente sobre la base de los muros.
+                    const bool checker = (((r + c) % 2) == 0);
+                    // Tinte de checkerboard sutil para darle el toque clásico pero con luz realista
+                    glm::vec3 floorTint = checker ? glm::vec3(1.0f, 1.0f, 1.0f) : glm::vec3(0.85f, 0.85f, 0.85f);
+                    glUniform3fv(uniform3DTexturedTintColor, 1, glm::value_ptr(floorTint));
+
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.001f)); // Casi a nivel de suelo
+                    model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // Tamaño normal de tile
+                    glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 }
             }
+            
+            // Restaurar parámetros originales para el resto de objetos texturizados
+            glUniform1f(uniform3DTexturedAmbientStrength, 0.30f);
+            glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
+            glUniform1f(uniform3DTexturedShininess, 28.0f);
+            glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
         }
 
         if (canRenderAnyBombGlb) {
