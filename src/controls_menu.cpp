@@ -1,5 +1,6 @@
 #include "controls_menu.hpp"
 #include "in_game_menu.hpp"
+#include "audio_manager.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -7,8 +8,6 @@
 #include <fstream>
 #include <string>
 #include <cctype>
-
-extern void PlayMenuSelectSound();
 
 static constexpr float scaleUsualHud = 0.0010f;
 static constexpr float scaleMiniTitle = 0.000675f;
@@ -602,7 +601,7 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexGlobalControls = 0;
             }
             else actualIndexBomberman_1_Controls += 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[downKey_P1] = GLFW_REPEAT;
         }
 
@@ -612,21 +611,21 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexGlobalControls = generalKeyStrings.size() - 1;
             }
             else actualIndexBomberman_1_Controls -= 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[upKey_P1] = GLFW_REPEAT;
         }
 
         if (!modifyingControls && ( keys[leftKey_P1] == GLFW_PRESS || keys[rightKey_P1] == GLFW_PRESS )) {
             actualIndexBomberman_2_Controls = actualIndexBomberman_1_Controls;
             actualIndexBomberman_1_Controls = -1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
 
             keys[leftKey_P1] = GLFW_REPEAT; keys[rightKey_P1] = GLFW_REPEAT;
         }
 
         if (keys[selectKey] == GLFW_PRESS && !modifyingControls) {
             modifyingControls = true;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
         }
         else if (modifyingControls && lastKeyPressed != selectKey) {
             std::cout << "Entro a modificar controles bomb 1" << std::endl;
@@ -657,7 +656,7 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexSaveResetExit = 0;
             }
             else actualIndexBomberman_2_Controls += 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[downKey_P1] = GLFW_REPEAT;
         }
 
@@ -667,21 +666,21 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexSaveResetExit = saveResetExitStrings.size() - 1;
             }
             else actualIndexBomberman_2_Controls -= 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[upKey_P1] = GLFW_REPEAT;
         }
 
         if (!modifyingControls && ( keys[leftKey_P1] == GLFW_PRESS || keys[rightKey_P1] == GLFW_PRESS )) {
             actualIndexBomberman_1_Controls = actualIndexBomberman_2_Controls;
             actualIndexBomberman_2_Controls = -1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
 
             keys[leftKey_P1] = GLFW_REPEAT; keys[rightKey_P1] = GLFW_REPEAT;
         }
 
         if (keys[selectKey] == GLFW_PRESS && !modifyingControls) {
             modifyingControls = true;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
         }
         else if (modifyingControls && lastKeyPressed != selectKey) {
             switch (actualIndexBomberman_2_Controls) {
@@ -711,7 +710,7 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexBomberman_1_Controls = 0;
             }
             else actualIndexGlobalControls += 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[downKey_P1] = GLFW_REPEAT;
         }
 
@@ -721,7 +720,7 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexBomberman_1_Controls = bombermanKeyStrings.size() - 1;
             }
             else actualIndexGlobalControls -= 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[upKey_P1] = GLFW_REPEAT;
         }
 
@@ -729,14 +728,14 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
             if (actualIndexGlobalControls > 0) actualIndexSaveResetExit = actualIndexGlobalControls - 1;
             else actualIndexSaveResetExit = actualIndexGlobalControls;
             actualIndexGlobalControls = -1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
 
             keys[leftKey_P1] = GLFW_REPEAT; keys[rightKey_P1] = GLFW_REPEAT;
         }
 
         if (keys[selectKey] == GLFW_PRESS && !modifyingControls) {
             modifyingControls = true;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
         }
         else if (modifyingControls && lastKeyPressed != selectKey) {
             switch (actualIndexGlobalControls) {
@@ -762,7 +761,7 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexBomberman_2_Controls = 0;
             }
             else actualIndexSaveResetExit += 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[downKey_P1] = GLFW_REPEAT;
         }
 
@@ -772,7 +771,7 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
                 actualIndexBomberman_2_Controls = bombermanKeyStrings.size() - 1;
             }
             else actualIndexSaveResetExit -= 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             keys[upKey_P1] = GLFW_REPEAT;
         }
 
@@ -780,13 +779,13 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
 
             actualIndexGlobalControls = actualIndexSaveResetExit + 1;
             actualIndexSaveResetExit = -1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
 
             keys[leftKey_P1] = GLFW_REPEAT; keys[rightKey_P1] = GLFW_REPEAT;
         }
         
         if (keys[selectKey] == GLFW_PRESS) {
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
             switch (actualIndexSaveResetExit) {
                 // SAVE
                 case 0: saveToNonTemps(); saveToFile(); break;

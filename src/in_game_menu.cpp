@@ -1,11 +1,10 @@
 #include "in_game_menu.hpp"
+#include "audio_manager.hpp"
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <iostream>
 #include <string>
 #include <cctype>
-
-extern void PlayMenuSelectSound();
 
 // ============================== GLOBAL VARIABLES ==============================
 
@@ -194,18 +193,18 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
 
     if (keys[controlsMenu.downKey_P1] == GLFW_PRESS) {
         posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         keys[controlsMenu.downKey_P1] = GLFW_REPEAT;
     }
     
     if (keys[controlsMenu.upKey_P1] == GLFW_PRESS) {
         posSeleccion <= 0 ? posSeleccion = inGameMenuOptions.size() - 1 : posSeleccion -= 1;
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         keys[controlsMenu.upKey_P1] = GLFW_REPEAT;
     }
 
     if (keys[controlsMenu.selectKey] == GLFW_PRESS) {
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         
         // Comportamiento condicionado al indice en el vector currentOptionsSelected 
         switch (posSeleccion) {

@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -17,75 +17,30 @@
 #include "versus_mode.hpp"
 #include "cpu_bomberman.hpp"
 #include "score_popup.hpp"
+#include "audio_manager.hpp"
 
 #include <chrono>
 #include <thread>
 #include <mutex>
 
-// ============================================================
-// Wrappers de audio — delegan al AudioManager (miniaudio)
-// ============================================================
-#include "audio_manager.hpp"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
-// Para la carga asincrona de modelos 3d
-struct PendingModel {
-    std::string key;
-    std::string path;
-    TexturedMeshData meshData;
-    GLuint* vao; GLuint* vbo; GLuint* ebo; GLsizei* ic; GLuint* tex;
-};
+#include <iostream>
+#include <string>
+#include <cstdlib>
+#include <vector>
+#include <algorithm>
+#include <cctype>
+#include <cmath>
+#include <utility>
+#include <fstream>
+#include <sstream>
+#include <iomanip>
 
-// Para la carga asincrona de modelos 3d
-std::vector<PendingModel> loadingQueue;
-std::mutex loadingMutex;
-
-
-// Llamada desde Bomb::detonate() en bomb.cpp
-void PlayExplosionSound() {
-    AudioManager::get().playVfx(VfxSound::Explosion);
-}
-
-// Llamada desde Dragon Joven cuando escupe fuego
-void PlayDragonFireSound() {
-    AudioManager::get().playVfx(VfxSound::Explosion);
-}
-
-// Llamada desde King Bomber cuando emite su ataque especial de explosión distorsionada
-void PlayKingBomberDistortedExplosionSound() {
-    // Reproducir el sonido de explosión dos veces con pequeño delay para simular distorsión
-    AudioManager::get().playVfx(VfxSound::Explosion);
-    // Segunda reproducción ligeramente desfasada para efecto de distorsión
-    static float distortionDelayTimer = 0.0f;
-    // Nota: esto es una aproximación; una mejor solución sería usar un timer en el AudioManager
-    // Por ahora reproducimos dos veces casi simultáneamente para efecto de solapamiento
-    AudioManager::get().playVfx(VfxSound::Explosion);
-}
-
-// Llamada desde Dron Bombardero cuando dispara sus bolas de fuego - MUY distorsionado
-void PlayDronDistortedFireSound() {
-    // Reproducir el sonido de explosión de robots distorsionado
-    AudioManager::get().playVfx(VfxSound::ExplosionRobots);
-}
-
-// Llamada desde menús al moverse entre opciones
-void PlayMenuSelectSound() {
-    AudioManager::get().playVfx(VfxSound::Select);
-}
-
-// Llamada desde constructor de Bomb en bomb.cpp
-void PlayPlaceBombSound() {
-    AudioManager::get().playVfx(VfxSound::PlaceBomb);
-}
-
-// Llamada desde game_map.cpp / bomberman.cpp al recoger power-up
-void PlayCogerPowerUpSound() {
-    AudioManager::get().playVfx(VfxSound::Pickup);
-}
-
-void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled) {
-    // Silenciado: sistema de debug de audio MCI eliminado.
-    (void)eventName; (void)ownerIndex; (void)row; (void)col; (void)power; (void)remoteControlled;
-}
+#define STB_IMAGE_IMPLEMENTATION
+#include "external/stb_image.h"
 
 /*
  * bomberman.cpp
@@ -104,24 +59,22 @@ void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, 
  *   para facilitar lectura sin introducir demasiadas clases nuevas.
  */
 
-#define STB_IMAGE_IMPLEMENTATION
-#include "external/stb_image.h"
+// Para la carga asincrona de modelos 3d
+struct PendingModel {
+    std::string key;
+    std::string path;
+    TexturedMeshData meshData;
+    GLuint* vao; GLuint* vbo; GLuint* ebo; GLsizei* ic; GLuint* tex;
+};
 
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-#include <glm/gtc/type_ptr.hpp>
+// Para la carga asincrona de modelos 3d
+std::vector<PendingModel> loadingQueue;
+std::mutex loadingMutex;
 
-#include <iostream>
-#include <string>
-#include <cstdlib>
-#include <vector>
-#include <algorithm>
-#include <cctype>
-#include <cmath>
-#include <utility>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
+void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled) {
+    // Silenciado: sistema de debug de audio MCI eliminado.
+    (void)eventName; (void)ownerIndex; (void)row; (void)col; (void)power; (void)remoteControlled;
+}
 
 GameMap* gameMap;
 
@@ -1662,337 +1615,6 @@ static bool createTexturedGlbModel(const std::string& meshCacheKey,
     }
     return completeTexturedGlbModel(meshData, meshCacheKey, modelPath, outVao, outVbo, outEbo, outIndexCount, outTexture);
 }
-
-void CreateActorGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("actorGLB",
-                                 modelPath,
-                                 actorGlbVAO,
-                                 actorGlbVBO,
-                                 actorGlbEBO,
-                                 actorGlbIndexCount,
-                                 actorGlbTexture);
-}
-
-void CreateRedActorGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("redActorGLB",
-                                 modelPath,
-                                 redActorGlbVAO,
-                                 redActorGlbVBO,
-                                 redActorGlbEBO,
-                                 redActorGlbIndexCount,
-                                 redActorGlbTexture);
-}
-
-void CreateBlueActorGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("blueActorGLB",
-                                 modelPath,
-                                 blueActorGlbVAO,
-                                 blueActorGlbVBO,
-                                 blueActorGlbEBO,
-                                 blueActorGlbIndexCount,
-                                 blueActorGlbTexture);
-}
-
-void CreateYellowActorGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("yellowActorGLB",
-                                 modelPath,
-                                 yellowActorGlbVAO,
-                                 yellowActorGlbVBO,
-                                 yellowActorGlbEBO,
-                                 yellowActorGlbIndexCount,
-                                 yellowActorGlbTexture);
-}
-
-void CreateLeonGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("leonGLB",
-                                 modelPath,
-                                 leonGlbVAO,
-                                 leonGlbVBO,
-                                 leonGlbEBO,
-                                 leonGlbIndexCount,
-                                 leonGlbTexture);
-}
-
-void CreateFantasmaGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("fantasmaGLB",
-                                 modelPath,
-                                 fantasmaGlbVAO,
-                                 fantasmaGlbVBO,
-                                 fantasmaGlbEBO,
-                                 fantasmaGlbIndexCount,
-                                 fantasmaGlbTexture);
-}
-
-void CreateBebeGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("bebeGLB",
-                                 modelPath,
-                                 bebeGlbVAO,
-                                 bebeGlbVBO,
-                                 bebeGlbEBO,
-                                 bebeGlbIndexCount,
-                                 bebeGlbTexture);
-}
-
-void CreateBabosaGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("babosaGLB",
-                                 modelPath,
-                                 babosaGlbVAO,
-                                 babosaGlbVBO,
-                                 babosaGlbEBO,
-                                 babosaGlbIndexCount,
-                                 babosaGlbTexture);
-}
-
-void CreateBombGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("bombGLB",
-                                 modelPath,
-                                 bombGlbVAO,
-                                 bombGlbVBO,
-                                 bombGlbEBO,
-                                 bombGlbIndexCount,
-                                 bombGlbTexture);
-}
-
-void CreateBombRcGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("bombRcGLB",
-                                 modelPath,
-                                 bombRcGlbVAO,
-                                 bombRcGlbVBO,
-                                 bombRcGlbEBO,
-                                 bombRcGlbIndexCount,
-                                 bombRcGlbTexture);
-}
-
-void CreateNextLevelBombGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("nextLevelBombGLB",
-                                 modelPath,
-                                 nextLevelBombGlbVAO,
-                                 nextLevelBombGlbVBO,
-                                 nextLevelBombGlbEBO,
-                                 nextLevelBombGlbIndexCount,
-                                 nextLevelBombGlbTexture);
-}
-
-void CreateFlameGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("flameGLB",
-                                 modelPath,
-                                 flameGlbVAO,
-                                 flameGlbVBO,
-                                 flameGlbEBO,
-                                 flameGlbIndexCount,
-                                 flameGlbTexture);
-}
-
-void CreateFlamePowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("flamePowerUpGLB",
-                                 modelPath,
-                                 flamePowerUpGlbVAO,
-                                 flamePowerUpGlbVBO,
-                                 flamePowerUpGlbEBO,
-                                 flamePowerUpGlbIndexCount,
-                                 flamePowerUpGlbTexture);
-}
-
-void CreateSpeedPowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("speedPowerUpGLB",
-                                 modelPath,
-                                 speedPowerUpGlbVAO,
-                                 speedPowerUpGlbVBO,
-                                 speedPowerUpGlbEBO,
-                                 speedPowerUpGlbIndexCount,
-                                 speedPowerUpGlbTexture);
-}
-
-void CreateExtraLifePowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("extraLifePowerUpGLB",
-                                 modelPath,
-                                 extraLifePowerUpGlbVAO,
-                                 extraLifePowerUpGlbVBO,
-                                 extraLifePowerUpGlbEBO,
-                                 extraLifePowerUpGlbIndexCount,
-                                 extraLifePowerUpGlbTexture);
-}
-
-void CreateRemoteControlPowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("remoteControlPowerUpGLB",
-                                 modelPath,
-                                 remoteControlPowerUpGlbVAO,
-                                 remoteControlPowerUpGlbVBO,
-                                 remoteControlPowerUpGlbEBO,
-                                 remoteControlPowerUpGlbIndexCount,
-                                 remoteControlPowerUpGlbTexture);
-}
-
-void CreateInvincibilityPowerUpGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("invincibilityPowerUpGLB",
-                                 modelPath,
-                                 invincibilityPowerUpGlbVAO,
-                                 invincibilityPowerUpGlbVBO,
-                                 invincibilityPowerUpGlbEBO,
-                                 invincibilityPowerUpGlbIndexCount,
-                                 invincibilityPowerUpGlbTexture);
-}
-
-void CreateMatchesItemGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("matchesItemGLB",
-                                 modelPath,
-                                 matchesItemGlbVAO,
-                                 matchesItemGlbVBO,
-                                 matchesItemGlbEBO,
-                                 matchesItemGlbIndexCount,
-                                 matchesItemGlbTexture);
-}
-
-void CreateCanItemGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("canItemGLB",
-                                 modelPath,
-                                 canItemGlbVAO,
-                                 canItemGlbVBO,
-                                 canItemGlbEBO,
-                                 canItemGlbIndexCount,
-                                 canItemGlbTexture);
-}
-
-void CreateLighterItemGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("lighterItemGLB",
-                                 modelPath,
-                                 lighterItemGlbVAO,
-                                 lighterItemGlbVBO,
-                                 lighterItemGlbEBO,
-                                 lighterItemGlbIndexCount,
-                                 lighterItemGlbTexture);
-}
-
-void CreateBatteryItemGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("batteryItemGLB",
-                                 modelPath,
-                                 batteryItemGlbVAO,
-                                 batteryItemGlbVBO,
-                                 batteryItemGlbEBO,
-                                 batteryItemGlbIndexCount,
-                                 batteryItemGlbTexture);
-}
-
-void CreateDragonflyItemGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dragonflyItemGLB",
-                                 modelPath,
-                                 dragonflyItemGlbVAO,
-                                 dragonflyItemGlbVBO,
-                                 dragonflyItemGlbEBO,
-                                 dragonflyItemGlbIndexCount,
-                                 dragonflyItemGlbTexture);
-}
-
-void CreateHudsonBeeItemGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("hudsonBeeItemGLB",
-                                 modelPath,
-                                 hudsonBeeItemGlbVAO,
-                                 hudsonBeeItemGlbVBO,
-                                 hudsonBeeItemGlbEBO,
-                                 hudsonBeeItemGlbIndexCount,
-                                 hudsonBeeItemGlbTexture);
-}
-
-void CreateKingBomberGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("kingBomberGLB",
-                                 modelPath,
-                                 kingBomberGlbVAO,
-                                 kingBomberGlbVBO,
-                                 kingBomberGlbEBO,
-                                 kingBomberGlbIndexCount,
-                                 kingBomberGlbTexture);
-}
-
-void CreateDronAzulGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronAzulGLB",
-                                 modelPath,
-                                 dronAzulGlbVAO,
-                                 dronAzulGlbVBO,
-                                 dronAzulGlbEBO,
-                                 dronAzulGlbIndexCount,
-                                 dronAzulGlbTexture);
-}
-
-void CreateDronRosaGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronRosaGLB",
-                                 modelPath,
-                                 dronRosaGlbVAO,
-                                 dronRosaGlbVBO,
-                                 dronRosaGlbEBO,
-                                 dronRosaGlbIndexCount,
-                                 dronRosaGlbTexture);
-}
-
-void CreateDronVerdeGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronVerdeGLB",
-                                 modelPath,
-                                 dronVerdeGlbVAO,
-                                 dronVerdeGlbVBO,
-                                 dronVerdeGlbEBO,
-                                 dronVerdeGlbIndexCount,
-                                 dronVerdeGlbTexture);
-}
-
-void CreateDronAmarilloGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dronAmarilloGLB",
-                                 modelPath,
-                                 dronAmarilloGlbVAO,
-                                 dronAmarilloGlbVBO,
-                                 dronAmarilloGlbEBO,
-                                 dronAmarilloGlbIndexCount,
-                                 dronAmarilloGlbTexture);
-}
-
-void CreateSolGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("solGLB",
-                                 modelPath,
-                                 solGlbVAO,
-                                 solGlbVBO,
-                                 solGlbEBO,
-                                 solGlbIndexCount,
-                                 solGlbTexture);
-}
-
-void CreateDragonGlbModel(const std::string& modelPath)
-{
-    (void)createTexturedGlbModel("dragonGLB",
-                                 modelPath,
-                                 dragonGlbVAO,
-                                 dragonGlbVBO,
-                                 dragonGlbEBO,
-                                 dragonGlbIndexCount,
-                                 dragonGlbTexture);
-}
-
 
 void Compile3DShaders()
 {
@@ -4715,8 +4337,10 @@ void Game::processInput() {
 
         lastDirKey = GLFW_KEY_UNKNOWN;
         lastDirKeyP2 = GLFW_KEY_UNKNOWN;
-        keys[inGameMenu.controlsMenu.leftKey_P1] = GLFW_REPEAT;
-        keys[inGameMenu.controlsMenu.rightKey_P1] = GLFW_REPEAT;
+        keys[inGameMenu.controlsMenu.leftKey_P1] = GLFW_RELEASE;
+        keys[inGameMenu.controlsMenu.rightKey_P1] = GLFW_RELEASE;
+        keys[inGameMenu.controlsMenu.upKey_P1] = GLFW_RELEASE;
+        keys[inGameMenu.controlsMenu.downKey_P1] = GLFW_RELEASE;
 
         return; 
     }
@@ -4966,10 +4590,10 @@ void Game::processInput() {
                         case GLFW_KEY_RIGHT: if (right) keyToUse = GLFW_KEY_RIGHT; break;
                     }
                     if (keyToUse == GLFW_KEY_UNKNOWN) {
-                        if (up) keyToUse = GLFW_KEY_UP;
-                        else if (down) keyToUse = GLFW_KEY_DOWN;
-                        else if (left) keyToUse = GLFW_KEY_LEFT;
-                        else if (right) keyToUse = GLFW_KEY_RIGHT;
+                        if (this->lastDirKey == inGameMenu.controlsMenu.upKey_P1) keyToUse = GLFW_KEY_UP;
+                        else if (this->lastDirKey == inGameMenu.controlsMenu.downKey_P1) keyToUse = GLFW_KEY_DOWN;
+                        else if (this->lastDirKey == inGameMenu.controlsMenu.leftKey_P1) keyToUse = GLFW_KEY_LEFT;
+                        else if (this->lastDirKey == inGameMenu.controlsMenu.rightKey_P1) keyToUse = GLFW_KEY_RIGHT;
                     }
                 }
 
@@ -5090,10 +4714,10 @@ void Game::processInput() {
                             case GLFW_KEY_D: if (right2) keyToUse2 = GLFW_KEY_D; break;
                         }
                         if (keyToUse2 == GLFW_KEY_UNKNOWN) {
-                            if (up2) keyToUse2 = GLFW_KEY_W;
-                            else if (down2) keyToUse2 = GLFW_KEY_S;
-                            else if (left2) keyToUse2 = GLFW_KEY_A;
-                            else if (right2) keyToUse2 = GLFW_KEY_D;
+                            if (this->lastDirKeyP2 == inGameMenu.controlsMenu.upKey_P2) keyToUse2 = GLFW_KEY_W;
+                            else if (this->lastDirKeyP2 == inGameMenu.controlsMenu.downKey_P2) keyToUse2 = GLFW_KEY_S;
+                            else if (this->lastDirKeyP2 == inGameMenu.controlsMenu.leftKey_P2) keyToUse2 = GLFW_KEY_A;
+                            else if (this->lastDirKeyP2 == inGameMenu.controlsMenu.rightKey_P2) keyToUse2 = GLFW_KEY_D;
                         }
                     }
 
@@ -5671,7 +5295,7 @@ void Game::update() {
         if (currentCinematicType == CinematicType::Intro && !introExplosionPlayed) {
             introCinematicElapsedSeconds += deltaTime;
             if (introCinematicElapsedSeconds >= kIntroExplosionTriggerSeconds) {
-                PlayExplosionSound();
+                AudioManager::get().playVfx(VfxSound::Explosion);
                 introExplosionPlayed = true;
             }
         }

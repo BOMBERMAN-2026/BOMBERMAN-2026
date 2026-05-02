@@ -1,4 +1,5 @@
 #include "custom_game_menu.hpp"
+#include "audio_manager.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -11,11 +12,7 @@
 #include <vector>
 
 // Reutilizamos utilidades globales ya existentes en el proyecto.
-extern std::string resolveAssetPath(const std::string& assetPath);
 extern GLuint LoadTexture(const char* filePath);
-extern bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spriteName, glm::vec4& uvRect);
-extern void PlayMenuSelectSound();
-extern void PlayExplosionSound();
 
 namespace {
 constexpr float kCanvasWidth = 1920.0f;
@@ -531,18 +528,18 @@ void CustomGameMenu::processInputMenu1(std::map<int, int>& keys, ControlsMenu& c
 
     if (keys[controls.upKey_P1] == GLFW_PRESS) {
         menu1RowSelection = (menu1RowSelection - 1 + kMenu1Rows) % kMenu1Rows;
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         keys[controls.upKey_P1] = GLFW_REPEAT;
     }
 
     if (keys[controls.downKey_P1] == GLFW_PRESS) {
         menu1RowSelection = (menu1RowSelection + 1) % kMenu1Rows;
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         keys[controls.downKey_P1] = GLFW_REPEAT;
     }
 
     if (keys[controls.selectKey] == GLFW_PRESS) {
-        PlayExplosionSound();
+        AudioManager::get().playVfx(VfxSound::Explosion);
         switch (menu1RowSelection) {
             case 0: {
                 if (settings.players == CustomPlayersOption::OnePlayer) {
@@ -613,13 +610,13 @@ void CustomGameMenu::processInputMenu2(std::map<int, int>& keys, ControlsMenu& c
 
     if (keys[GLFW_KEY_LEFT] == GLFW_PRESS) {
         enemyTypeSelection = (enemyTypeSelection - 1 + kEnemyTypeCount) % kEnemyTypeCount;
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         keys[GLFW_KEY_LEFT] = GLFW_REPEAT;
     }
 
     if (keys[GLFW_KEY_RIGHT] == GLFW_PRESS) {
         enemyTypeSelection = (enemyTypeSelection + 1) % kEnemyTypeCount;
-        PlayMenuSelectSound();
+        AudioManager::get().playVfx(VfxSound::Select);
         keys[GLFW_KEY_RIGHT] = GLFW_REPEAT;
     }
 
@@ -627,7 +624,7 @@ void CustomGameMenu::processInputMenu2(std::map<int, int>& keys, ControlsMenu& c
         const int totalNow = getEnemyTotalCount();
         if (totalNow < kEnemyTotalMax) {
             enemyCounts[enemyTypeSelection] += 1;
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
         }
         keys[GLFW_KEY_UP] = GLFW_REPEAT;
     }
@@ -636,14 +633,14 @@ void CustomGameMenu::processInputMenu2(std::map<int, int>& keys, ControlsMenu& c
         const int oldCount = enemyCounts[enemyTypeSelection];
         enemyCounts[enemyTypeSelection] = std::max(0, enemyCounts[enemyTypeSelection] - 1);
         if (enemyCounts[enemyTypeSelection] != oldCount) {
-            PlayMenuSelectSound();
+            AudioManager::get().playVfx(VfxSound::Select);
         }
         keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
     }
 
     if (keys[controls.selectKey] == GLFW_PRESS) {
         if (getEnemyTotalCount() > 0) {
-            PlayExplosionSound();
+            AudioManager::get().playVfx(VfxSound::Explosion);
             menu2PlaySelected = true;
             menu2ArrowAnimTimer = 0.0f;
             menu2SelectedWaitTimer = 0.0f;
