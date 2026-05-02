@@ -11,6 +11,7 @@
 extern std::string resolveAssetPath(const std::string& assetPath);
 extern GLuint LoadTexture(const char* filePath);
 extern bool getUvRectForSprite(const SpriteAtlas& atlas, const std::string& spriteName, glm::vec4& uvRect);
+extern void PlayExplosionSound();
 
 MenuScreen::MenuScreen()
     : menuBackgroundTexture(0), menuArrowTexture(0), menuSelection(0),
@@ -189,6 +190,7 @@ void MenuScreen::processInputMenu(std::map<int, int>& keys, ControlsMenu& contro
         if (!menuArrowSelected) {
             menuArrowSelected = true;
             menuArrowAnimTimer = 0.0f;
+            PlayExplosionSound();
             keys[controls.selectKey] = GLFW_REPEAT;
         }
     }
