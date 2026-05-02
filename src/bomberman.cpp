@@ -4051,14 +4051,14 @@ void Game::setCamera3DType(Camera3DType newType) {
         }
 
         freeCameraYaw = wrapAnglePi(freeCameraYaw);
-        freeCameraPitch = std::max(kFreeCameraPitchMinRadians, std::min(kFreeCameraPitchMaxRadians, freeCameraPitch));
+        freeCameraPitch = wrapAnglePi(freeCameraPitch);
         freeCameraRoll = wrapAnglePi(freeCameraRoll);
         cameraOrbitDragging = false;
         std::cout << "[Render] Camara libre: arrastre IZQ mueve | arrastre DER rota | rueda zoom | 0 fija/desfija\n";
     } else if (camera3DType == Camera3DType::PerspectiveFixed ||
                camera3DType == Camera3DType::PerspectiveMobile) {
         cameraOrbitYaw = wrapAnglePi(cameraOrbitYaw);
-        cameraOrbitPitch = std::max(kOrbitPitchMinRadians, std::min(kOrbitPitchMaxRadians, cameraOrbitPitch));
+        cameraOrbitPitch = wrapAnglePi(cameraOrbitPitch);
     }
 
     const bool shouldCaptureFirstPersonMouse =
@@ -4118,9 +4118,9 @@ void Game::onMouseScroll(double yOffset) {
 
             freeCameraPosX = std::max(-mapHalfWidth - boundPad, std::min(mapHalfWidth + boundPad, freeCameraPosX));
             freeCameraPosZ = std::max(-mapHalfDepth - boundPad, std::min(mapHalfDepth + boundPad, freeCameraPosZ));
-            freeCameraPosY = std::max(0.35f, std::min(mapRadius * 3.6f + 13.0f, freeCameraPosY));
+            freeCameraPosY = std::max(-1000.0f, std::min(1000.0f, freeCameraPosY));
         } else {
-            freeCameraPosY = std::max(0.35f, freeCameraPosY);
+            freeCameraPosY = std::max(-1000.0f, freeCameraPosY);
         }
     }
 }
@@ -5265,7 +5265,22 @@ void Game::processInput() {
                         } else {
                             rightAxis = glm::normalize(rightAxis);
                         }
-                        const glm::vec3 upAxis = computeCameraUpFromForwardAndRoll(forward, this->freeCameraRoll);
+                        
+                        glm::vec3 baseUp = glm::normalize(glm::vec3(
+                            std::sin(this->freeCameraYaw) * std::sin(this->freeCameraPitch),
+                            std::cos(this->freeCameraPitch),
+                            std::cos(this->freeCameraYaw) * std::sin(this->freeCameraPitch)
+                        ));
+                        
+                        // Apply roll manually here since we have a true custom baseUp
+                        glm::vec3 upAxis = baseUp;
+                        if (std::abs(this->freeCameraRoll) > 0.001f) {
+                            glm::vec3 orthRight = glm::normalize(glm::cross(forward, baseUp));
+                            glm::vec3 orthUp = glm::normalize(glm::cross(orthRight, forward));
+                            float cosR = std::cos(this->freeCameraRoll);
+                            float sinR = std::sin(this->freeCameraRoll);
+                            upAxis = glm::normalize(orthUp * cosR + orthRight * sinR);
+                        }
 
                         this->freeCameraPosX += (rightAxis.x * (float)deltaX - upAxis.x * (float)deltaY) * kFreeCameraDragPanSensitivity;
                         this->freeCameraPosY += (rightAxis.y * (float)deltaX - upAxis.y * (float)deltaY) * kFreeCameraDragPanSensitivity;
@@ -5274,15 +5289,13 @@ void Game::processInput() {
                         this->freeCameraYaw -= (float)deltaX * kFreeCameraRotateYawSensitivity;
                         this->freeCameraPitch -= (float)deltaY * kFreeCameraRotatePitchSensitivity;
                         this->freeCameraYaw = wrapAnglePi(this->freeCameraYaw);
-                        this->freeCameraPitch = std::max(kFreeCameraPitchMinRadians,
-                                                         std::min(kFreeCameraPitchMaxRadians, this->freeCameraPitch));
+                        this->freeCameraPitch = wrapAnglePi(this->freeCameraPitch);
                     }
                 } else {
                     this->cameraOrbitYaw -= (float)deltaX * kOrbitMouseYawSensitivity;
                     this->cameraOrbitPitch -= (float)deltaY * kOrbitMousePitchSensitivity;
                     this->cameraOrbitYaw = wrapAnglePi(this->cameraOrbitYaw);
-                    this->cameraOrbitPitch = std::max(kOrbitPitchMinRadians,
-                                                      std::min(kOrbitPitchMaxRadians, this->cameraOrbitPitch));
+                    this->cameraOrbitPitch = wrapAnglePi(this->cameraOrbitPitch);
                 }
             }
         } else {
@@ -5343,7 +5356,7 @@ void Game::processInput() {
             const float boundPad = 8.0f;
             this->freeCameraPosX = std::max(-mapHalfWidth - boundPad, std::min(mapHalfWidth + boundPad, this->freeCameraPosX));
             this->freeCameraPosZ = std::max(-mapHalfDepth - boundPad, std::min(mapHalfDepth + boundPad, this->freeCameraPosZ));
-            this->freeCameraPosY = std::max(0.35f, std::min(mapRadius * 3.6f + 13.0f, this->freeCameraPosY));
+            this->freeCameraPosY = std::max(-1000.0f, std::min(1000.0f, this->freeCameraPosY));
         }
     }
 
@@ -6187,19 +6200,21 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     } else if (camera3DType == Camera3DType::PerspectiveFixed) {
         const float orbitRadius = cameraOrbitDistance;
         const glm::vec3 pivot = mapCenter + glm::vec3(0.0f, mapRadius * 0.30f + 0.75f, 0.0f);
-        const float elevation = std::max(0.16f, std::min(1.28f, 0.72f + cameraOrbitPitch));
+        const float elevation = cameraOrbitPitch;
         const float horizontalRadius = std::cos(elevation) * orbitRadius;
         const float verticalRadius = std::sin(elevation) * orbitRadius;
         cameraPos = pivot + glm::vec3(std::sin(cameraOrbitYaw) * horizontalRadius,
                                       verticalRadius,
                                       std::cos(cameraOrbitYaw) * horizontalRadius);
         cameraTarget = pivot;
-        up = computeCameraUpFromForwardAndRoll(glm::normalize(cameraTarget - cameraPos), 0.0f);
+        up = glm::normalize(glm::vec3(-std::sin(cameraOrbitYaw) * std::sin(elevation),
+                                       std::cos(elevation),
+                                      -std::cos(cameraOrbitYaw) * std::sin(elevation)));
     } else if (camera3DType == Camera3DType::PerspectiveMobile) {
         // Camara de seguimiento orbital: mantiene foco en jugador y rota con el yaw de camara.
         const float followDistance = cameraFollowDistance;
         const glm::vec3 pivot = trackedPlayerCenter + glm::vec3(0.0f, 0.75f, 0.0f);
-        const float elevation = std::max(0.10f, std::min(1.18f, 0.56f + cameraOrbitPitch));
+        const float elevation = cameraOrbitPitch;
         const float horizontalDistance = std::cos(elevation) * followDistance;
         const float verticalDistance = std::sin(elevation) * followDistance;
         const glm::vec3 followOffset(std::sin(cameraOrbitYaw) * horizontalDistance,
@@ -6207,7 +6222,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                                      std::cos(cameraOrbitYaw) * horizontalDistance);
         cameraPos = pivot + followOffset;
         cameraTarget = pivot;
-        up = computeCameraUpFromForwardAndRoll(glm::normalize(cameraTarget - cameraPos), 0.0f);
+        up = glm::normalize(glm::vec3(-std::sin(cameraOrbitYaw) * std::sin(elevation),
+                                       std::cos(elevation),
+                                      -std::cos(cameraOrbitYaw) * std::sin(elevation)));
     } else if (camera3DType == Camera3DType::FirstPerson) {
         float firstPersonCameraYaw = this->firstPersonYaw;
         float firstPersonCameraPitch = this->firstPersonPitch;
@@ -6235,7 +6252,21 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         const glm::vec3 freeForward = firstPersonLookToForward(freeCameraYaw, freeCameraPitch);
         cameraPos = glm::vec3(freeCameraPosX, freeCameraPosY, freeCameraPosZ);
         cameraTarget = cameraPos + freeForward * 3.4f;
-        up = computeCameraUpFromForwardAndRoll(freeForward, freeCameraRoll);
+        
+        glm::vec3 baseUp = glm::normalize(glm::vec3(
+            std::sin(freeCameraYaw) * std::sin(freeCameraPitch),
+            std::cos(freeCameraPitch),
+            std::cos(freeCameraYaw) * std::sin(freeCameraPitch)
+        ));
+        
+        up = baseUp;
+        if (std::abs(freeCameraRoll) > 0.001f) {
+            glm::vec3 orthRight = glm::normalize(glm::cross(freeForward, baseUp));
+            glm::vec3 orthUp = glm::normalize(glm::cross(orthRight, freeForward));
+            float cosR = std::cos(freeCameraRoll);
+            float sinR = std::sin(freeCameraRoll);
+            up = glm::normalize(orthUp * cosR + orthRight * sinR);
+        }
     }
 
     const glm::mat4 view = glm::lookAt(cameraPos, cameraTarget, up);
