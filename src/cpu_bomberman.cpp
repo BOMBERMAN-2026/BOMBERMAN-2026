@@ -1351,6 +1351,13 @@ void updateCpuPlayers(GameMode mode,
                 float perSecond = 0.08f + 0.42f * profile.aggressiveness;
                 if (adjHidden) perSecond += 0.18f;
                 if (holdingToBreakTarget) perSecond += 0.14f;
+                
+                // En VS: si hay target (oponente) cercano, aumentar mucho la agresividad
+                // para forzar combate entre CPUs incluso sin alineación directa.
+                if (target != nullptr && bestDist < 8.0f) {
+                    perSecond += 0.50f; // Impulso fuerte de combate en VS
+                }
+                
                 wantBomb = (rand01() < perSecond * deltaTime);
                 if (wantBomb) {
                     wantBomb = canEscapeOwnBomb(*map, *p);
@@ -1938,6 +1945,8 @@ void Agent::Update()
     // Combate contra targets hostiles (Medium/Hard).
     if (hasTarget && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
         const bool inRange = canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
+        const float distToTarget = std::abs(tr - sr) + std::abs(tc - sc);
+        
         if (inRange) {
             const float perSecond = isAlly() ? 0.50f : 0.45f;
             const bool trigger = (rand01() < perSecond * std::max(0.0f, deltaTime));
@@ -1958,7 +1967,13 @@ void Agent::Update()
             }
         } else if (difficulty != Difficulty::Easy) {
             // Medium/Hard: incluso si no está en rango, considera bombardear para control territorial.
-            const float controlPerSecond = 0.18f + 0.25f * agentProfile.aggressiveness;
+            float controlPerSecond = 0.18f + 0.25f * agentProfile.aggressiveness;
+            
+            // Si target muy cercano, aumentar agresividad para forzar combate.
+            if (distToTarget < 8.0f) {
+                controlPerSecond += 0.35f; // Impulso de combate cuando hay target cerca
+            }
+            
             if (rand01() < controlPerSecond * std::max(0.0f, deltaTime) &&
                 !cellHasAnyBomb(sr, sc) &&
                 canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
