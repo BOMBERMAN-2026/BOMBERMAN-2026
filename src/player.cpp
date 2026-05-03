@@ -597,7 +597,7 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
     {
         int r, c;
         const float eFront = halfTile * 0.82f;
-        const float eSide  = halfTile * 0.48f;
+        const float eSide  = halfTile * 0.68f;
 
         if (mov == MOVE_UP) {
             bool hitLeft = false;
@@ -611,7 +611,6 @@ void Player::UpdateSprite(Move mov, const GameMap* map, float deltaTime) {
             else if (hitLeft && !hitRight) newPos.x += step * 0.75f;
             else if (!hitLeft && hitRight) newPos.x -= step * 0.75f;
             else newPos.y += step;
-
         }
         if (mov == MOVE_DOWN) {
             bool hitLeft = false;

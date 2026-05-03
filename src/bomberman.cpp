@@ -183,6 +183,7 @@ static const char* kDronVerdeGlbPath = "models/3D/green robot 3d model.glb";
 static const char* kDronAmarilloGlbPath = "models/3D/yellow robot 3d model.glb";
 static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
 static const char* kDragonGlbPath = "models/3D/teal creature 3d model.glb";
+static const char* kDestructibleStage3GlbPath = "models/3D/bloqueDestructibleStage3.glb";
 static const char* kHorizonBackgroundCandidates[] = {
     "models/3D/Fondo3D.jpeg",
     "models/Fondo3D.jpeg",
@@ -351,6 +352,14 @@ GLuint dragonGlbVBO = 0;
 GLuint dragonGlbEBO = 0;
 GLsizei dragonGlbIndexCount = 0;
 GLuint dragonGlbTexture = 0;
+GLuint destructibleStage3GlbVAO = 0;
+GLuint destructibleStage3GlbVBO = 0;
+GLuint destructibleStage3GlbEBO = 0;
+GLsizei destructibleStage3GlbIndexCount = 0;
+GLuint destructibleStage3GlbTexture = 0;
+GLuint destructibleStage3InstanceVBO = 0;
+bool destructibleStage3InstanceLayoutReady = false;
+int gCurrentLoadedStageNum = 1;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -376,6 +385,7 @@ GLuint uniform3DTexturedShininess = 0;
 GLuint uniform3DTexturedTintColor = 0;
 GLuint uniform3DTexturedLightSpaceMatrix = 0;
 GLuint uniform3DTexturedShadowMap = 0;
+GLuint uniform3DTexturedUseInstancing = 0;
 
 GLuint shadowMapFBO = 0;
 GLuint shadowMapTex = 0;
@@ -425,6 +435,23 @@ static const char* camera3DTypeToString(Camera3DType type) {
         case Camera3DType::FreeCamera: return "Libre";
         default: return "Unknown";
     }
+}
+
+static bool shouldSkipStage2BorderTile(const GameMap* gameMap, int row, int col)
+{
+    if (!gameMap || gCurrentLoadedStageNum != 2) {
+        return false;
+    }
+
+    const int spriteId = gameMap->getSpriteId(row, col);
+    return spriteId == 12 || spriteId == 13;
+}
+
+static bool isTwoHumanPlayersMode(GameMode mode)
+{
+    return mode == GameMode::HistoryTwoPlayers
+        || mode == GameMode::VsTwoPlayers
+        || mode == GameMode::TwoPlayers;
 }
 
 static float facingKeyToYawRadians(int facingKey)
@@ -511,7 +538,7 @@ static int yawToControlQuadrant(float yawRadians)
     return ((int)std::floor((wrapped + kQuarterPi) / kHalfPi)) % 4;
 }
 
-static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
+static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey, int playerIndex)
 {
     if (!game || game->viewMode != ViewMode::Mode3D) {
         return inputDirKey;
@@ -522,7 +549,7 @@ static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
         game->camera3DType == Camera3DType::PerspectiveMobile) {
         yawForControls = game->getCameraOrbitYaw();
     } else if (game->camera3DType == Camera3DType::FirstPerson) {
-        yawForControls = game->getFirstPersonYaw();
+        yawForControls = game->getFirstPersonYawForPlayer(playerIndex);
     } else if (game->camera3DType == Camera3DType::FreeCamera) {
         yawForControls = game->getFreeCameraYaw();
     } else {
@@ -562,6 +589,11 @@ static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
     }
 }
 
+static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
+{
+    return remapDirectionFor3DCamera(game, inputDirKey, 0);
+}
+
 static Move directionKeyToMove(GLint directionKey)
 {
     switch (directionKey) {
@@ -595,12 +627,13 @@ static bool isSameTile(const GameMap* map, const glm::vec2& a, const glm::vec2& 
     return ar == br && ac == bc;
 }
 
-// Colisi├│n enemigo-jugador (AABB simple por tile): detecta contacto.
+// Colisión enemigo-jugador: detecta contacto.
 static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, const glm::vec2& playerPos) {
     if (!map) return false;
-    // AABB simple alrededor del centro del tile. Ajustable.
+    // Ampliamos el rango de contacto (antes 0.95f) para que abarque el tamaño visual
+    // de los sprites y se produzca la muerte desde el borde, sin esperar al centro.
     const float halfTile = map->getTileSize() / 2.0f;
-    const float r = halfTile * 0.95f;
+    const float r = halfTile * 1.45f; 
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
@@ -1680,6 +1713,7 @@ void Compile3DTexturedShaders()
     uniform3DTexturedTintColor = glGetUniformLocation(shader3DTextured, "objectTintColor");
     uniform3DTexturedLightSpaceMatrix = glGetUniformLocation(shader3DTextured, "lightSpaceMatrix");
     uniform3DTexturedShadowMap = glGetUniformLocation(shader3DTextured, "shadowMap");
+    uniform3DTexturedUseInstancing = glGetUniformLocation(shader3DTextured, "useInstancing");
 }
 
 static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
@@ -2012,70 +2046,58 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
         drawQuadNdc(x, y + yOffset, halfW, halfH, texId, uvRect, glm::vec4(1.0f), actorFlipX);
     };
 
-    // Enemigos: usar siempre el sprite estático frontal (abajo.0) en el minimapa.
+    // Items: Power-ups y puntuación revelados en el mapa.
+    if (map) {
+        const auto& grid = map->getGrid();
+        for (int r = 0; r < rows; ++r) {
+            for (int c = 0; c < cols; ++c) {
+                const auto& block = grid[r][c];
+                if (block.hasPowerUp && block.powerUpRevealed && !block.powerUpCollected) {
+                    GLuint itemTex = map->getPowerUpTexture(block.powerUpType, map->getPowerUpAnimFrame());
+                    if (itemTex != 0) {
+                        float x = 0.0f;
+                        float y = 0.0f;
+                        glm::vec2 ndcPos = map->gridToNDC(r, c);
+                        if (ndcToMiniMap(ndcPos, x, y)) {
+                            // Los items son más pequeños que los actores, ocupando máximo un bloque.
+                            float halfW = panelTileW * 0.45f;
+                            float halfH = panelTileH * 0.45f;
+                            drawQuadNdc(x, y, halfW, halfH, itemTex, glm::vec4(0, 0, 1, 1), glm::vec4(1.0f), 0.0f);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Enemigos: sprites dinámicos y fluidos conforme se mueven.
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive || enemyTexture == 0) {
             continue;
         }
 
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        std::string chosenSprite;
-
-        // Obtener el base del sprite del enemigo.
-        std::string base = enemy->spriteBaseId;
-        if (base.empty() && !enemy->currentSpriteName.empty()) {
-            const std::size_t dotPos = enemy->currentSpriteName.find('.');
-            base = (dotPos == std::string::npos)
-                ? enemy->currentSpriteName
-                : enemy->currentSpriteName.substr(0, dotPos);
-        }
-
-        if (!base.empty()) {
-            const std::string frontName = base + ".abajo.0";
-            const std::string frontAlt = base + ".frente.0";
-            const std::string sideName = base + ".derecha.0";
-
-            if (getUvRectForSprite(gEnemyAtlas, frontName, uvRect)) {
-                chosenSprite = frontName;
-            } else if (getUvRectForSprite(gEnemyAtlas, frontAlt, uvRect)) {
-                chosenSprite = frontAlt;
-            } else if (getUvRectForSprite(gEnemyAtlas, sideName, uvRect)) {
-                chosenSprite = sideName;
-            }
-        }
-
-        if (chosenSprite.empty()) {
+        if (enemy->currentSpriteName.empty() || !getUvRectForSprite(gEnemyAtlas, enemy->currentSpriteName, uvRect)) {
             continue;
         }
 
         drawMiniActor(enemy->position, enemyTexture, uvRect,
-                      spriteAspect(gEnemyAtlas, chosenSprite), 0.0f);
+                      spriteAspect(gEnemyAtlas, enemy->currentSpriteName), enemy->flipX);
     }
 
-    // Jugadores: usar siempre el sprite estático frontal (abajo.0) en el minimapa.
+    // Jugadores: sprites dinámicos y fluidos conforme se mueven.
     for (Player* player : gPlayers) {
         if (!player || !player->isAlive() || texture == 0) {
             continue;
         }
 
         glm::vec4 uvRect(0.0f, 0.0f, 1.0f, 1.0f);
-        std::string chosenSprite;
-
-        // Siempre usar el sprite frontal estático.
-        const std::string frontName = player->spritePrefix + ".abajo.0";
-        if (getUvRectForSprite(gPlayerAtlas, frontName, uvRect)) {
-            chosenSprite = frontName;
-        } else {
-            const std::string sideName = player->spritePrefix + ".derecha.0";
-            if (getUvRectForSprite(gPlayerAtlas, sideName, uvRect)) {
-                chosenSprite = sideName;
-            } else {
-                continue;
-            }
+        if (player->currentSpriteName.empty() || !getUvRectForSprite(gPlayerAtlas, player->currentSpriteName, uvRect)) {
+            continue;
         }
 
         drawMiniActor(player->position, texture, uvRect,
-                      spriteAspect(gPlayerAtlas, chosenSprite), 0.0f);
+                      spriteAspect(gPlayerAtlas, player->currentSpriteName), player->flipX);
     }
 
     if (hasValidScissor) {
@@ -2234,6 +2256,7 @@ void Game::ensureRenderResources() {
     
     addTask("solGLB", kSolGlbPath, &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
     addTask("dragonGLB", kDragonGlbPath, &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
+    addTask("destructibleStage3GLB", kDestructibleStage3GlbPath, &destructibleStage3GlbVAO, &destructibleStage3GlbVBO, &destructibleStage3GlbEBO, &destructibleStage3GlbIndexCount, &destructibleStage3GlbTexture);
 
     for (auto& t : loadingThreads) {
         if (t.joinable()) t.join();
@@ -3162,6 +3185,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     }
 
     std::string stageNumStr = std::to_string(stageNum);
+    gCurrentLoadedStageNum = stageNum;
 
     if (mapTexture != 0) {
         glDeleteTextures(1, &mapTexture);
@@ -3679,6 +3703,73 @@ void Game::resetFreeCameraPose() {
     freeCameraRoll = 0.0f;
 }
 
+int Game::resolveRawMouseSlot(std::uint64_t deviceId)
+{
+    if (deviceId == 0) {
+        return 0;
+    }
+
+    if (rawMouseDeviceIdP1 == deviceId) {
+        return 0;
+    }
+    if (rawMouseDeviceIdP2 == deviceId) {
+        return 1;
+    }
+
+    if (rawMouseDeviceIdP1 == 0) {
+        rawMouseDeviceIdP1 = deviceId;
+        return 0;
+    }
+    if (rawMouseDeviceIdP2 == 0) {
+        rawMouseDeviceIdP2 = deviceId;
+        return 1;
+    }
+
+    // Si llegan más dispositivos, priorizamos el primero para no romper el control principal.
+    return 0;
+}
+
+void Game::resetRawMouseInputState(bool clearDeviceAssignments)
+{
+    rawMouseDeltaX[0] = rawMouseDeltaX[1] = 0;
+    rawMouseDeltaY[0] = rawMouseDeltaY[1] = 0;
+    rawMouseLeftPressed[0] = rawMouseLeftPressed[1] = false;
+    rawMouseRightPressed[0] = rawMouseRightPressed[1] = false;
+    firstPersonMouseP2LeftPressedLastFrame = false;
+    firstPersonMouseP2RightPressedLastFrame = false;
+
+    if (clearDeviceAssignments) {
+        rawMouseDeviceIdP1 = 0;
+        rawMouseDeviceIdP2 = 0;
+    }
+}
+
+void Game::onRawMouseInput(std::uint64_t deviceId,
+                           int deltaX,
+                           int deltaY,
+                           bool leftDown,
+                           bool leftUp,
+                           bool rightDown,
+                           bool rightUp)
+{
+    const int slot = resolveRawMouseSlot(deviceId);
+    rawMouseDeltaX[slot] += deltaX;
+    rawMouseDeltaY[slot] += deltaY;
+
+    if (leftDown) {
+        rawMouseLeftPressed[slot] = true;
+    }
+    if (leftUp) {
+        rawMouseLeftPressed[slot] = false;
+    }
+    if (rightDown) {
+        rawMouseRightPressed[slot] = true;
+    }
+    if (rightUp) {
+        rawMouseRightPressed[slot] = false;
+    }
+}
+
 void Game::setCamera3DType(Camera3DType newType) {
     camera3DType = newType;
 
@@ -3688,10 +3779,15 @@ void Game::setCamera3DType(Camera3DType newType) {
         if (!gPlayers.empty() && gPlayers[0] != nullptr) {
             firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
         }
+        if (gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+            firstPersonYawP2 = facingKeyToYawRadians(gPlayers[1]->facingDirKey);
+        }
         firstPersonPitch = -0.18f;
+        firstPersonPitchP2 = -0.18f;
         firstPersonMouseInitialized = false;
         firstPersonMouseLeftPressedLastFrame = false;
         firstPersonMouseRightPressedLastFrame = false;
+        resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     } else if (camera3DType == Camera3DType::FreeCamera) {
         if (!freeCameraInitialized) {
             resetFreeCameraPose();
@@ -3717,6 +3813,7 @@ void Game::setCamera3DType(Camera3DType newType) {
     firstPersonCursorLocked = shouldCaptureFirstPersonMouse;
     if (!shouldCaptureFirstPersonMouse) {
         firstPersonMouseInitialized = false;
+        resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     }
 
     refreshWindowTitle();
@@ -3788,6 +3885,7 @@ void Game::toggleViewMode() {
     firstPersonMouseInitialized = false;
     firstPersonMouseLeftPressedLastFrame = false;
     firstPersonMouseRightPressedLastFrame = false;
+    resetRawMouseInputState(/*clearDeviceAssignments=*/false);
 
     refreshWindowTitle();
     std::cout << "[Render] View mode -> " << viewModeToString(viewMode) << "\n";
@@ -3859,6 +3957,11 @@ Game::~Game() {
     if (VAO != 0) {
         glDeleteVertexArrays(1, &VAO);
         VAO = 0;
+    }
+    if (destructibleStage3InstanceVBO != 0) {
+        glDeleteBuffers(1, &destructibleStage3InstanceVBO);
+        destructibleStage3InstanceVBO = 0;
+        destructibleStage3InstanceLayoutReady = false;
     }
 
     if (actorGlbTexture != 0) {
@@ -3952,6 +4055,10 @@ Game::~Game() {
     if (dragonGlbTexture != 0) {
         glDeleteTextures(1, &dragonGlbTexture);
         dragonGlbTexture = 0;
+    }
+    if (destructibleStage3GlbTexture != 0) {
+        glDeleteTextures(1, &destructibleStage3GlbTexture);
+        destructibleStage3GlbTexture = 0;
     }
     if (overlayWhiteTexture != 0) {
         glDeleteTextures(1, &overlayWhiteTexture);
@@ -4054,6 +4161,11 @@ Game::~Game() {
     dragonGlbVAO = dragonGlbVBO = dragonGlbEBO = 0;
     dragonGlbIndexCount = 0;
     dragonGlbTexture = 0;
+    destructibleStage3GlbVAO = destructibleStage3GlbVBO = destructibleStage3GlbEBO = 0;
+    destructibleStage3GlbIndexCount = 0;
+    destructibleStage3GlbTexture = 0;
+    destructibleStage3InstanceVBO = 0;
+    destructibleStage3InstanceLayoutReady = false;
 
     // Apaga el sistema de audio (libera miniaudio)
     AudioManager::get().shutdown();
@@ -4107,7 +4219,11 @@ void Game::init() {
     if (!gPlayers.empty() && gPlayers[0] != nullptr) {
         firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
     }
+    if (gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+        firstPersonYawP2 = facingKeyToYawRadians(gPlayers[1]->facingDirKey);
+    }
     firstPersonPitch = -0.18f;
+    firstPersonPitchP2 = -0.18f;
     cameraOrbitPitch = -0.18f;
     cameraOrbitDistance = 0.0f;
     cameraFollowDistance = 6.8f;
@@ -4116,6 +4232,7 @@ void Game::init() {
     firstPersonCursorLocked = false;
     firstPersonMouseLeftPressedLastFrame = false;
     firstPersonMouseRightPressedLastFrame = false;
+    resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     freeCameraInitialized = false;
     freeCameraAnchored = false;
     gFirstPersonBlockedHintTimer[0] = 0.0f;
@@ -4137,11 +4254,15 @@ void Game::processInput() {
     }
 
     if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
         this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
         toggleViewMode();
     }
 
     if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
         this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
         cycleCamera3DType(); 
     }
@@ -4231,6 +4352,13 @@ void Game::processInput() {
         (this->viewMode == ViewMode::Mode3D &&
          this->camera3DType == Camera3DType::FirstPerson &&
          this->window != nullptr);
+    const bool twoHumanPlayersMode = isTwoHumanPlayersMode(this->mode);
+    const bool shouldUseDualMouseFirstPerson =
+        (shouldCaptureFirstPersonMouse &&
+         twoHumanPlayersMode &&
+         gPlayers.size() >= 2 &&
+         gPlayers[0] != nullptr &&
+         gPlayers[1] != nullptr);
 
     const bool keepScreenFacingForCameraRelative3D =
         (this->viewMode == ViewMode::Mode3D &&
@@ -4326,7 +4454,7 @@ void Game::processInput() {
             return;
         }
 
-        int result = this->inGameMenu.processInputInGameMenu(this->keys);
+        int result = this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
 
         // Mirar processInputInGameMenu para saber que devuelve
         switch (result) {
@@ -4414,7 +4542,7 @@ void Game::processInput() {
         std::cout << "[Render] Camara libre reiniciada\n";
     }
 
-    if (shouldCaptureFirstPersonMouse) {
+    if (shouldCaptureFirstPersonMouse && !shouldUseDualMouseFirstPerson) {
         double mouseX = 0.0;
         double mouseY = 0.0;
         glfwGetCursorPos(this->window, &mouseX, &mouseY);
@@ -4434,18 +4562,51 @@ void Game::processInput() {
             this->firstPersonPitch = std::max(-1.30f, std::min(1.10f, this->firstPersonPitch));
             this->firstPersonYaw = wrapAnglePi(this->firstPersonYaw);
         }
+    } else if (shouldUseDualMouseFirstPerson) {
+        const int deltaXP1 = rawMouseDeltaX[0];
+        const int deltaYP1 = rawMouseDeltaY[0];
+        const int deltaXP2 = rawMouseDeltaX[1];
+        const int deltaYP2 = rawMouseDeltaY[1];
+        rawMouseDeltaX[0] = rawMouseDeltaX[1] = 0;
+        rawMouseDeltaY[0] = rawMouseDeltaY[1] = 0;
+
+        this->firstPersonYaw -= (float)deltaXP1 * kFirstPersonMouseYawSensitivity;
+        this->firstPersonPitch -= (float)deltaYP1 * kFirstPersonMousePitchSensitivity;
+        this->firstPersonPitch = std::max(-1.30f, std::min(1.10f, this->firstPersonPitch));
+        this->firstPersonYaw = wrapAnglePi(this->firstPersonYaw);
+
+        this->firstPersonYawP2 -= (float)deltaXP2 * kFirstPersonMouseYawSensitivity;
+        this->firstPersonPitchP2 -= (float)deltaYP2 * kFirstPersonMousePitchSensitivity;
+        this->firstPersonPitchP2 = std::max(-1.30f, std::min(1.10f, this->firstPersonPitchP2));
+        this->firstPersonYawP2 = wrapAnglePi(this->firstPersonYawP2);
+
+        this->firstPersonMouseInitialized = false;
+    } else {
+        rawMouseDeltaX[0] = rawMouseDeltaX[1] = 0;
+        rawMouseDeltaY[0] = rawMouseDeltaY[1] = 0;
     }
 
     const bool mouseLeftPressedNow = (this->window != nullptr)
         && (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
     const bool mouseRightPressedNow = (this->window != nullptr)
         && (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+    const bool p1MouseLeftPressedNow = shouldUseDualMouseFirstPerson ? rawMouseLeftPressed[0] : mouseLeftPressedNow;
+    const bool p1MouseRightPressedNow = shouldUseDualMouseFirstPerson ? rawMouseRightPressed[0] : mouseRightPressedNow;
+    const bool p2MouseLeftPressedNow = shouldUseDualMouseFirstPerson ? rawMouseLeftPressed[1] : false;
+    const bool p2MouseRightPressedNow = shouldUseDualMouseFirstPerson ? rawMouseRightPressed[1] : false;
+
     const bool firstPersonLeftClick = shouldCaptureFirstPersonMouse
-        && mouseLeftPressedNow
+        && p1MouseLeftPressedNow
         && !this->firstPersonMouseLeftPressedLastFrame;
     const bool firstPersonRightClick = shouldCaptureFirstPersonMouse
-        && mouseRightPressedNow
+        && p1MouseRightPressedNow
         && !this->firstPersonMouseRightPressedLastFrame;
+    const bool firstPersonP2LeftClick = shouldUseDualMouseFirstPerson
+        && p2MouseLeftPressedNow
+        && !this->firstPersonMouseP2LeftPressedLastFrame;
+    const bool firstPersonP2RightClick = shouldUseDualMouseFirstPerson
+        && p2MouseRightPressedNow
+        && !this->firstPersonMouseP2RightPressedLastFrame;
 
     auto bombBlocksCellForPlayer = [&](int row, int col, int playerId) {
         for (auto* bomb : gBombs) {
@@ -4530,8 +4691,10 @@ void Game::processInput() {
     };
 
     if (gPlayers.empty() || gPlayers[0] == nullptr) {
-        this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
-        this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+        this->firstPersonMouseLeftPressedLastFrame = p1MouseLeftPressedNow;
+        this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
+        this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
+        this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
         return;
     }
     Player* p1 = gPlayers[0];
@@ -4641,7 +4804,7 @@ void Game::processInput() {
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
-    if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if (twoHumanPlayersMode && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
         if (!p2->isAlive()) {
@@ -4667,7 +4830,7 @@ void Game::processInput() {
                     }
                     const GLint idleFacingDir2 = keepScreenFacingForCameraRelative3D
                         ? screenDir2
-                        : remapDirectionFor3DCamera(this, screenDir2);
+                        : remapDirectionFor3DCamera(this, screenDir2, 1);
                     p2->facingDirKey = idleFacingDir2;
                 }
             } else {
@@ -4677,21 +4840,21 @@ void Game::processInput() {
                     GLint primaryKey2 = GLFW_KEY_UNKNOWN;
 
                     if (up2 && !down2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_UP);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_UP, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         primaryKey2 = GLFW_KEY_W;
                     } else if (down2 && !up2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_DOWN);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_DOWN, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         primaryKey2 = GLFW_KEY_S;
                     }
 
                     if (left2 && !right2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_LEFT);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_LEFT, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         if (primaryKey2 == GLFW_KEY_UNKNOWN || this->lastDirKeyP2 == GLFW_KEY_A) primaryKey2 = GLFW_KEY_A;
                     } else if (right2 && !left2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_RIGHT);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_RIGHT, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         if (primaryKey2 == GLFW_KEY_UNKNOWN || this->lastDirKeyP2 == GLFW_KEY_D) primaryKey2 = GLFW_KEY_D;
                     }
@@ -4705,7 +4868,11 @@ void Game::processInput() {
                             case GLFW_KEY_A: screenDir2 = GLFW_KEY_LEFT; break;
                             case GLFW_KEY_D: screenDir2 = GLFW_KEY_RIGHT; break;
                         }
-                        const GLint facingDir2 = remapDirectionFor3DCamera(this, screenDir2);
+                        const GLint facingDir2 = remapDirectionFor3DCamera(this, screenDir2, 1);
+                        if (!p2->isWalking || p2->facingDirKey != facingDir2) {
+                            p2->walkTimer = 0.0f;
+                            p2->walkPhase = 0;
+                        }
                         p2->facingDirKey = facingDir2;
                     }
                     p2->isWalking = movedAny2;
@@ -4742,7 +4909,7 @@ void Game::processInput() {
                             case GLFW_KEY_D: dir2Screen = GLFW_KEY_RIGHT; break;
                         }
 
-                        const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen);
+                        const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen, 1);
                         const Move mov2 = directionKeyToMove(dir2);
 
                         if (mov2 != MOVE_NONE) {
@@ -4777,8 +4944,10 @@ void Game::processInput() {
     if (this->keys[GLFW_KEY_F3] == GLFW_PRESS) {
         this->keys[GLFW_KEY_F3] = GLFW_REPEAT;
         advanceToNextLevel();
-        this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
-        this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+        this->firstPersonMouseLeftPressedLastFrame = p1MouseLeftPressedNow;
+        this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
+        this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
+        this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
         return;
     }
 
@@ -4827,11 +4996,15 @@ void Game::processInput() {
     }
 
     // ======================= Bombas (Jugador 2) =======================
-    if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if (twoHumanPlayersMode && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
-        if (p2->isAlive() && !p2->isGameOver() && this->keys[inGameMenu.controlsMenu.bombKey_P2] == GLFW_PRESS) {
-            this->keys[inGameMenu.controlsMenu.bombKey_P2] = GLFW_REPEAT;
+        const bool p2BombByKeyboard = (this->keys[inGameMenu.controlsMenu.bombKey_P2] == GLFW_PRESS);
+        const bool p2BombByMouse = (firstPersonP2LeftClick || firstPersonP2RightClick);
+        if (p2->isAlive() && !p2->isGameOver() && (p2BombByKeyboard || p2BombByMouse)) {
+            if (p2BombByKeyboard) {
+                this->keys[inGameMenu.controlsMenu.bombKey_P2] = GLFW_REPEAT;
+            }
 
             if (p2->canPlaceBomb()) {
                 int bombRow, bombCol;
@@ -5001,8 +5174,10 @@ void Game::processInput() {
         }
     }
 
-    this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
-    this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+    this->firstPersonMouseLeftPressedLastFrame = p1MouseLeftPressedNow;
+    this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
+    this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
+    this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
 
 }
 
@@ -5012,20 +5187,19 @@ void Game::update() {
     gFirstPersonBlockedHintTimer[0] = std::max(0.0f, gFirstPersonBlockedHintTimer[0] - deltaTime);
     gFirstPersonBlockedHintTimer[1] = std::max(0.0f, gFirstPersonBlockedHintTimer[1] - deltaTime);
 
-    // Actualizar intensidad del head bobbing para suavizar transiciones
-    bool isAnyoneWalking = false;
-    if (this->camera3DType == Camera3DType::FirstPerson && !gPlayers.empty()) {
-        int trackedIdx = std::max(0, std::min(active3DViewportPlayerIndex, (int)gPlayers.size() - 1));
-        Player* p = gPlayers[trackedIdx];
-        if (p && p->isAlive() && p->isWalking) {
-            isAnyoneWalking = true;
+    // Actualizar intensidad del head bobbing por jugador para evitar mezcla entre cámaras.
+    for (int i = 0; i < 2; ++i) {
+        bool isPlayerWalking = false;
+        if (this->camera3DType == Camera3DType::FirstPerson && i < (int)gPlayers.size()) {
+            Player* p = gPlayers[i];
+            isPlayerWalking = (p != nullptr && p->isAlive() && p->isWalking);
         }
-    }
 
-    if (isAnyoneWalking) {
-        firstPersonHeadBobIntensity = std::min(1.0f, firstPersonHeadBobIntensity + deltaTime * 8.0f);
-    } else {
-        firstPersonHeadBobIntensity = std::max(0.0f, firstPersonHeadBobIntensity - deltaTime * 12.0f);
+        if (isPlayerWalking) {
+            firstPersonHeadBobIntensity[i] = std::min(1.0f, firstPersonHeadBobIntensity[i] + deltaTime * 8.0f);
+        } else {
+            firstPersonHeadBobIntensity[i] = std::max(0.0f, firstPersonHeadBobIntensity[i] - deltaTime * 12.0f);
+        }
     }
 
     // ========== MENU ==========
@@ -5770,7 +5944,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     const int viewportHeight = std::max(1, viewport[3]);
     const bool isSplitFirstPersonPass =
         (camera3DType == Camera3DType::FirstPerson &&
-         mode == GameMode::TwoPlayers &&
+         isTwoHumanPlayersMode(mode) &&
          gPlayers.size() >= 2 &&
          viewportWidth < WIDTH);
 
@@ -5879,23 +6053,21 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                                        std::cos(elevation),
                                       -std::cos(cameraOrbitYaw) * std::sin(elevation)));
     } else if (camera3DType == Camera3DType::FirstPerson) {
-        float firstPersonCameraYaw = this->firstPersonYaw;
-        float firstPersonCameraPitch = this->firstPersonPitch;
-        if (trackedPlayerIndex > 0 && trackedPlayer != nullptr) {
-            firstPersonCameraYaw = facingKeyToYawRadians(trackedPlayer->facingDirKey);
-            firstPersonCameraPitch = -0.18f;
-        }
+        float firstPersonCameraYaw = (trackedPlayerIndex == 1) ? this->firstPersonYawP2 : this->firstPersonYaw;
+        float firstPersonCameraPitch = (trackedPlayerIndex == 1) ? this->firstPersonPitchP2 : this->firstPersonPitch;
         const glm::vec3 firstPersonForward = firstPersonLookToForward(firstPersonCameraYaw, firstPersonCameraPitch);
+        const int bobSlot = std::max(0, std::min(1, trackedPlayerIndex));
+        const float bobIntensity = firstPersonHeadBobIntensity[bobSlot];
         float headBobOffset = 0.0f;
         if (kFirstPersonHeadBobAmplitude > 0.0f &&
             trackedPlayer != nullptr &&
             trackedPlayer->isAlive() &&
-            (trackedPlayer->isWalking || firstPersonHeadBobIntensity > 0.001f)) {
+            (trackedPlayer->isWalking || bobIntensity > 0.001f)) {
             const float headBobPhase = (float)glfwGetTime() * kFirstPersonHeadBobFrequency;
             // Usamos una combinación más suave (88% sin, 12% sin2x) para evitar la brusquedad en el ascenso
             const float headBobPrimary = std::sin(headBobPhase);
             const float headBobSecondary = std::sin(headBobPhase * 2.0f);
-            headBobOffset = (headBobPrimary * 0.88f + headBobSecondary * 0.12f) * kFirstPersonHeadBobAmplitude * firstPersonHeadBobIntensity;
+            headBobOffset = (headBobPrimary * 0.88f + headBobSecondary * 0.12f) * kFirstPersonHeadBobAmplitude * bobIntensity;
         }
         const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f + headBobOffset, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
@@ -6029,9 +6201,19 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     for (int r = 0; r < gameMap->getRows(); ++r) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
+            if (shouldSkipStage2BorderTile(gameMap, r, c)) {
+                continue;
+            }
             if (walkable) continue; // Saltamos suelo, se dibuja abajo.
 
             const bool destructible = gameMap->isDestructible(r, c);
+            const bool useStage3DestructibleModel =
+                (gCurrentLoadedStageNum == 3 && destructible &&
+                 destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
+                 destructibleStage3GlbTexture != 0 && shader3DTextured != 0);
+            if (useStage3DestructibleModel) {
+                continue;
+            }
             const bool checker = (((r + c) % 2) == 0);
 
             float h = 1.00f;
@@ -6071,9 +6253,6 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     glBindTexture(GL_TEXTURE_2D, mapTexture);
     glBindVertexArray(VAO);
 
-    glm::vec4 indestructibleSideUv(0.0f, 0.0f, 1.0f, 1.0f);
-    const bool hasIndestructibleSideUv = gameMap->getUvRectForSpriteId(8, indestructibleSideUv);
-
     const int mapRows = gameMap->getRows();
     const int mapCols = gameMap->getCols();
     const float topHalfSize = 0.475f;
@@ -6083,13 +6262,39 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         if (row < 0 || row >= mapRows || col < 0 || col >= mapCols) {
             return true;
         }
+        // Si el vecino es uno de los tiles ocultos del Stage 2, tratamos ese lado
+        // como expuesto para cubrir la cara del cubo con decal y evitar el gris liso.
+        if (shouldSkipStage2BorderTile(gameMap, row, col)) {
+            return true;
+        }
         return gameMap->isWalkable(row, col);
+    };
+
+    constexpr int kStage2DecorativeSideSpriteId = 15;
+    auto sideUvForNeighbor = [&](int neighborRow, int neighborCol, const glm::vec4& defaultUvRect) {
+        if (gCurrentLoadedStageNum == 2) {
+            const bool outOfBounds = (neighborRow < 0 || neighborRow >= mapRows || neighborCol < 0 || neighborCol >= mapCols);
+            if (outOfBounds || shouldSkipStage2BorderTile(gameMap, neighborRow, neighborCol)) {
+                glm::vec4 decorativeUv(0.0f, 0.0f, 1.0f, 1.0f);
+                if (gameMap->getUvRectForSpriteId(kStage2DecorativeSideSpriteId, decorativeUv)) {
+                    return decorativeUv;
+                }
+            }
+        }
+        return defaultUvRect;
     };
 
     for (int r = 0; r < gameMap->getRows(); ++r) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
             const BlockType blockType = gameMap->getBlockType(r, c);
+            if (shouldSkipStage2BorderTile(gameMap, r, c)) {
+                continue;
+            }
+            const bool useStage3DestructibleModel =
+                (gCurrentLoadedStageNum == 3 && blockType == BlockType::DESTRUCTIBLE &&
+                 destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
+                 destructibleStage3GlbTexture != 0 && shader3DTextured != 0);
             const bool isBorderTile = (r == 0 || c == 0 || r == mapRows - 1 || c == mapCols - 1);
             const float h = walkable ? 0.08f : 1.00f;
 
@@ -6099,7 +6304,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             }
 
             // Cara superior: SOLO para bloques no walkable (techo de muros).
-            if (!walkable) {
+            if (!walkable && !useStage3DestructibleModel) {
                 const glm::vec3 centerTop = gridToWorld3D(gameMap, r, c, h + sideOutward);
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, centerTop);
@@ -6110,29 +6315,45 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
                 glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+                // Cara inferior: evita que desde abajo se vea la base gris del cubo.
+                // En Stage 2 usamos el mismo sprite decorativo aplicado en laterales.
+                glm::vec4 bottomUvRect = uvRect;
+                if (gCurrentLoadedStageNum == 2) {
+                    gameMap->getUvRectForSpriteId(kStage2DecorativeSideSpriteId, bottomUvRect);
+                }
+                const glm::vec3 centerBottom = gridToWorld3D(gameMap, r, c, -sideOutward);
+                glm::mat4 modelBottom(1.0f);
+                modelBottom = glm::translate(modelBottom, centerBottom);
+                modelBottom = glm::rotate(modelBottom, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                modelBottom = glm::scale(modelBottom, glm::vec3(topHalfSize, topHalfSize, 1.0f));
+
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(modelBottom));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(bottomUvRect));
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             }
 
             // Caras laterales para bloques no walkable.
-            if (!walkable) {
-                glm::vec4 sideUv = uvRect;
-                if (blockType == BlockType::BARRIER && isBorderTile && hasIndestructibleSideUv) {
-                    sideUv = indestructibleSideUv;
-                }
-
+            if (!walkable && !useStage3DestructibleModel) {
                 const float halfH = h * 0.5f;
                 const glm::vec3 tileCenter = gridToWorld3D(gameMap, r, c, halfH);
                 const glm::vec4 sideTint(1.0f, 1.0f, 1.0f, 0.98f);
 
                 if (sideIsVisible(r - 1, c)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r - 1, c, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(0.0f, 0.0f, -topHalfSize - sideOutward), topHalfSize, halfH, 180.0f, sideUv, sideTint);
                 }
                 if (sideIsVisible(r + 1, c)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r + 1, c, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(0.0f, 0.0f, topHalfSize + sideOutward), topHalfSize, halfH, 0.0f, sideUv, sideTint);
                 }
                 if (sideIsVisible(r, c - 1)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r, c - 1, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(-topHalfSize - sideOutward, 0.0f, 0.0f), topHalfSize, halfH, 90.0f, sideUv, sideTint);
                 }
                 if (sideIsVisible(r, c + 1)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r, c + 1, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(topHalfSize + sideOutward, 0.0f, 0.0f), topHalfSize, halfH, -90.0f, sideUv, sideTint);
                 }
             }
@@ -6623,6 +6844,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         (solGlbVAO != 0 && solGlbIndexCount > 0 && solGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDestructibleStage3Glb =
+        (destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
+         destructibleStage3GlbTexture != 0 && shader3DTextured != 0);
 
     auto resolvePlayerGlbResource = [&](const Player* p,
                                         GLuint& outVao,
@@ -6661,7 +6885,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         return false;
     };
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderBombRcGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || (floor3DTexture != 0)) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderBombRcGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || canRenderDestructibleStage3Glb || (floor3DTexture != 0)) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -6679,6 +6903,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
         glUniform1f(uniform3DTexturedShininess, 28.0f);
         glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
+        if (uniform3DTexturedUseInstancing != (GLuint)-1) {
+            glUniform1i(uniform3DTexturedUseInstancing, 0);
+        }
 
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, shadowMapTex);
@@ -6697,6 +6924,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
 
             for (int r = 0; r < gameMap->getRows(); ++r) {
                 for (int c = 0; c < gameMap->getCols(); ++c) {
+                    if (shouldSkipStage2BorderTile(gameMap, r, c)) {
+                        continue;
+                    }
                     // Dibujamos el suelo en todas las celdas para que no haya huecos bajo los bloques
                     // y así las sombras caigan correctamente sobre la base de los muros.
                     const bool checker = (((r + c) % 2) == 0);
@@ -6717,6 +6947,67 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
             glUniform1f(uniform3DTexturedShininess, 28.0f);
             glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
+        }
+
+        if (gCurrentLoadedStageNum == 3 && canRenderDestructibleStage3Glb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, destructibleStage3GlbTexture);
+            glBindVertexArray(destructibleStage3GlbVAO);
+
+            if (destructibleStage3InstanceVBO == 0) {
+                glGenBuffers(1, &destructibleStage3InstanceVBO);
+            }
+            glBindBuffer(GL_ARRAY_BUFFER, destructibleStage3InstanceVBO);
+
+            if (!destructibleStage3InstanceLayoutReady) {
+                const GLsizei stride = static_cast<GLsizei>(sizeof(glm::mat4));
+                for (GLuint i = 0; i < 4; ++i) {
+                    glEnableVertexAttribArray(3 + i);
+                    glVertexAttribPointer(3 + i,
+                                          4,
+                                          GL_FLOAT,
+                                          GL_FALSE,
+                                          stride,
+                                          (void*)(sizeof(GLfloat) * 4 * i));
+                    glVertexAttribDivisor(3 + i, 1);
+                }
+                destructibleStage3InstanceLayoutReady = true;
+            }
+
+            std::vector<glm::mat4> instanceModels;
+            instanceModels.reserve(static_cast<std::size_t>(gameMap->getRows() * gameMap->getCols()));
+
+            for (int r = 0; r < gameMap->getRows(); ++r) {
+                for (int c = 0; c < gameMap->getCols(); ++c) {
+                    if (!gameMap->isDestructible(r, c)) {
+                        continue;
+                    }
+
+                    const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.06f);
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, center);
+                    model = glm::scale(model, glm::vec3(1.55f, 1.55f, 1.55f));
+                    instanceModels.push_back(model);
+                }
+            }
+
+            if (!instanceModels.empty()) {
+                glBufferData(GL_ARRAY_BUFFER,
+                             static_cast<GLsizeiptr>(instanceModels.size() * sizeof(glm::mat4)),
+                             instanceModels.data(),
+                             GL_STREAM_DRAW);
+                if (uniform3DTexturedUseInstancing != (GLuint)-1) {
+                    glUniform1i(uniform3DTexturedUseInstancing, 1);
+                }
+                glDrawElementsInstanced(GL_TRIANGLES,
+                                        destructibleStage3GlbIndexCount,
+                                        GL_UNSIGNED_INT,
+                                        0,
+                                        static_cast<GLsizei>(instanceModels.size()));
+                if (uniform3DTexturedUseInstancing != (GLuint)-1) {
+                    glUniform1i(uniform3DTexturedUseInstancing, 0);
+                }
+            }
         }
 
         if (canRenderAnyBombGlb) {
@@ -7350,13 +7641,13 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 if (!isSolEnemy) continue;
 
                 float modelScale = 1.12f;
-                float hoverHeight = 1.62f;
+                float hoverHeight = 1.22f;
                 if (enemy->currentSpriteName.size() >= 12 && enemy->currentSpriteName.compare(0, 12, "sol.mediano.") == 0) {
                     modelScale = 0.90f;
-                    hoverHeight = 1.48f;
+                    hoverHeight = 1.22f;
                 } else if (enemy->currentSpriteName.size() >= 9 && enemy->currentSpriteName.compare(0, 9, "sol.peque") == 0) {
                     modelScale = 0.72f;
-                    hoverHeight = 1.34f;
+                    hoverHeight = 1.22f;
                 }
 
                 modelScale *= 2.0f;
@@ -7665,7 +7956,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                            currentGameLevel,
                            levelTimeRemaining,
                            (mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1,
-                           true);
+                           false);
 
         glBindVertexArray(0);
         glUseProgram(0);
@@ -8197,7 +8488,7 @@ void Game::render() {
 
         const bool splitFirstPersonTwoPlayers =
             (this->camera3DType == Camera3DType::FirstPerson &&
-             this->mode == GameMode::TwoPlayers &&
+             isTwoHumanPlayersMode(this->mode) &&
              gPlayers.size() >= 2 &&
              gPlayers[0] != nullptr &&
              gPlayers[1] != nullptr);

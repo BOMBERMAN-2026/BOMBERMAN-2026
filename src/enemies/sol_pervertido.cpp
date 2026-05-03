@@ -24,7 +24,8 @@ SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase p
 {
     spriteBaseId = "sol";
 
-    float angle = randomFloat(0.1f, 1.4f); // angulo aleatorio
+    // Ángulo aleatorio completo de 0 a 2*PI (360 grados) para que salga en cualquier dirección
+    float angle = randomFloat(0.0f, 6.28318f);
     
     // Incremento de velocidad principal
     float actualSpeed = speed * (phase == Phase::FULL ? 3.0f : 1.0f);

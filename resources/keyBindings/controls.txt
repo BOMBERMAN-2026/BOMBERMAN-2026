@@ -1,5 +1,5 @@
-bombKey_P1=345
-detonateBombKey_P1=346
+bombKey_P1=89
+detonateBombKey_P1=85
 upKey_P1=265
 leftKey_P1=263
 downKey_P1=264

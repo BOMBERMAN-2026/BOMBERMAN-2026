@@ -22,6 +22,7 @@ extern GLuint uniformWhiteFlash;
 #include <map>
 
 extern uint32_t getHistoryRankingHighScore();
+extern int gCurrentLoadedStageNum;
 
 namespace {
     constexpr float kPowerUpPickupFxDuration = 0.26f;
@@ -765,6 +766,10 @@ void GameMap::render(GLuint vao, GLuint atlasTexture,
             // Si el bloque fue destruido o se está rompiendo, el fondo será el suelo
             int originalId = block.spriteId;
             int displayId = animator.getDisplayId(originalId);
+
+            if (gCurrentLoadedStageNum == 2 && (originalId == 12 || originalId == 13)) {
+                continue;
+            }
             
             if (block.destroyed || block.breaking) {
                 // Calcular el sprite de suelo dinámicamente según el entorno

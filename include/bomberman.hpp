@@ -4,6 +4,7 @@
 #define GLEW_STATIC
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
+#include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
@@ -114,14 +115,28 @@ private:
 
     float firstPersonYaw = 0.0f;
     float firstPersonPitch = -0.18f;
-    float firstPersonHeadBobIntensity = 0.0f; // Para suavizar el inicio/fin del balanceo
+    float firstPersonYawP2 = 0.0f;
+    float firstPersonPitchP2 = -0.18f;
+    float firstPersonHeadBobIntensity[2] = {0.0f, 0.0f}; // Intensidad por jugador (P1/P2)
     bool firstPersonMouseInitialized = false;
     double firstPersonLastMouseX = 0.0;
     double firstPersonLastMouseY = 0.0;
     bool firstPersonCursorLocked = false;
     bool firstPersonMouseLeftPressedLastFrame = false;
     bool firstPersonMouseRightPressedLastFrame = false;
+    bool firstPersonMouseP2LeftPressedLastFrame = false;
+    bool firstPersonMouseP2RightPressedLastFrame = false;
     int active3DViewportPlayerIndex = 0;
+
+    // Raw Input (Windows): deltas y botones por dispositivo de ratón asignados a P1/P2.
+    std::uint64_t rawMouseDeviceIdP1 = 0;
+    std::uint64_t rawMouseDeviceIdP2 = 0;
+    int rawMouseDeltaX[2] = {0, 0};
+    int rawMouseDeltaY[2] = {0, 0};
+    bool rawMouseLeftPressed[2] = {false, false};
+    bool rawMouseRightPressed[2] = {false, false};
+
+    int resolveRawMouseSlot(std::uint64_t deviceId);
 
     // Cámara libre 3D: movimiento desacoplado del jugador.
     float freeCameraPosX = 0.0f;
@@ -288,7 +303,18 @@ public:
     bool is3DViewEnabled() const { return viewMode == ViewMode::Mode3D; }
     float getCameraOrbitYaw() const { return cameraOrbitYaw; }
     float getFirstPersonYaw() const { return firstPersonYaw; }
+    float getFirstPersonYawForPlayer(int playerIndex) const {
+        return (playerIndex == 1) ? firstPersonYawP2 : firstPersonYaw;
+    }
     float getFreeCameraYaw() const { return freeCameraYaw; }
+    void resetRawMouseInputState(bool clearDeviceAssignments = false);
+    void onRawMouseInput(std::uint64_t deviceId,
+                         int deltaX,
+                         int deltaY,
+                         bool leftDown,
+                         bool leftUp,
+                         bool rightDown,
+                         bool rightUp);
 
     // Init / loop
     void init();
