@@ -34,7 +34,7 @@ bool IsKingPreBattleBlinkVisible() {
 }
 
 KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size)
-    : Enemy(pos, size, kSpeed, /*hp=*/3, /*score=*/77000, /*passSoftBlocks=*/false, /*boss=*/true),
+    : Enemy(pos, size, kSpeedIntro, /*hp=*/3, /*score=*/77000, /*passSoftBlocks=*/false, /*boss=*/true),
       battleState(BattleState::IntroBlink),
       specialState(SpecialAttackState::Idle),
       introBlinkTimer(0.0f),
@@ -113,17 +113,17 @@ bool KingBomber::hasAliveDrones() const {
 void KingBomber::updatePhaseAggression() {
     spriteBaseId = phaseBase();
     if (phaseIndex == 1) {
-        speed = 0.30f;
+        speed = kSpeedCombat;
         bombCooldownMax = 2.4f;
         maxOwnedBombs = 2;
         specialCooldown = 7.0f;
     } else if (phaseIndex == 2) {
-        speed = 0.30f;
+        speed = kSpeedCombat;
         bombCooldownMax = 1.75f;
         maxOwnedBombs = 3;
         specialCooldown = 5.6f;
     } else {
-        speed = 0.30f;
+        speed = kSpeedCombat;
         bombCooldownMax = 1.15f;
         maxOwnedBombs = 4;
         specialCooldown = 4.4f;

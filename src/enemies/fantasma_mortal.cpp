@@ -40,7 +40,7 @@ float FantasmaMortal::movementStepForDirection(EnemyDirection dir) const {
     // Para simplificar y evitar que se ralentice estando en un pasillo libre,
     // comprobamos solo la celda en la que está el fantasma.
     if (gameMap->isDestructible(currentR, currentC)) {
-        step *= 0.35f;
+        step *= kBlockSlowdown;
     }
 
     return step;
