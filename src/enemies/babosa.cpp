@@ -13,8 +13,8 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 
-Babosa::Babosa(glm::vec2 pos, glm::vec2 size, float speed)
-    : Enemy(pos, size, speed, /*hp=*/1, /*score=*/400),
+Babosa::Babosa(glm::vec2 pos, glm::vec2 size)
+    : Enemy(pos, size, kSpeed, /*hp=*/1, /*score=*/400),
       dirChangeTimer(0.0f),
       dirChangeInterval(1.0f) // Intervalo de cambio de dirección.
 {

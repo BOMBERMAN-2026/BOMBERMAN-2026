@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -45,17 +45,17 @@
 /*
  * bomberman.cpp
  * ------------
- * Implementaci├│n del bucle de juego (init/input/update/render) + render OpenGL simple.
+ * Implementaci+�n del bucle de juego (init/input/update/render) + render OpenGL simple.
  *
  * Funcionalidades principales:
  * - Inicializa OpenGL (VAO/VBO/EBO + shaders) y carga texturas.
  * - Carga el mapa (`GameMap`) y su atlas.
- * - Crea 1 o 2 jugadores seg├║n `GameMode`.
+ * - Crea 1 o 2 jugadores seg+�n `GameMode`.
  * - Entrada: Jugador 1 con flechas, Jugador 2 con WASD.
  * - Render: mapa primero, jugadores encima (sprites desde SpriteAtlasPlayer).
  *
  * Nota:
- * - Este archivo es deliberadamente "monol├¡tico" por ahora. Se organizan secciones
+ * - Este archivo es deliberadamente "monol+�tico" por ahora. Se organizan secciones
  *   para facilitar lectura sin introducir demasiadas clases nuevas.
  */
 
@@ -80,13 +80,13 @@ GameMap* gameMap;
 
 // Atlases y texturas
 
-SpriteAtlas gPlayerAtlas; // No est├ítico para usarlo en player.cpp
-SpriteAtlas gEnemyAtlas; // No est├ítico para usarlo en enemigos .cpp
+SpriteAtlas gPlayerAtlas; // No est+�tico para usarlo en player.cpp
+SpriteAtlas gEnemyAtlas; // No est+�tico para usarlo en enemigos .cpp
 SpriteAtlas gScoreboardAtlas; // Atlas para el scoreboard/HUD 
 SpriteAtlas gBombAtlas; // Atlas para las bombas (misma sprite sheet del stage)
 SpriteAtlas gBombRcAtlas;
 GLuint bombRcTexture = 0;
-SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo pequeño
+SpriteAtlas gVocabAmarilloAtlas; // Atlas para el vocabulario amarillo peque�o
 SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
 SpriteAtlas gNextLevelAtlas;
@@ -627,18 +627,18 @@ static bool isSameTile(const GameMap* map, const glm::vec2& a, const glm::vec2& 
     return ar == br && ac == bc;
 }
 
-// Colisión enemigo-jugador: detecta contacto.
+// Colisi�n enemigo-jugador: detecta contacto.
 static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, const glm::vec2& playerPos) {
     if (!map) return false;
-    // Ampliamos el rango de contacto (antes 0.95f) para que abarque el tamaño visual
+    // Ampliamos el rango de contacto (antes 0.95f) para que abarque el tama�o visual
     // de los sprites y se produzca la muerte desde el borde, sin esperar al centro.
     const float halfTile = map->getTileSize() / 2.0f;
     const float r = halfTile * 1.45f; 
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
-// Devuelve true si la caja de colisi├│n de la entidad intersecta con el ├írea de explosi├│n
-// calculada de la bomba. Permite detectar da├▒o si est├í parcialmente en la casilla.
+// Devuelve true si la caja de colisi+�n de la entidad intersecta con el +�rea de explosi+�n
+// calculada de la bomba. Permite detectar da+�o si est+� parcialmente en la casilla.
 static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm::vec2& entityPos) {
     if (!map || !bomb) return false;
     
@@ -647,19 +647,19 @@ static bool explosionHitsEntity(const GameMap* map, const Bomb* bomb, const glm:
     float tileHalf = map->getTileSize() * 0.5f;
 
     for (const auto& seg : bomb->explosionSegments) {
-        // La explosi├│n ocupa casi todo el segmento/tile
+        // La explosi+�n ocupa casi todo el segmento/tile
         float exMin = seg.pos.x - tileHalf;
         float exMax = seg.pos.x + tileHalf;
         float eyMin = seg.pos.y - tileHalf;
         float eyMax = seg.pos.y + tileHalf;
 
-        // La caja de colisi├│n de la entidad
+        // La caja de colisi+�n de la entidad
         float entMinX = entityPos.x - entityRadius;
         float entMaxX = entityPos.x + entityRadius;
         float entMinY = entityPos.y - entityRadius;
         float entMaxY = entityPos.y + entityRadius;
 
-        // Comprobar intersecci├│n AABB (Eje X e Y)
+        // Comprobar intersecci+�n AABB (Eje X e Y)
         bool intersectX = (entMaxX > exMin) && (entMinX < exMax);
         bool intersectY = (entMaxY > eyMin) && (entMinY < eyMax);
 
@@ -1802,7 +1802,7 @@ static glm::mat4 renderShadowPass(GameMap* gameMap, const glm::vec3& lightPos)
     // 3. Jugadores
     for (auto* p : gPlayers) {
         if (p && p->isAlive()) {
-             // Simplificación: usamos el modelo base para sombras
+             // Simplificaci�n: usamos el modelo base para sombras
              drawShadowMesh(actorGlbVAO, actorGlbIndexCount, ndcToWorld3D(gameMap, p->position, 0.55f), glm::vec3(0.55f));
         }
     }
@@ -2046,7 +2046,7 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
         drawQuadNdc(x, y + yOffset, halfW, halfH, texId, uvRect, glm::vec4(1.0f), actorFlipX);
     };
 
-    // Items: Power-ups y puntuación revelados en el mapa.
+    // Items: Power-ups y puntuaci�n revelados en el mapa.
     if (map) {
         const auto& grid = map->getGrid();
         for (int r = 0; r < rows; ++r) {
@@ -2059,7 +2059,7 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
                         float y = 0.0f;
                         glm::vec2 ndcPos = map->gridToNDC(r, c);
                         if (ndcToMiniMap(ndcPos, x, y)) {
-                            // Los items son más pequeños que los actores, ocupando máximo un bloque.
+                            // Los items son m�s peque�os que los actores, ocupando m�ximo un bloque.
                             float halfW = panelTileW * 0.45f;
                             float halfH = panelTileH * 0.45f;
                             drawQuadNdc(x, y, halfW, halfH, itemTex, glm::vec4(0, 0, 1, 1), glm::vec4(1.0f), 0.0f);
@@ -2070,7 +2070,7 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
         }
     }
 
-    // Enemigos: sprites dinámicos y fluidos conforme se mueven.
+    // Enemigos: sprites din�micos y fluidos conforme se mueven.
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive || enemyTexture == 0) {
             continue;
@@ -2085,7 +2085,7 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
                       spriteAspect(gEnemyAtlas, enemy->currentSpriteName), enemy->flipX);
     }
 
-    // Jugadores: sprites dinámicos y fluidos conforme se mueven.
+    // Jugadores: sprites din�micos y fluidos conforme se mueven.
     for (Player* player : gPlayers) {
         if (!player || !player->isAlive() || texture == 0) {
             continue;
@@ -2198,11 +2198,11 @@ static GLuint loadHorizonTextureWithFallback() {
 // ============================== Game: run/level helpers ==============================
 
 /*
- * Recursos de render que s├│lo deber├¡an inicializarse una vez por ejecuci├│n:
+ * Recursos de render que s+�lo deber+�an inicializarse una vez por ejecuci+�n:
  * - VAO/VBO/EBO del quad 2D
  * - Programas shader 2D y 3D
- * - Geometr├¡a del cubo para modo 3D
- * Adem├ís activamos blending para sprites con alpha.
+ * - Geometr+�a del cubo para modo 3D
+ * Adem+�s activamos blending para sprites con alpha.
  */
 void Game::ensureRenderResources() {
     if (renderResourcesInitialized) return;
@@ -2262,7 +2262,7 @@ void Game::ensureRenderResources() {
         if (t.joinable()) t.join();
     }
 
-    // Procesar toda la cola de carga (subida a GPU) de una vez para que el juego esté listo tras el join.
+    // Procesar toda la cola de carga (subida a GPU) de una vez para que el juego est� listo tras el join.
     {
         std::lock_guard<std::mutex> lock(loadingMutex);
         while (!loadingQueue.empty()) {
@@ -2276,7 +2276,7 @@ void Game::ensureRenderResources() {
     std::chrono::duration<float, std::milli> duration = end - start;
     std::cout << "Tiempo total de carga PARALELA de modelos: " << duration.count() << " ms" << std::endl;
 
-    // --- Inicialización del Shadow Map FBO ---
+    // --- Inicializaci�n del Shadow Map FBO ---
     if (shadowMapFBO == 0) {
         const unsigned int SHADOW_WIDTH = 2048, SHADOW_HEIGHT = 2048;
         glGenFramebuffers(1, &shadowMapFBO);
@@ -2308,7 +2308,7 @@ void Game::ensureRenderResources() {
     }
     gNextLevelTexture = LoadTexture(resolveAssetPath("resources/sprites/bomba_next_lvl.png").c_str());
 
-    // Esto debe hacerse aquí para que las cinemáticas con overlay tengan acceso a las texturas
+    // Esto debe hacerse aqu� para que las cinem�ticas con overlay tengan acceso a las texturas
     ensureGameplayAssets();
 
     glEnable(GL_BLEND);
@@ -2317,7 +2317,7 @@ void Game::ensureRenderResources() {
     renderResourcesInitialized = true;
 }
 
-// Carga atlas/texturas compartidas que se reutilizan entre niveles (1 vez por ejecuci├│n).
+// Carga atlas/texturas compartidas que se reutilizan entre niveles (1 vez por ejecuci+�n).
 void Game::ensureGameplayAssets() {
     // Evita recargar texturas/atlases en cada `loadLevel()`.
     if (gameplayAssetsLoaded) return;
@@ -2373,7 +2373,7 @@ void Game::ensureGameplayAssets() {
         std::exit(EXIT_FAILURE);
     }
 
-    // Texturas del vocabulario en amarillo pequeño
+    // Texturas del vocabulario en amarillo peque�o
     {
         const std::string vocabAmarilloAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasVocAmarilloPeq.json");
         if (!loadSpriteAtlasMinimal(vocabAmarilloAtlasPath, gVocabAmarilloAtlas)) {
@@ -2419,7 +2419,7 @@ void Game::ensureGameplayAssets() {
         }
     }
 
-    // Atlas y textura de la explosión del objeto
+    // Atlas y textura de la explosi�n del objeto
     {
         const std::string explosionAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasExplosionObjeto.json");
         if (!loadSpriteAtlasMinimal(explosionAtlasPath, gExplosionObjetoAtlas)) {
@@ -2436,7 +2436,7 @@ void Game::ensureGameplayAssets() {
     gameplayAssetsLoaded = true;
 }
 
-// Limpieza del contenido "din├ímico" de un nivel.
+// Limpieza del contenido "din+�mico" de un nivel.
 // Orden: bombas -> enemigos -> jugadores.
 void Game::cleanupGameplayEntities() {
     for (auto* b : gBombs) delete b;
@@ -2451,7 +2451,7 @@ void Game::cleanupGameplayEntities() {
     ScorePopup::clear();
 }
 
-// Condici├│n de Game Over: todos los jugadores est├ín sin vidas.
+// Condici+�n de Game Over: todos los jugadores est+�n sin vidas.
 bool Game::allPlayersOutOfLives() const {
     if (gPlayers.empty()) return true;
     for (auto* p : gPlayers) {
@@ -2492,7 +2492,7 @@ void Game::startVsRoundCinematic(CinematicType type, const std::string& videoPat
     vsCinematicWinnerIndex = winnerIndex;
 
     if (!cinematicPlayer.open(videoPath)) {
-        std::cerr << "No se pudo abrir cinemática VS: " << videoPath << std::endl;
+        std::cerr << "No se pudo abrir cinem�tica VS: " << videoPath << std::endl;
     }
 
     AudioManager::get().stopBgm();
@@ -2952,7 +2952,7 @@ void Game::updateTimeUpSequence(float deltaTime) {
             }
         }
 
-        // Repetir el nivel con cinemática de carga y conservando vidas.
+        // Repetir el nivel con cinem�tica de carga y conservando vidas.
         AudioManager::get().stopBgm();
         this->state = GAME_CINEMATIC;
         this->currentCinematicType = CinematicType::LevelStart;
@@ -3002,7 +3002,7 @@ void Game::renderTimeUpOverlay(float aspect) {
         letterY = targetY + bounceAmp * std::exp(-bounceDecay * t2) * std::abs(std::sin(bounceFreq * t2));
     }
 
-    // Alpha de las letras: fade-in rápido, luego fade-out al empezar el fade-to-black
+    // Alpha de las letras: fade-in r�pido, luego fade-out al empezar el fade-to-black
     const float letterAlpha = std::min(1.0f, timeUpTimer / 0.10f);
     const glm::vec4 tint(1.0f, 1.0f, 1.0f, letterAlpha);
 
@@ -3022,9 +3022,9 @@ void Game::renderTimeUpOverlay(float aspect) {
     const float desiredWidthNDC = aspect * 1.2f;  // 120% del half-aspect -> ~60% del ancho total
 
     // Primero medir el ancho total sumando los w de los sprites (sin espaciado entre letras
-    // del png, que ya están separadas por el espacio en blanco del PNG original).
+    // del png, que ya est�n separadas por el espacio en blanco del PNG original).
     // Usaremos spacing=0 porque el png ya los tiene bien separados si los dibujamos juntos.
-    // Calcularemos un scale_x a partir del ancho total de píxeles cubiertos.
+    // Calcularemos un scale_x a partir del ancho total de p�xeles cubiertos.
     const float imgW = (gTimeUpAtlas.imageWidth > 0) ? (float)gTimeUpAtlas.imageWidth : 665.0f;
     const float imgH = (gTimeUpAtlas.imageHeight > 0) ? (float)gTimeUpAtlas.imageHeight : 379.0f;
 
@@ -3046,17 +3046,17 @@ void Game::renderTimeUpOverlay(float aspect) {
     }
 
     // La escala: queremos que rawTotalW pixels del PNG -> desiredWidthNDC en NDC.
-    // Dado que los sprites del PNG están en pixels,
+    // Dado que los sprites del PNG est�n en pixels,
     // scale = desiredWidthNDC / rawTotalW   (en unidades NDC por pixel)
     const float scale   = desiredWidthNDC / rawTotalW;
     const float halfHNDC = rawH * scale * 0.5f;
 
-    // Dibujar cada glifo con pequeño spacing basado en el gap visual del PNG.
+    // Dibujar cada glifo con peque�o spacing basado en el gap visual del PNG.
     // Espaciado entre letras (en pixels del PNG, se escalan con `scale`):
     //  indices: T=0, I=1, M=2, E=3, U=4, P=5, !1=6, !2=7
-    //  - Pequeño entre T-I-M-E  (4 px)
-    //  - Grande entre E y U  (28 px, separación de palabra)
-    //  - Pequeño entre U-P-!-! (4 px)
+    //  - Peque�o entre T-I-M-E  (4 px)
+    //  - Grande entre E y U  (28 px, separaci�n de palabra)
+    //  - Peque�o entre U-P-!-! (4 px)
     const float gapAfterGlyph[8] = { 4.0f, 4.0f, 4.0f, 28.0f, 4.0f, 4.0f, 4.0f, 0.0f };
 
     // Recalcular el ancho total incluyendo los espacios para centrar correctamente.
@@ -3128,7 +3128,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     const auto& activeLevelSequence = versus ? VersusMode::levelSequence() : levelSequence;
     const auto& activeLevelToStage = versus ? VersusMode::levelToStage() : levelToStage;
 
-    // Evita heredar orientación del nivel anterior (especialmente al hacer skip).
+    // Evita heredar orientaci�n del nivel anterior (especialmente al hacer skip).
     lastDirKey = GLFW_KEY_UNKNOWN;
     lastDirKeyP2 = GLFW_KEY_UNKNOWN;
 
@@ -3146,7 +3146,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     // Limpiar entidades del nivel anterior.
     cleanupGameplayEntities();
 
-    // Reset de transición de nivel (para no arrastrar timers entre niveles).
+    // Reset de transici�n de nivel (para no arrastrar timers entre niveles).
     pendingLevelAdvance = false;
     levelAdvanceTimer = 0.0f;
     timeUpSequenceActive = false;
@@ -3167,7 +3167,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         levelTimeRemaining = customGameMode.getInitialTimeSeconds();
     } else {
         if (levelIndex < 0 || levelIndex >= (int)activeLevelSequence.size()) {
-            // Seguridad: si algo fuerza un índice inválido, terminamos run y volvemos al menú.
+            // Seguridad: si algo fuerza un �ndice inv�lido, terminamos run y volvemos al men�.
             std::cerr << "Nivel fuera de rango: " << levelIndex << std::endl;
             returnToMenuFromGame(/*resetRun=*/true);
             return;
@@ -3236,7 +3236,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     float aspectRatio = (float)WIDTH / (float)HEIGHT;
     gameMap->calculateTileMetrics(aspectRatio);
 
-    // Crear jugadores según el modo.
+    // Crear jugadores seg�n el modo.
     const int numPlayers = custom ? customGameMode.getPlayerCount()
                                   : (versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1));
     const int versusHumanCount = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
@@ -3258,20 +3258,20 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         "jugadoramarillo"
     };
 
-    // En VS: asignar colores según dificultad de CPU
-    // 1P VS: P1=blanco, P2=rojo(fácil), P3=azul(medio), P4=amarillo(difícil)
-    // 2P VS: P1=blanco, P2=rojo(humano), P3=azul(medio), P4=amarillo(difícil)
+    // En VS: asignar colores seg�n dificultad de CPU
+    // 1P VS: P1=blanco, P2=rojo(f�cil), P3=azul(medio), P4=amarillo(dif�cil)
+    // 2P VS: P1=blanco, P2=rojo(humano), P3=azul(medio), P4=amarillo(dif�cil)
     auto getPlayerColorIndex = [&](int playerId) -> int {
         if (versus) {
             const int humanCount = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
             if (playerId < humanCount) {
                 return playerId; // 0=blanco, 1=rojo para humanos
             } else {
-                // CPUs: playerId 1 o 2 -> rojo(fácil), 2 o 3 -> azul(medio), 3 -> amarillo(difícil)
-                // Simplemente mapear: segundo CPU (índice 2) = azul, tercer CPU (índice 3) = amarillo
+                // CPUs: playerId 1 o 2 -> rojo(f�cil), 2 o 3 -> azul(medio), 3 -> amarillo(dif�cil)
+                // Simplemente mapear: segundo CPU (�ndice 2) = azul, tercer CPU (�ndice 3) = amarillo
                 if (playerId == 2) return 2; // azul (medio)
-                if (playerId == 3) return 3; // amarillo (difícil)
-                return 1; // rojo (fácil, para índice 1)
+                if (playerId == 3) return 3; // amarillo (dif�cil)
+                return 1; // rojo (f�cil, para �ndice 1)
             }
         } else if (custom) {
             return playerId;
@@ -3303,11 +3303,11 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                 // Si el jugador tiene 0 vidas en VS, debe quedar en estado de muerte permanente.
                 if (versus && p->lives <= 0) {
                     p->lifeState = PlayerLifeState::DyingByEnemy;
-                    p->deathFrame = 7; // Último frame de animación de muerte
+                    p->deathFrame = 7; // �ltimo frame de animaci�n de muerte
                     p->currentSpriteName = p->spritePrefix + ".muerto.7";
                     p->isWalking = false;
                 } else if (versus) {
-                    // Resetear a Alive si el jugador aún tiene vidas (misma ronda reintentada en VS)
+                    // Resetear a Alive si el jugador a�n tiene vidas (misma ronda reintentada en VS)
                     p->lifeState = PlayerLifeState::Alive;
                     p->isWalking = false;
                     p->deathTimer = 0.0f;
@@ -3327,7 +3327,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
         gPlayers.push_back(p);
     }
 
-    // Crear enemigos según el nivel.
+    // Crear enemigos seg�n el nivel.
     // La lista de spawns viene del TXT (enemy <type> <x> <y>).
     if (custom) {
         customGameMode.spawnConfiguredEnemies(gameMap,
@@ -3347,67 +3347,67 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
             Enemy* enemy = nullptr;
             switch (s.type) {
                 case EnemySpawnType::Leon: {
-                    auto* e = new Leon(pos, kDefaultPlayerSize, /*speed=*/0.18f);
+                    auto* e = new Leon(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "leon.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::Babosa: {
-                    auto* e = new Babosa(pos, kDefaultPlayerSize, /*speed=*/0.13f);
+                    auto* e = new Babosa(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "babosa.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::BebeLloron: {
-                    auto* e = new BebeLloron(pos, kDefaultPlayerSize, /*speed=*/0.16f);
+                    auto* e = new BebeLloron(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "bebe.derecha.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::FantasmaMortal: {
-                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize, /*speed=*/0.20f);
+                    auto* e = new FantasmaMortal(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "fantasma.derecha.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::SolPervertido: {
-                    auto* e = new SolPervertido(pos, kDefaultPlayerSize, /*speed=*/0.15f);
+                    auto* e = new SolPervertido(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "sol.grande.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::KingBomber: {
-                    auto* e = new KingBomber(pos, kDefaultPlayerSize, /*speed=*/kDefaultPlayerSpeed);
+                    auto* e = new KingBomber(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "kingbomber1.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronRosa: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "dronrosa.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronVerde: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "dronverde.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronAmarillo: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "dronamarillo.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DronAzul: {
-                    auto* e = new DronBombardero(pos, kDefaultPlayerSize, /*speed=*/0.17f);
+                    auto* e = new DronBombardero(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "dronazul.abajo.0";
                     enemy = e;
                     break;
                 }
                 case EnemySpawnType::DragonJoven: {
-                    auto* e = new DragonJoven(pos, kDefaultPlayerSize, /*speed=*/0.15f);
+                    auto* e = new DragonJoven(pos, kDefaultPlayerSize);
                     e->currentSpriteName = "dragon.abajo.0";
                     enemy = e;
                     break;
@@ -3430,10 +3430,10 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     // Power-Ups (texturas: se cargan una vez por instancia de GameMap)
     gameMap->loadPowerUpTextures();
-    // Colocar power-ups usando la lógica de GameMap:
-    // Si el nivel define `powerup` se usan esos; si no, se hace colocación aleatoria.
-    // En Versus, solo se colocan power-ups (sin items de puntuación).
-    // En Custom, excluir además power-up ExtraLife.
+    // Colocar power-ups usando la l�gica de GameMap:
+    // Si el nivel define `powerup` se usan esos; si no, se hace colocaci�n aleatoria.
+    // En Versus, solo se colocan power-ups (sin items de puntuaci�n).
+    // En Custom, excluir adem�s power-up ExtraLife.
     gameMap->placePowerUps(versus, custom);
 
     // En Versus, resetear power-ups de jugadores humanos al inicio de cada ronda.
@@ -3469,7 +3469,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     }
 }
 
-// Arranca una partida nueva desde nivel_01 (índice 0).
+// Arranca una partida nueva desde nivel_01 (�ndice 0).
 void Game::startNewRun(GameMode newMode) {
     customGameMode.deactivate();
     mode = newMode;
@@ -3497,10 +3497,10 @@ void Game::startNewRun(GameMode newMode) {
         this->state = GAME_CINEMATIC;
         this->currentCinematicType = CinematicType::LevelStart;
         this->nextStateAfterCinematic = GAME_PLAYING;
-        this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+        this->loadLevelPending = true;  // Flag para cargar nivel despu�s de cinem�tica
         this->pendingLoadPreserveLivesAndScore = false;
 
-        // Abrir el video de la cinemática del primer nivel
+        // Abrir el video de la cinem�tica del primer nivel
         std::string videoPath;
         if (mode == GameMode::VsTwoPlayers) {
             videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode2Player.mp4");
@@ -3509,7 +3509,7 @@ void Game::startNewRun(GameMode newMode) {
         }
         cinematicPlayer.open(videoPath);
 
-        // Reproducir jingle "Game Start" durante la cinemática del nivel
+        // Reproducir jingle "Game Start" durante la cinem�tica del nivel
         AudioManager::get().stopBgm();
         AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
 
@@ -3517,30 +3517,30 @@ void Game::startNewRun(GameMode newMode) {
         return;
     }
 
-    // Transicionar a CINEMATIC para reproducir cinemática del primer nivel antes de cargar
+    // Transicionar a CINEMATIC para reproducir cinem�tica del primer nivel antes de cargar
     this->state = GAME_CINEMATIC;
     this->currentCinematicType = CinematicType::LevelStart;
     this->nextStateAfterCinematic = GAME_PLAYING;
-    this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+    this->loadLevelPending = true;  // Flag para cargar nivel despu�s de cinem�tica
     this->pendingLoadPreserveLivesAndScore = false;
 
-    // Abrir el video de la cinemática del primer nivel
+    // Abrir el video de la cinem�tica del primer nivel
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
     cinematicPlayer.open(videoPath);
 
-    // Reproducir jingle "Game Start" durante la cinemática del nivel
+    // Reproducir jingle "Game Start" durante la cinem�tica del nivel
     AudioManager::get().stopBgm();
     AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
 
 
-    // Por si el menú dejó la marca de transición activa.
+    // Por si el men� dej� la marca de transici�n activa.
     menuScreen.resetTransition();
 }
 
 // Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
 void Game::advanceToNextLevel() {
     if (customGameMode.isActive()) {
-        // En Custom Game hay un solo nivel: al completarlo volvemos al menú principal.
+        // En Custom Game hay un solo nivel: al completarlo volvemos al men� principal.
         returnToMenuFromGame(/*resetRun=*/true);
         return;
     }
@@ -3555,14 +3555,14 @@ void Game::advanceToNextLevel() {
         //loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
         //this->state = GAME_PLAYING;
 
-        // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar.
+        // Transicionar a CINEMATIC para reproducir cinem�tica del siguiente nivel antes de cargar.
         this->state = GAME_CINEMATIC;
         this->currentCinematicType = CinematicType::LevelStart;
         this->nextStateAfterCinematic = GAME_PLAYING;
-        this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+        this->loadLevelPending = true;  // Flag para cargar nivel despu�s de cinem�tica
         this->pendingLoadPreserveLivesAndScore = true;
 
-        // Abrir el video de la cinemática del nivel.
+        // Abrir el video de la cinem�tica del nivel.
         std::string videoPath;
         if (mode == GameMode::VsTwoPlayers) {
             videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode2Player.mp4");
@@ -3571,7 +3571,7 @@ void Game::advanceToNextLevel() {
         }
         cinematicPlayer.open(videoPath);
 
-        // Reproducir jingle "Game Start" durante la cinemática del nivel (siguiente nivel)
+        // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
         AudioManager::get().stopBgm();
         AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
 
@@ -3589,7 +3589,7 @@ void Game::advanceToNextLevel() {
             std::string videoPath = resolveAssetPath("resources/video/HistoryEnd.mp4");
             cinematicPlayer.open(videoPath);
 
-            // Música de ending al iniciar la cinemática final
+            // M�sica de ending al iniciar la cinem�tica final
             AudioManager::get().stopBgm();
             AudioManager::get().playBgm(resolveAssetPath("resources/sounds/07 Normal Game ~ Ending.mp3"), /*loop=*/false, 0.6f);
 
@@ -3602,24 +3602,24 @@ void Game::advanceToNextLevel() {
 
     currentLevelIndex = nextIndex;
 
-    // Transicionar a CINEMATIC para reproducir cinemática del siguiente nivel antes de cargar.
+    // Transicionar a CINEMATIC para reproducir cinem�tica del siguiente nivel antes de cargar.
     this->state = GAME_CINEMATIC;
     this->currentCinematicType = CinematicType::LevelStart;
     this->nextStateAfterCinematic = GAME_PLAYING;
-    this->loadLevelPending = true;  // Flag para cargar nivel después de cinemática
+    this->loadLevelPending = true;  // Flag para cargar nivel despu�s de cinem�tica
     this->pendingLoadPreserveLivesAndScore = true;
 
-    // Abrir el video de la cinemática del nivel.
+    // Abrir el video de la cinem�tica del nivel.
     std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
     cinematicPlayer.open(videoPath);
 
-    // Reproducir jingle "Game Start" durante la cinemática del nivel (siguiente nivel)
+    // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
     AudioManager::get().stopBgm();
     AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
 
 }
 
-// Sale a menú desde gameplay (Game Over / fin de campaña / fin VS).
+// Sale a men� desde gameplay (Game Over / fin de campa�a / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
     AudioManager::get().resetPlaceBombSpecialSound();
@@ -3730,7 +3730,7 @@ int Game::resolveRawMouseSlot(std::uint64_t deviceId)
         return 1;
     }
 
-    // Si llegan más dispositivos, priorizamos el primero para no romper el control principal.
+    // Si llegan m�s dispositivos, priorizamos el primero para no romper el control principal.
     return 0;
 }
 
@@ -4179,7 +4179,7 @@ Game::~Game() {
 
 void Game::init() {
 
-    // Inicializar sistema de audio (miniaudio) — solo la primera vez
+    // Inicializar sistema de audio (miniaudio) � solo la primera vez
     AudioManager::get().init(resolveAssetPath(""));
 
 
@@ -4249,9 +4249,9 @@ void Game::init() {
     refreshWindowTitle();
 }
 
-// Lee teclas y aplica acciones (movimiento, animaci├│n y colocar bombas).
+// Lee teclas y aplica acciones (movimiento, animaci+�n y colocar bombas).
 void Game::processInput() {
-    // Atajos globales de ventana (también disponibles en intro/menu).
+    // Atajos globales de ventana (tambi�n disponibles en intro/menu).
     if (this->keys[inGameMenu.controlsMenu.swapWindowModeKey] == GLFW_PRESS || this->keys[GLFW_KEY_F11] == GLFW_PRESS) {
         this->keys[inGameMenu.controlsMenu.swapWindowModeKey] = GLFW_REPEAT;
         this->keys[GLFW_KEY_F11] = GLFW_REPEAT;
@@ -4296,7 +4296,7 @@ void Game::processInput() {
         if (this->keys[GLFW_KEY_SPACE] == GLFW_PRESS) {
             this->keys[GLFW_KEY_SPACE] = GLFW_REPEAT;
             if (isVsResolutionCinematic(this->currentCinematicType)) {
-                // Para VS, forzamos fin controlado y dejamos que se aplique su post-acción.
+                // Para VS, forzamos fin controlado y dejamos que se aplique su post-acci�n.
                 vsCinematicSkipRequested = true;
             } else {
                 cinematicPlayer.skip();
@@ -4419,7 +4419,7 @@ void Game::processInput() {
             continueProgress01 = 0.0f;
             continueCountdownValue = 9;
 
-            // Al revivir de un "Continue" (donde paramos la música), retomamos la del nivel.
+            // Al revivir de un "Continue" (donde paramos la m�sica), retomamos la del nivel.
             AudioManager::get().stopBgm();
 
             std::string bgmFile = "";
@@ -4446,7 +4446,7 @@ void Game::processInput() {
         this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
         this->inGameMenu.showInGameMenu = true;
     }
-    // Salimos para no recibir más inputs en caso de haber desplegado el menu
+    // Salimos para no recibir m�s inputs en caso de haber desplegado el menu
     if (this->inGameMenu.showInGameMenu) { 
         // ========== CONTROLS_MENU ==========
         if (this->inGameMenu.controlsMenu.showControlsMenu) {
@@ -4753,7 +4753,7 @@ void Game::processInput() {
                 if (primaryKey != GLFW_KEY_UNKNOWN) {
                     this->lastDirKey = primaryKey;
                     const GLint facingDir = remapDirectionFor3DCamera(this, primaryKey);
-                    // Jugador humano: cambio de facing inmediato sin restricción
+                    // Jugador humano: cambio de facing inmediato sin restricci�n
                     if (!p1->isWalking) {
                         p1->walkTimer = 0.0f;
                         p1->walkPhase = 0;
@@ -5186,13 +5186,13 @@ void Game::processInput() {
 
 }
 
-// Tick de l├│gica: mapa, enemigos, bombas (da├▒o) y contacto enemigo-jugador.
+// Tick de l+�gica: mapa, enemigos, bombas (da+�o) y contacto enemigo-jugador.
 void Game::update() {
     float deltaTime = this->deltaTime;
     gFirstPersonBlockedHintTimer[0] = std::max(0.0f, gFirstPersonBlockedHintTimer[0] - deltaTime);
     gFirstPersonBlockedHintTimer[1] = std::max(0.0f, gFirstPersonBlockedHintTimer[1] - deltaTime);
 
-    // Actualizar intensidad del head bobbing por jugador para evitar mezcla entre cámaras.
+    // Actualizar intensidad del head bobbing por jugador para evitar mezcla entre c�maras.
     for (int i = 0; i < 2; ++i) {
         bool isPlayerWalking = false;
         if (this->camera3DType == Camera3DType::FirstPerson && i < (int)gPlayers.size()) {
@@ -5212,7 +5212,7 @@ void Game::update() {
         menuScreen.updateMenu(deltaTime);
         if (menuScreen.shouldStartGame()) {
             GameMode selectedMode = menuScreen.getSelectedMode();
-            // TODO: Cambiar esto para que cada modo tenga su propia cinemática.
+            // TODO: Cambiar esto para que cada modo tenga su propia cinem�tica.
             if (selectedMode == GameMode::HistoryOnePlayer || selectedMode == GameMode::HistoryTwoPlayers) {
                 // Reproducir cinematica antes de empezar la partida (solo para Historia 2P)
                 this->mode = selectedMode;
@@ -5222,7 +5222,7 @@ void Game::update() {
                 std::string videoPath = resolveAssetPath("resources/video/HistoryIntro.mp4");
                 cinematicPlayer.open(videoPath);
                 
-                // Reproducir música de intro de Historia antes de la cinemática
+                // Reproducir m�sica de intro de Historia antes de la cinem�tica
                 AudioManager::get().stopBgm();
                 AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
 
@@ -5237,7 +5237,7 @@ void Game::update() {
                 std::string videoPath = resolveAssetPath("resources/video/vsMode/IntroVsMode.mp4");
                 cinematicPlayer.open(videoPath);
                 
-                // Reproducir música de intro de Historia antes de la cinemática
+                // Reproducir m�sica de intro de Historia antes de la cinem�tica
                 AudioManager::get().stopBgm();
                 AudioManager::get().playBgm(resolveAssetPath("resources/sounds/11 Vs. Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
 
@@ -5256,7 +5256,7 @@ void Game::update() {
             return;
         }
 
-        // Cerrar el juego si se presionó Escape en el menú
+        // Cerrar el juego si se presion� Escape en el men�
         if (menuScreen.isExitRequested()) {
             glfwSetWindowShouldClose(window, GLFW_TRUE);
         }
@@ -5392,13 +5392,13 @@ void Game::update() {
                     rankingScreenTimer = 0.0f;
                     rankingAutoExitSeconds = 5.0f; // Esperar 5s tras confirmar nombre
                 } else if (sel == "<-") {
-                    // Borrar último carácter
+                    // Borrar �ltimo car�cter
                     if (!rankingPlayerName.empty()) {
                         rankingPlayerName.pop_back();
                     }
-                    // Mantener posición en <-
+                    // Mantener posici�n en <-
                 } else {
-                    // Añadir carácter al nombre (máx 6) y, si llega a 6, terminar edición
+                    // A�adir car�cter al nombre (m�x 6) y, si llega a 6, terminar edici�n
                     if ((int)rankingPlayerName.size() < 6) {
                         rankingPlayerName += sel;
                     }
@@ -5422,7 +5422,7 @@ void Game::update() {
                         rankingScreenTimer = 0.0f;
                         rankingAutoExitSeconds = 5.0f;
                     } else {
-                        // Volver a A para el siguiente carácter
+                        // Volver a A para el siguiente car�cter
                         rankingCurrentVocabIndex = 0;
                     }
                 }
@@ -5463,7 +5463,7 @@ void Game::update() {
         auto playCurrentLevelBgm = [&]() {
             std::string bgmFile = "";
             if (mode == GameMode::VsTwoPlayers || mode == GameMode::VsOnePlayer) {
-                // En modo Versus siempre la misma música de fondo durante los niveles.
+                // En modo Versus siempre la misma m�sica de fondo durante los niveles.
                 bgmFile = "resources/sounds/12 Vs. Game BGM.mp3";
             } else if (currentLevelIndex == 0 || currentLevelIndex == 1) {
                 bgmFile = "resources/sounds/03 BGM 1.mp3";
@@ -5524,7 +5524,7 @@ void Game::update() {
                 // La musica de ending ya esta sonando desde que empezo la cinematica.
                 enterRankingScreen();
             } else if (currentCinematicType == CinematicType::LevelStart) {
-                // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
+                // Despu�s de la cinem�tica del nivel, cargar el nivel y transicionar a GAME_PLAYING
                 if (loadLevelPending) {
                     const bool preserve = pendingLoadPreserveLivesAndScore;
                     loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/preserve);
@@ -5594,7 +5594,7 @@ void Game::update() {
 
     ScorePopup::update(deltaTime);
 
-    // Actualizar enemigos (l├│gica o animaci├│n de muerte)
+    // Actualizar enemigos (l+�gica o animaci+�n de muerte)
     const std::size_t enemiesToUpdate = gEnemies.size();
     for (std::size_t enemyIndex = 0; enemyIndex < enemiesToUpdate; ++enemyIndex) {
         Enemy* enemy = gEnemies[enemyIndex];
@@ -5656,11 +5656,11 @@ void Game::update() {
         }
     }
 
-    // Actualizar bombas + aplicar da├▒o por explosi├│n
+    // Actualizar bombas + aplicar da+�o por explosi+�n
     for (auto it = gBombs.begin(); it != gBombs.end(); ) {
         Bomb* b = *it;
 
-        // Marcar si el due├▒o ya abandon├│ la casilla (entonces bloquea tambi├®n para ├®l)
+        // Marcar si el due+�o ya abandon+� la casilla (entonces bloquea tambi+�n para +�l)
         if (b && !b->ownerLeftTile) {
             Player* owner = nullptr;
             if (b->ownerIndex >= 0 && (std::size_t)b->ownerIndex < gPlayers.size()) {
@@ -5674,7 +5674,7 @@ void Game::update() {
         bool justExploded = b->Update(deltaTime);
 
         if (b->state == BombState::EXPLODING) {
-            // Explosi├│n: si el fuego toca a una entidad, muere.
+            // Explosi+�n: si el fuego toca a una entidad, muere.
             for (auto* p : gPlayers) {
                 if (!p || !p->isAlive()) continue;
                 if (explosionHitsEntity(gameMap, b, p->position)) {
@@ -5684,7 +5684,7 @@ void Game::update() {
                     }
                     CpuBomberman::recordCpuDeath(p->playerId, deathReason);
 
-                    // Recompensa a la CPU que mató a otro jugador (si el dueño de la bomba es CPU)
+                    // Recompensa a la CPU que mat� a otro jugador (si el due�o de la bomba es CPU)
                     if (b && b->ownerIndex >= 0 && b->ownerIndex < 4 && b->ownerIndex != p->playerId) {
                         CpuBomberman::rewardCpu(b->ownerIndex, 80.0f); // Gran premio por matar rivales
                     }
@@ -5700,7 +5700,7 @@ void Game::update() {
 
                 const bool hostileEnemy = isHostileEnemyForPlayers(enemy);
                 if (!hostileEnemy && b && b->ownerIndex >= 0) {
-                    // Las bombas de jugador no deben matar al compañero CPU en cooperativo.
+                    // Las bombas de jugador no deben matar al compa�ero CPU en cooperativo.
                     continue;
                 }
 
@@ -5717,7 +5717,7 @@ void Game::update() {
                             b->enemiesKilled++;
 
                             // En modo Versus `playerScores` representa wins (no puntos),
-                            // por lo que no debemos sumar puntos de enemigos aquí.
+                            // por lo que no debemos sumar puntos de enemigos aqu�.
                             if (!VersusMode::isVersusMode(mode)) {
                                 playerScores[b->ownerIndex] += pointsEarned;
                             }
@@ -5726,7 +5726,7 @@ void Game::update() {
                     }
                 }
             }
-            // Explosi├│n: si toca a otra bomba que a├║n no ha explotado, la detona.
+            // Explosi+�n: si toca a otra bomba que a+�n no ha explotado, la detona.
             for (auto* otherB : gBombs) {
                 if (otherB && otherB != b && otherB->state == BombState::FUSE) {
                     if (explosionHitsEntity(gameMap, b, otherB->position)) {
@@ -5744,7 +5744,7 @@ void Game::update() {
         }
     }
 
-    // Colisi├│n enemigo Ôåö jugador: el jugador muere y respawnea.
+    // Colisi+�n enemigo ��� jugador: el jugador muere y respawnea.
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
         // Los Bomberman CPU no son letales por contacto directo (como en VS).
@@ -5783,7 +5783,7 @@ void Game::update() {
                 }
             }
 
-            // Victoria: queda un único jugador en pie y ya no quedan enemigos.
+            // Victoria: queda un �nico jugador en pie y ya no quedan enemigos.
             if (deathAnimationsFinished && survivingPlayers == 1 && noHostileEnemiesAlive) {
                 const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
                 if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
@@ -5820,15 +5820,15 @@ void Game::update() {
                 return;
             }
 
-            // Empate total: no quedan jugadores ni enemigos (muerte simultánea global).
+            // Empate total: no quedan jugadores ni enemigos (muerte simult�nea global).
             if (deathAnimationsFinished && survivingPlayers == 0 && noHostileEnemiesAlive) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
                     : VsCinematicPostAction::RestartCurrentLevel;
 
-                // Muerte simultánea total siempre se considera empate visualmente,
-                // aunque la post-acción pueda cerrar partida si no quedan vidas.
+                // Muerte simult�nea total siempre se considera empate visualmente,
+                // aunque la post-acci�n pueda cerrar partida si no quedan vidas.
                 startVsRoundCinematic(CinematicType::VsDraw,
                                       resolveAssetPath("resources/video/vsMode/VsModeDraw.mp4"),
                                       /*winnerIndex=*/-1);
@@ -5838,7 +5838,7 @@ void Game::update() {
             // Sin humanos vivos durante la ronda:
             // - Si aun quedan humanos con vidas, se avanza la ronda.
             // - Si los humanos estan sin vidas, termina la partida y muestra ranking.
-            // En ambos casos, la resolución visual de la ronda es derrota.
+            // En ambos casos, la resoluci�n visual de la ronda es derrota.
             if (deathAnimationsFinished && aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
@@ -5923,7 +5923,7 @@ void Game::update() {
         levelTimeRemaining -= deltaTime;
         if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 
-        // Aceleración de música si queda 1 minuto o menos
+        // Aceleraci�n de m�sica si queda 1 minuto o menos
         if (this->state == GAME_PLAYING && levelTimeRemaining <= 60.0f) {
             fastMusicActive = true;
             AudioManager::get().setBgmPitch(1.25f); // Forzar siempre si el tiempo es bajo (corrige desmuteo)
@@ -6071,7 +6071,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             trackedPlayer->isAlive() &&
             (trackedPlayer->isWalking || bobIntensity > 0.001f)) {
             const float headBobPhase = (float)glfwGetTime() * kFirstPersonHeadBobFrequency;
-            // Usamos una combinación más suave (88% sin, 12% sin2x) para evitar la brusquedad en el ascenso
+            // Usamos una combinaci�n m�s suave (88% sin, 12% sin2x) para evitar la brusquedad en el ascenso
             const float headBobPrimary = std::sin(headBobPhase);
             const float headBobSecondary = std::sin(headBobPhase * 2.0f);
             headBobOffset = (headBobPrimary * 0.88f + headBobSecondary * 0.12f) * kFirstPersonHeadBobAmplitude * bobIntensity;
@@ -6204,7 +6204,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
     };
 
-    // Mapa: cubos por tile (SOLO MUROS). El suelo se dibuja después con textura limpia y luz 3D.
+    // Mapa: cubos por tile (SOLO MUROS). El suelo se dibuja despu�s con textura limpia y luz 3D.
     for (int r = 0; r < gameMap->getRows(); ++r) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
@@ -6376,7 +6376,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     const GLuint sphereOrCubeVAO = hasSphereMesh ? sphereVAO : cubeVAO;
     const GLsizei sphereOrCubeIndexCount = hasSphereMesh ? sphereIndexCount : cubeIndexCount;
 
-    // Jugadores: sombra en suelo (el sprite real se dibuja después como billboard 2.5D).
+    // Jugadores: sombra en suelo (el sprite real se dibuja despu�s como billboard 2.5D).
     for (std::size_t i = 0; i < gPlayers.size(); ++i) {
         Player* p = gPlayers[i];
         if (!p) continue;
@@ -6400,7 +6400,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                    glm::vec3(0.05f, 0.05f, 0.05f));
     }
 
-    // Enemigos: sombra en suelo (el sprite real se dibuja después como billboard 2.5D).
+    // Enemigos: sombra en suelo (el sprite real se dibuja despu�s como billboard 2.5D).
     for (auto* enemy : gEnemies) {
         if (!enemy || enemy->lifeState != EnemyLifeState::Alive) continue;
 
@@ -6639,7 +6639,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                        glm::vec3(ringRadius, ringThickness, ringRadius),
                        ringColor);
 
-            // Particulas glitter: chispas dorado/blanco con dispersión radial y desvanecido.
+            // Particulas glitter: chispas dorado/blanco con dispersi�n radial y desvanecido.
             const int sparkleCount = 12;
             const float kTwoPi = 6.28318530718f;
             for (int i = 0; i < sparkleCount; ++i) {
@@ -6674,7 +6674,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     }
 
     // Celebracion al superar nivel en modo 3D: burst de glitter rosa desde la bomba bajo el bomberman.
-    // También efecto de muerte 3D.
+    // Tambi�n efecto de muerte 3D.
     for (std::size_t playerIndex = 0; playerIndex < gPlayers.size(); ++playerIndex) {
         Player* p = gPlayers[playerIndex];
         if (!p) continue;
@@ -6691,7 +6691,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
 
             const glm::vec3 center = ndcToWorld3D(gameMap, p->deathStartPosition, 0.50f + p->death3DHeight);
 
-            // Explosión de polvo grisaceo con naranja
+            // Explosi�n de polvo grisaceo con naranja
             const float corePulse = 1.0f + 0.2f * std::sin((1.0f - t) * 20.0f);
             const float coreRadius = (0.20f + 0.65f * easeOut) * corePulse;
             const glm::vec3 coreColor(0.80f + 0.20f * intensity, 0.60f + 0.30f * intensity, 0.40f + 0.10f * intensity);
@@ -6774,22 +6774,22 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             const float hash01 = glm::fract(hashBase);
             const float hash02 = glm::fract(hashBase * 1.5432f);
             
-            // Simulación física de "lluvia de glitter"
-            // Explosión inicial hacia todas direcciones + caída por gravedad
+            // Simulaci�n f�sica de "lluvia de glitter"
+            // Explosi�n inicial hacia todas direcciones + ca�da por gravedad
             const float initialSpeed = 1.35f + 0.85f * hash02;
             const float verticalBoost = 1.80f + 1.20f * hash01;
             
-            // Ángulo horizontal aleatorio
+            // �ngulo horizontal aleatorio
             const float angle = hash01 * kTwoPi + ((float)i * (kTwoPi / (float)sparkleCount));
             
-            // Tiempo de vida normalizado de la partícula (con pequeño desfase por semilla para que no todas caigan igual)
+            // Tiempo de vida normalizado de la part�cula (con peque�o desfase por semilla para que no todas caigan igual)
             const float particleT = std::min(1.0f, t * (1.1f + 0.2f * hash02));
             
-            // Posición horizontal (avanza a velocidad constante hacia fuera)
+            // Posici�n horizontal (avanza a velocidad constante hacia fuera)
             const float radial = initialSpeed * particleT;
             
-            // Ecuación de caída libre: y = y0 + v0*t - 0.5 * g * t^2
-            const float gravity = 8.50f; // Aumentada para que caigan con más fuerza hasta el suelo
+            // Ecuaci�n de ca�da libre: y = y0 + v0*t - 0.5 * g * t^2
+            const float gravity = 8.50f; // Aumentada para que caigan con m�s fuerza hasta el suelo
             const float verticalPos = (verticalBoost * particleT) - (0.5f * gravity * particleT * particleT);
 
             const float twinkle = 0.50f + 0.50f * std::sin((1.0f - t) * 45.0f + ((float)i * 2.1f));
@@ -6800,7 +6800,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                                                             verticalPos,
                                                             std::sin(angle) * radial);
             
-            // Colores rosas/fucsias vibrantes con algo de variación
+            // Colores rosas/fucsias vibrantes con algo de variaci�n
             const glm::vec3 sparkleColor(1.00f + 0.45f * sparkleIntensity,
                                          0.10f + 0.25f * hash02 + 0.20f * sparkleIntensity,
                                          0.80f + 0.60f * sparkleIntensity);
@@ -6924,7 +6924,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             glBindTexture(GL_TEXTURE_2D, floor3DTexture);
             glBindVertexArray(floorVAO); // Usamos el floorVAO que tiene UVs correctas
 
-            // Suelo más pulido/realista para el phong shading
+            // Suelo m�s pulido/realista para el phong shading
             glUniform1f(uniform3DTexturedAmbientStrength, 0.35f);
             glUniform1f(uniform3DTexturedSpecularStrength, 0.55f);
             glUniform1f(uniform3DTexturedShininess, 32.0f);
@@ -6935,21 +6935,21 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                         continue;
                     }
                     // Dibujamos el suelo en todas las celdas para que no haya huecos bajo los bloques
-                    // y así las sombras caigan correctamente sobre la base de los muros.
+                    // y as� las sombras caigan correctamente sobre la base de los muros.
                     const bool checker = (((r + c) % 2) == 0);
-                    // Tinte de checkerboard sutil para darle el toque clásico pero con luz realista
+                    // Tinte de checkerboard sutil para darle el toque cl�sico pero con luz realista
                     glm::vec3 floorTint = checker ? glm::vec3(1.0f, 1.0f, 1.0f) : glm::vec3(0.85f, 0.85f, 0.85f);
                     glUniform3fv(uniform3DTexturedTintColor, 1, glm::value_ptr(floorTint));
 
                     glm::mat4 model(1.0f);
                     model = glm::translate(model, gridToWorld3D(gameMap, r, c, 0.001f)); // Casi a nivel de suelo
-                    model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // Tamaño normal de tile
+                    model = glm::scale(model, glm::vec3(1.0f, 1.0f, 1.0f)); // Tama�o normal de tile
                     glUniformMatrix4fv(uniform3DTexturedModel, 1, GL_FALSE, glm::value_ptr(model));
                     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 }
             }
             
-            // Restaurar parámetros originales para el resto de objetos texturizados
+            // Restaurar par�metros originales para el resto de objetos texturizados
             glUniform1f(uniform3DTexturedAmbientStrength, 0.30f);
             glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
             glUniform1f(uniform3DTexturedShininess, 28.0f);
@@ -7292,13 +7292,13 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 const Block& b = gameGrid[r][c];
                 if (!b.isFlying) continue;
 
-                // Calculamos posición NDC para billboards si fuera necesario
+                // Calculamos posici�n NDC para billboards si fuera necesario
                 glm::vec2 ndcPos = gameMap->gridToNDC(r, c) + glm::vec2(b.flyOffset.x * 0.1f, b.flyOffset.y * 0.1f); 
                 // Pero mejor usamos worldPos para todo
                 glm::vec3 worldPos = gridToWorld3D(gameMap, r, c, 0.5f) + b.flyOffset;
                 
                 if (b.itemExploding) {
-                    // Es un power-up/ítem volando
+                    // Es un power-up/�tem volando
                     PowerUpRenderModelSpec spec;
                     if (resolvePowerUpModelSpec(b.powerUpType, spec) && spec.vao != 0) {
                         glUseProgram(shader3DTextured);
@@ -7491,14 +7491,14 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 model = glm::translate(model, feet + glm::vec3(0.0f, 0.01f + modelLift + winExtraLift, 0.0f));
                 model = glm::rotate(model, yaw, glm::vec3(0.0f, 1.0f, 0.0f));
                 
-                // Aplicar inclinación si está muriendo
+                // Aplicar inclinaci�n si est� muriendo
                 if (isDying3D) {
                     model = glm::rotate(model, p->death3DTilt, glm::vec3(1.0f, 0.0f, 0.0f));
                 }
 
                 model = glm::scale(model, glm::vec3(1.28f * modelScale, 1.28f * modelScale, 1.28f * modelScale));
 
-                // Aplicar color rojo si está muriendo
+                // Aplicar color rojo si est� muriendo
                 glm::vec3 tint(1.0f, 1.0f, 1.0f);
                 if (isDying3D) {
                     // Turn redder as death progresses
@@ -7933,7 +7933,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     glBindVertexArray(0);
     glUseProgram(0);
 
-    // HUD clásico (2D) también en vista 3D: fijo en pantalla y en la misma posición que en 2D.
+    // HUD cl�sico (2D) tambi�n en vista 3D: fijo en pantalla y en la misma posici�n que en 2D.
     if (!isSplitFirstPersonPass && gameMap != nullptr && shader != 0 && VAO != 0 && scoreboardTexture != 0) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (!wasBlendEnabled) {
@@ -8030,7 +8030,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         const float speedBoostNorm = std::min(1.0f, speedBoost / 0.35f);
 
         if (camera3DType == Camera3DType::FirstPerson) {
-            // Cruz central y guías más visibles para entrar en huecos.
+            // Cruz central y gu�as m�s visibles para entrar en huecos.
             const float crossAlpha = 0.88f + blockedHint * 0.12f;
             const glm::vec4 crossColor = (blockedHint > 0.001f)
                 ? glm::vec4(1.0f, 0.30f, 0.20f, crossAlpha)
@@ -8062,7 +8062,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                             glm::vec4(0.95f, 0.22f, 0.08f, 0.24f + blockedHint * 0.24f));
         }
 
-        // En split first-person ocultamos el HUD clásico; dibujamos inventario con sprites 2D.
+        // En split first-person ocultamos el HUD cl�sico; dibujamos inventario con sprites 2D.
         if (isSplitFirstPersonPass && gameMap != nullptr) {
             const glm::vec2 invPos(-aspect + 0.16f, 0.82f);
             gameMap->renderPlayerInventory(overlayPlayer,
@@ -8189,7 +8189,7 @@ void Game::render() {
 
         // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        // Menú siempre se dibuja en 2D puro: limpiar buffers y desactivar estados heredados de 3D.
+        // Men� siempre se dibuja en 2D puro: limpiar buffers y desactivar estados heredados de 3D.
         glDisable(GL_SCISSOR_TEST);
         glDisable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -8251,7 +8251,7 @@ void Game::render() {
             glUniform1f(uniformWhiteFlash, 0.0f);
 
             const bool versus = VersusMode::isVersusMode(mode);
-            // Coordenadas relativas a la resolución de referencia 1920x1080
+            // Coordenadas relativas a la resoluci�n de referencia 1920x1080
             const float refW = 1920.0f;
             const float refH = 1080.0f;
             const float scaleX = (float)std::max(1, WIDTH)  / refW;
@@ -8379,7 +8379,7 @@ void Game::render() {
                     // Esta es la fila de la partida actual (rankingEntryIndex)
                     const bool isCurrentEntry = (rankingEntryIndex >= 0 && i == rankingEntryIndex);
 
-                    // Nombre a mostrar: mientras se edita usar el buffer, si ya acabó usar entry.name
+                    // Nombre a mostrar: mientras se edita usar el buffer, si ya acab� usar entry.name
                     const std::string& displayName = isCurrentEntry ? rankingPlayerName : entry.name;
 
                     drawYellowTextLeftPx(displayName,
@@ -8392,7 +8392,7 @@ void Game::render() {
                                          glm::vec4(1.0f));
 
                     if (isCurrentEntry && isEnteringRankingName) {
-                        // Dibujar carácter AmaBla (cursor de selección)
+                        // Dibujar car�cter AmaBla (cursor de selecci�n)
                         float nameWidth = 0.0f;
                         for (char c : rankingPlayerName) {
                             nameWidth += glyphW + spacing;
@@ -8457,12 +8457,12 @@ void Game::render() {
 
     // ========== CINEMATICA ==========
     if (this->state == GAME_CINEMATIC) {
-        // La cinemática comparte shader 2D; evitamos depth/scissor residuales de la vista 3D.
+        // La cinem�tica comparte shader 2D; evitamos depth/scissor residuales de la vista 3D.
         glDisable(GL_SCISSOR_TEST);
         glDisable(GL_DEPTH_TEST);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         
-        // Usar renderWithLevelOverlay solo para cinemáticas de inicio de nivel en modo VS
+        // Usar renderWithLevelOverlay solo para cinem�ticas de inicio de nivel en modo VS
         if (this->currentCinematicType == CinematicType::LevelStart &&
             (this->mode == GameMode::VsTwoPlayers || this->mode == GameMode::VsOnePlayer)) {
             cinematicPlayer.renderWithLevelOverlay(VAO, shader, uniformModel, uniformProjection, 

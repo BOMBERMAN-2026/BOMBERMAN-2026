@@ -15,8 +15,8 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 
-BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size, float speed)
-    : Enemy(pos, size, speed, /*hp=*/1, /*score=*/800),
+BebeLloron::BebeLloron(glm::vec2 pos, glm::vec2 size)
+    : Enemy(pos, size, kSpeed, /*hp=*/1, /*score=*/800),
       pursuitRange(0.4f),       // Empieza a perseguir si el jugador está cerca
       pursuitGiveUpRange(0.7f), // Deja de perseguir si se aleja demasiado
       pursuing(false),

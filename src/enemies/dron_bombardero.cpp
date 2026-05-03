@@ -118,8 +118,8 @@ public:
     bool takeDamage(const SpriteAtlas&, int) override { return false; }
 };
 
-DronBombardero::DronBombardero(glm::vec2 pos, glm::vec2 size, float speed, const std::string& skinBase)
-    : Enemy(pos, size, speed, 3, 2000),
+DronBombardero::DronBombardero(glm::vec2 pos, glm::vec2 size, const std::string& skinBase)
+    : Enemy(pos, size, kSpeed, 3, 2000),
       spriteSkinBase(skinBase),
       state(DronState::Normal),
       stateTimer(0.0f),
@@ -243,7 +243,7 @@ void DronBombardero::updateFireMode(float dist, float step) {
     }
 
     if (dist > 0.1f) {
-        float fastStep = 0.22f * deltaTime;
+        float fastStep = kFireSpeed * deltaTime;
         EnemyDirection toPlayer = directionTowardPlayer();
         if (!tryMove(toPlayer, fastStep)) {
             EnemyDirection alt = randomDirection();

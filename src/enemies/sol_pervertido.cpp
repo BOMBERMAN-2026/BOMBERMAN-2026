@@ -18,8 +18,8 @@ static float randomFloat(float lo, float hi) {
 }
 
 // Velocidad de rebote inicial en diagonal (estilo pinball).
-SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase phase)
-    : Enemy(pos, size, speed, /*hp=*/3, /*score=*/5000, /*passSoftBlocks=*/false, /*boss=*/true),
+SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, Phase phase)
+    : Enemy(pos, size, kSpeedFull, /*hp=*/3, /*score=*/5000, /*passSoftBlocks=*/false, /*boss=*/true),
         currentPhase(phase), invulnerableTimer(phase != Phase::FULL ? 0.8f : 0.0f)
 {
     spriteBaseId = "sol";
@@ -28,24 +28,24 @@ SolPervertido::SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase p
     float angle = randomFloat(0.0f, 6.28318f);
     
     // Incremento de velocidad principal
-    float actualSpeed = speed * (phase == Phase::FULL ? 3.0f : 1.0f);
-    velocity = glm::vec2(std::cos(angle), std::sin(angle)) * actualSpeed;
+    glm::vec2 dir = glm::vec2(std::cos(angle), std::sin(angle));
 
     // Ajustar propiedades y velocidad según la fase
     hitPoints = 1;
     maxHitPoints = 1;
-    
+
     std::string prefix;
     switch (currentPhase) {
         case Phase::FULL:
+            velocity = dir * kSpeedFull;
             prefix = "sol.grande.";
             break;
         case Phase::HALF:
-            velocity *= 1.5f;  // Más rápido
+            velocity = dir * kSpeedHalf;
             prefix = "sol.mediano.";
             break;
         case Phase::QUARTER:
-            velocity *= 2.0f;  // Aún más rápido
+            velocity = dir * kSpeedQuarter;
             prefix = "sol.pequeño.";
             break;
     }
@@ -212,9 +212,9 @@ std::vector<std::unique_ptr<SolPervertido>> SolPervertido::split() {
         // Se divide en 2 mitades
         float offset = gameMap ? gameMap->getTileSize() * 0.3f : 0.05f;
         auto half1 = std::unique_ptr<SolPervertido>(
-            new SolPervertido(position + glm::vec2(-offset, 0.0f), size * 0.7f, speed * 1.3f, Phase::HALF));
+            new SolPervertido(position + glm::vec2(-offset, 0.0f), size * 0.7f, Phase::HALF));
         auto half2 = std::unique_ptr<SolPervertido>(
-            new SolPervertido(position + glm::vec2( offset, 0.0f), size * 0.7f, speed * 1.3f, Phase::HALF));
+            new SolPervertido(position + glm::vec2( offset, 0.0f), size * 0.7f, Phase::HALF));
         if (gameMap && playersList) {
             half1->setContext(gameMap, playersList);
             half2->setContext(gameMap, playersList);
@@ -231,7 +231,7 @@ std::vector<std::unique_ptr<SolPervertido>> SolPervertido::split() {
         };
         for (int i = 0; i < 4; ++i) {
             auto quarter = std::unique_ptr<SolPervertido>(
-                new SolPervertido(position + offsets[i], size * 0.5f, speed * 1.6f, Phase::QUARTER));
+                new SolPervertido(position + offsets[i], size * 0.5f, Phase::QUARTER));
             if (gameMap && playersList) {
                 quarter->setContext(gameMap, playersList);
             }

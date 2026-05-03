@@ -15,8 +15,8 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 
-FantasmaMortal::FantasmaMortal(glm::vec2 pos, glm::vec2 size, float speed)
-    : Enemy(pos, size, speed, /*hp=*/1, /*score=*/1000, /*passSoftBlocks=*/true),
+FantasmaMortal::FantasmaMortal(glm::vec2 pos, glm::vec2 size)
+    : Enemy(pos, size, kSpeed, /*hp=*/1, /*score=*/1000, /*passSoftBlocks=*/true),
       bombTurnCooldown(0.0f),
       bombEscapeDir(EnemyDirection::NONE),
       bombAvoidTimer(0.0f),

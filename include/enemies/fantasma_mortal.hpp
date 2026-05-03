@@ -11,7 +11,9 @@
  */
 class FantasmaMortal : public Enemy {
 public:
-    FantasmaMortal(glm::vec2 pos, glm::vec2 size, float speed);
+    static constexpr float kSpeed = 0.20f;
+
+    FantasmaMortal(glm::vec2 pos, glm::vec2 size);
     ~FantasmaMortal() override;
 
     void Update() override;

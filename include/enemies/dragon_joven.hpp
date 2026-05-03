@@ -11,7 +11,9 @@
  */
 class DragonJoven : public Enemy {
 public:
-    DragonJoven(glm::vec2 pos, glm::vec2 size, float speed);
+    static constexpr float kSpeed = 0.15f;
+
+    DragonJoven(glm::vec2 pos, glm::vec2 size);
     ~DragonJoven() override;
 
     void Update() override;

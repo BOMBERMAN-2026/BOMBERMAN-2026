@@ -252,32 +252,32 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
             // Antes: return createBomberEnemy(CpuBomberman::Difficulty::Hard);
             return createBomberEnemy(CpuBomberman::Difficulty::Hard, "jugadorazul");
         case CustomEnemyKind::Leon: {
-            Leon* enemy = new Leon(position, enemySize, 0.18f);
+            Leon* enemy = new Leon(position, enemySize);
             enemy->currentSpriteName = "leon.abajo.0";
             return enemy;
         }
         case CustomEnemyKind::BebeLloron: {
-            BebeLloron* enemy = new BebeLloron(position, enemySize, 0.16f);
+            BebeLloron* enemy = new BebeLloron(position, enemySize);
             enemy->currentSpriteName = "bebe.derecha.0";
             return enemy;
         }
         case CustomEnemyKind::Babosa: {
-            Babosa* enemy = new Babosa(position, enemySize, 0.13f);
+            Babosa* enemy = new Babosa(position, enemySize);
             enemy->currentSpriteName = "babosa.abajo.0";
             return enemy;
         }
         case CustomEnemyKind::Fantasma: {
-            FantasmaMortal* enemy = new FantasmaMortal(position, enemySize, 0.20f);
+            FantasmaMortal* enemy = new FantasmaMortal(position, enemySize);
             enemy->currentSpriteName = "fantasma.derecha.0";
             return enemy;
         }
         case CustomEnemyKind::Sol: {
-            SolPervertido* enemy = new SolPervertido(position, enemySize, 0.15f);
+            SolPervertido* enemy = new SolPervertido(position, enemySize);
             enemy->currentSpriteName = "sol.grande.0";
             return enemy;
         }
         case CustomEnemyKind::Dragon: {
-            DragonJoven* enemy = new DragonJoven(position, enemySize, 0.15f);
+            DragonJoven* enemy = new DragonJoven(position, enemySize);
             enemy->currentSpriteName = "dragon.abajo.0";
             return enemy;
         }
@@ -289,13 +289,13 @@ Enemy* CustomGameMode::createEnemyFromKind(CustomEnemyKind kind,
                 "dronazul.abajo.0"
             };
 
-            DronBombardero* enemy = new DronBombardero(position, enemySize, 0.17f);
+            DronBombardero* enemy = new DronBombardero(position, enemySize);
             enemy->currentSpriteName = kDroneSprites[droneColorCursor % 4];
             droneColorCursor += 1;
             return enemy;
         }
         case CustomEnemyKind::KingBomberman: {
-            KingBomber* enemy = new KingBomber(position, enemySize, defaultPlayerSpeed);
+            KingBomber* enemy = new KingBomber(position, enemySize);
             enemy->currentSpriteName = "kingbomber1.abajo.0";
             return enemy;
         }

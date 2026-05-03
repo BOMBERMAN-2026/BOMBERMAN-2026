@@ -20,7 +20,9 @@ bool IsKingPreBattleBlinkVisible();
 
 class KingBomber : public Enemy {
 public:
-    KingBomber(glm::vec2 pos, glm::vec2 size, float speed);
+    static constexpr float kSpeed = 0.4f;
+
+    KingBomber(glm::vec2 pos, glm::vec2 size);
     ~KingBomber() override;
 
     void Update() override;

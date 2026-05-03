@@ -33,8 +33,8 @@ bool IsKingPreBattleBlinkVisible() {
     return gKingPreBattleBlinkVisible;
 }
 
-KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size, float speed)
-    : Enemy(pos, size, speed, /*hp=*/3, /*score=*/77000, /*passSoftBlocks=*/false, /*boss=*/true),
+KingBomber::KingBomber(glm::vec2 pos, glm::vec2 size)
+    : Enemy(pos, size, kSpeed, /*hp=*/3, /*score=*/77000, /*passSoftBlocks=*/false, /*boss=*/true),
       battleState(BattleState::IntroBlink),
       specialState(SpecialAttackState::Idle),
       introBlinkTimer(0.0f),

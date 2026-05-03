@@ -23,7 +23,11 @@ public:
         QUARTER  // Cuarto de forma
     };
 
-    SolPervertido(glm::vec2 pos, glm::vec2 size, float speed, Phase phase = Phase::FULL);
+    static constexpr float kSpeedFull    = 0.24f;
+    static constexpr float kSpeedHalf    = 0.32f;
+    static constexpr float kSpeedQuarter = 0.40f;
+
+    SolPervertido(glm::vec2 pos, glm::vec2 size, Phase phase = Phase::FULL);
     ~SolPervertido() override;
 
     void Update() override;

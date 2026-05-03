@@ -20,8 +20,8 @@ extern SpriteAtlas gBombAtlas;
 extern GLuint mapTexture;
 extern GLuint enemyTexture;
 
-DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size, float speed)
-    : Enemy(pos, size, speed, /*hp=*/1, /*score=*/400),
+DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size)
+    : Enemy(pos, size, kSpeed, /*hp=*/1, /*score=*/400),
       fireCooldown(0.0f),
       fireCooldownMax(3.0f),  // Cada 3 segundos puede escupir fuego
       fireRange(2),

@@ -12,7 +12,10 @@ enum class DronState {
 
 class DronBombardero : public Enemy {
 public:
-    DronBombardero(glm::vec2 pos, glm::vec2 size, float speed,
+    static constexpr float kSpeed    = 0.17f;
+    static constexpr float kFireSpeed = 0.22f;
+
+    DronBombardero(glm::vec2 pos, glm::vec2 size,
                    const std::string& skinBase = "dronrosa");
     ~DronBombardero() override;
 

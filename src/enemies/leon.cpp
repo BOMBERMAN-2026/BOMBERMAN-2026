@@ -13,8 +13,8 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 
-Leon::Leon(glm::vec2 pos, glm::vec2 size, float speed)
-    : Enemy(pos, size, speed, /*hp=*/1, /*score=*/100),
+Leon::Leon(glm::vec2 pos, glm::vec2 size)
+    : Enemy(pos, size, kSpeed, /*hp=*/1, /*score=*/100),
       dirChangeTimer(0.0f),
       dirChangeInterval(3.0f),  // Intervalo de reconsideración de dirección.
       dirChangeChance(0.15f)    // Probabilidad de cambio tras colisión.
