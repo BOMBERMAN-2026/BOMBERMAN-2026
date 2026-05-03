@@ -8114,8 +8114,8 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                            &gEnemies,
                            currentGameLevel,
                            levelTimeRemaining,
-                           (mode == GameMode::OnePlayer || mode == GameMode::TwoPlayers) ? 0 : 1,
-                           true);
+                           (mode == GameMode::HistoryOnePlayer || mode == GameMode::HistoryTwoPlayers) ? 0 : 1,
+                           false);
 
         glBindVertexArray(0);
         glUseProgram(0);
