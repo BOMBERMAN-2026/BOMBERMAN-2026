@@ -81,32 +81,32 @@ inline AiProfile clampProfile(const AiProfile& profile, const AiEvolutionCaps& c
 inline const AiDifficultyConfig& configForDifficulty(Difficulty difficulty)
 {
     static const AiDifficultyConfig easy{
-        /*initialProfile=*/AiProfile(0.35f, 0.15f, 0.0f, 0.30f),
+        /*initialProfile=*/AiProfile(0.40f, 0.05f, 0.0f, 0.20f),
         /*caps=*/AiEvolutionCaps(
-            0.20f, 0.55f,
-            0.05f, 0.40f,
-            0.0f, 0.0f,   // Fácil nunca detecta ocultos.
-            0.15f, 0.50f
+            0.20f, 0.65f,
+            0.02f, 0.40f,
+            0.0f, 0.0f,
+            0.10f, 0.60f
         )
     };
 
     static const AiDifficultyConfig medium{
-        /*initialProfile=*/AiProfile(0.55f, 0.35f, 0.25f, 0.65f),
+        /*initialProfile=*/AiProfile(0.60f, 0.15f, 0.30f, 0.45f),
         /*caps=*/AiEvolutionCaps(
-            0.40f, 0.85f,
-            0.15f, 0.65f,
+            0.40f, 0.90f,
             0.10f, 0.70f,
-            0.50f, 0.90f
+            0.10f, 0.85f,
+            0.40f, 0.95f
         )
     };
 
     static const AiDifficultyConfig hard{
-        /*initialProfile=*/AiProfile(0.85f, 0.45f, 0.85f, 0.90f),
+        /*initialProfile=*/AiProfile(0.85f, 0.25f, 0.85f, 0.70f),
         /*caps=*/AiEvolutionCaps(
             0.70f, 1.00f,
-            0.25f, 0.85f,
-            0.60f, 1.0f,
-            0.80f, 1.0f
+            0.15f, 0.95f,
+            0.70f, 1.0f,
+            0.65f, 1.0f
         )
     };
 

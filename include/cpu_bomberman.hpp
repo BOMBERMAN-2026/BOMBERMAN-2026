@@ -39,7 +39,6 @@ struct Settings {
         Difficulty::Hard     // CPU #3 (P4 - Amarillo)
     };
 };
-
 enum class DeathReason {
     Unknown,
     EnemyContact,

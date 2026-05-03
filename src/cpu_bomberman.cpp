@@ -309,27 +309,27 @@ void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths)
         const AiProfile before = st.runtimeProfile;
 
         if (playerWon) {
-            // El jugador ganó, la CPU debe mejorar más para alcanzarlo.
-            st.runtimeProfile.aggressiveness += 0.04f;
-            st.runtimeProfile.pathfindingPrecision += 0.03f;
-            st.runtimeProfile.itemClairvoyance += 0.03f;
-            st.runtimeProfile.dangerAversion += 0.01f;
+            // El jugador ganó, la CPU debe mejorar MUCHO más rápido para alcanzarlo.
+            st.runtimeProfile.aggressiveness += 0.10f; 
+            st.runtimeProfile.pathfindingPrecision += 0.08f; 
+            st.runtimeProfile.itemClairvoyance += 0.06f;
+            st.runtimeProfile.dangerAversion += 0.03f;
         } else {
-            // La CPU ganó o sobrevivió, sigue mejorando su agresividad.
-            st.runtimeProfile.aggressiveness += 0.02f;
-            st.runtimeProfile.pathfindingPrecision += 0.015f;
+            // La CPU ganó o sobrevivió, sigue mejorando su agresividad y técnica.
+            st.runtimeProfile.aggressiveness += 0.06f;
+            st.runtimeProfile.pathfindingPrecision += 0.05f;
         }
 
         if (reason == DeathReason::ExplosionSelfBomb) {
-            st.runtimeProfile.dangerAversion += 0.05f; // Un poco más de cuidado si se suicida
-            st.runtimeProfile.aggressiveness -= 0.01f; // Pero no demasiado castigo
+            st.runtimeProfile.dangerAversion += 0.04f; 
+            st.runtimeProfile.aggressiveness -= 0.005f; // Casi nada de penalización por intentar ser agresiva
         } else if (reason == DeathReason::ExplosionOther) {
-            st.runtimeProfile.dangerAversion += 0.02f;
+            st.runtimeProfile.dangerAversion += 0.015f;
         } else if (reason == DeathReason::EnemyContact) {
-            st.runtimeProfile.pathfindingPrecision += 0.02f;
+            st.runtimeProfile.pathfindingPrecision += 0.04f;
         } else {
-            // Si sobrevive, que sea MUCHO más agresiva para la siguiente.
-            st.runtimeProfile.aggressiveness += 0.03f;
+            // Si sobrevive, que se vuelva una auténtica bestia agresiva.
+            st.runtimeProfile.aggressiveness += 0.12f;
         }
 
         st.runtimeProfile = clampProfile(st.runtimeProfile, st.profileCaps);

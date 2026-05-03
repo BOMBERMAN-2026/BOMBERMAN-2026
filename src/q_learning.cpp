@@ -70,14 +70,14 @@ QLearningConfig qlConfigForDifficulty(int difficultyIndex)
             cfg.heuristicSeed    = 0.0f;  // ¡AQUÍ! Ponlo a 0.0f para que empiece tonta y aprenda.
             break;
 
-        default: // Hard — pre-entrenada, explota conocimiento
-            cfg.alpha            = 0.08f;
-            cfg.gamma            = 0.97f;
-            cfg.epsilon          = 0.08f;
-            cfg.epsilonDecay     = 0.92f;
-            cfg.epsilonMin       = 0.02f;
-            cfg.decisionInterval = 0.18f;
-            cfg.heuristicSeed    = 1.0f;  // Completamente pre-entrenada
+        default: // Hard — pre-entrenada pero adaptativa
+            cfg.alpha            = 0.12f; // Más alto para aprender de nuevas partidas
+            cfg.gamma            = 0.95f;
+            cfg.epsilon          = 0.20f; // Más exploración inicial
+            cfg.epsilonDecay     = 0.95f;
+            cfg.epsilonMin       = 0.05f;
+            cfg.decisionInterval = 0.15f;
+            cfg.heuristicSeed    = 0.75f; // No 1.0 para que no sea rígida
             break;
     }
 
@@ -251,17 +251,17 @@ void QTable::seedWithHeuristics(float strength)
 
         // ── DESTROY_BLOCK (3): muy importante al inicio ──
         if (adjDes > 0 && canBmb && danger <= 1) {
-            q[3] = 18.0f + (float)adjDes * 4.0f; 
+            q[3] = 25.0f + (float)adjDes * 5.0f; // Subimos mucho para que rompan todo
         } else {
-            q[3] = -2.0f;
+            q[3] = -5.0f;
         }
 
         // ── PLACE_BOMB_COMBAT (4): agresividad máxima ──
         if (oppDir > 0 && oppDist >= 2 && canBmb && danger <= 1) {
-            q[4] = 40.0f + (oppDist == 3 ? 15.0f : 0.0f); 
-            if (hpAdv) q[4] += 10.0f;
+            q[4] = 45.0f + (oppDist == 3 ? 20.0f : 0.0f); 
+            if (hpAdv) q[4] += 15.0f;
         } else {
-            q[4] = -5.0f;
+            q[4] = -8.0f;
         }
 
         // ── WANDER (5) ──
