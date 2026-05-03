@@ -484,6 +484,16 @@ static const char* camera3DTypeToString(Camera3DType type) {
     }
 }
 
+static bool shouldSkipStage2BorderTile(const GameMap* gameMap, int row, int col)
+{
+    if (!gameMap || gCurrentLoadedStageNum != 2) {
+        return false;
+    }
+
+    const int spriteId = gameMap->getSpriteId(row, col);
+    return spriteId == 12 || spriteId == 13;
+}
+
 static bool isTwoHumanPlayersMode(GameMode mode)
 {
     return mode == GameMode::HistoryTwoPlayers
@@ -6539,6 +6549,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     for (int r = 0; r < gameMap->getRows(); ++r) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
+            if (shouldSkipStage2BorderTile(gameMap, r, c)) {
+                continue;
+            }
             if (walkable) continue; // Saltamos suelo, se dibuja abajo.
 
             const bool destructible = gameMap->isDestructible(r, c);
@@ -6588,9 +6601,6 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     glBindTexture(GL_TEXTURE_2D, mapTexture);
     glBindVertexArray(VAO);
 
-    glm::vec4 indestructibleSideUv(0.0f, 0.0f, 1.0f, 1.0f);
-    const bool hasIndestructibleSideUv = gameMap->getUvRectForSpriteId(8, indestructibleSideUv);
-
     const int mapRows = gameMap->getRows();
     const int mapCols = gameMap->getCols();
     const float topHalfSize = 0.475f;
@@ -6600,13 +6610,35 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         if (row < 0 || row >= mapRows || col < 0 || col >= mapCols) {
             return true;
         }
+        // Si el vecino es uno de los tiles ocultos del Stage 2, tratamos ese lado
+        // como expuesto para cubrir la cara del cubo con decal y evitar el gris liso.
+        if (shouldSkipStage2BorderTile(gameMap, row, col)) {
+            return true;
+        }
         return gameMap->isWalkable(row, col);
+    };
+
+    constexpr int kStage2DecorativeSideSpriteId = 15;
+    auto sideUvForNeighbor = [&](int neighborRow, int neighborCol, const glm::vec4& defaultUvRect) {
+        if (gCurrentLoadedStageNum == 2) {
+            const bool outOfBounds = (neighborRow < 0 || neighborRow >= mapRows || neighborCol < 0 || neighborCol >= mapCols);
+            if (outOfBounds || shouldSkipStage2BorderTile(gameMap, neighborRow, neighborCol)) {
+                glm::vec4 decorativeUv(0.0f, 0.0f, 1.0f, 1.0f);
+                if (gameMap->getUvRectForSpriteId(kStage2DecorativeSideSpriteId, decorativeUv)) {
+                    return decorativeUv;
+                }
+            }
+        }
+        return defaultUvRect;
     };
 
     for (int r = 0; r < gameMap->getRows(); ++r) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
             const BlockType blockType = gameMap->getBlockType(r, c);
+            if (shouldSkipStage2BorderTile(gameMap, r, c)) {
+                continue;
+            }
             const bool useStage3DestructibleModel =
                 (gCurrentLoadedStageNum == 3 && blockType == BlockType::DESTRUCTIBLE &&
                  destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
@@ -6631,29 +6663,45 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
                 glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
                 glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+                // Cara inferior: evita que desde abajo se vea la base gris del cubo.
+                // En Stage 2 usamos el mismo sprite decorativo aplicado en laterales.
+                glm::vec4 bottomUvRect = uvRect;
+                if (gCurrentLoadedStageNum == 2) {
+                    gameMap->getUvRectForSpriteId(kStage2DecorativeSideSpriteId, bottomUvRect);
+                }
+                const glm::vec3 centerBottom = gridToWorld3D(gameMap, r, c, -sideOutward);
+                glm::mat4 modelBottom(1.0f);
+                modelBottom = glm::translate(modelBottom, centerBottom);
+                modelBottom = glm::rotate(modelBottom, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                modelBottom = glm::scale(modelBottom, glm::vec3(topHalfSize, topHalfSize, 1.0f));
+
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(modelBottom));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(bottomUvRect));
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
             }
 
             // Caras laterales para bloques no walkable.
             if (!walkable && !useStage3DestructibleModel) {
-                glm::vec4 sideUv = uvRect;
-                if (blockType == BlockType::BARRIER && isBorderTile && hasIndestructibleSideUv) {
-                    sideUv = indestructibleSideUv;
-                }
-
                 const float halfH = h * 0.5f;
                 const glm::vec3 tileCenter = gridToWorld3D(gameMap, r, c, halfH);
                 const glm::vec4 sideTint(1.0f, 1.0f, 1.0f, 0.98f);
 
                 if (sideIsVisible(r - 1, c)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r - 1, c, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(0.0f, 0.0f, -topHalfSize - sideOutward), topHalfSize, halfH, 180.0f, sideUv, sideTint);
                 }
                 if (sideIsVisible(r + 1, c)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r + 1, c, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(0.0f, 0.0f, topHalfSize + sideOutward), topHalfSize, halfH, 0.0f, sideUv, sideTint);
                 }
                 if (sideIsVisible(r, c - 1)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r, c - 1, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(-topHalfSize - sideOutward, 0.0f, 0.0f), topHalfSize, halfH, 90.0f, sideUv, sideTint);
                 }
                 if (sideIsVisible(r, c + 1)) {
+                    const glm::vec4 sideUv = sideUvForNeighbor(r, c + 1, uvRect);
                     drawSpriteTileQuad3D(tileCenter + glm::vec3(topHalfSize + sideOutward, 0.0f, 0.0f), topHalfSize, halfH, -90.0f, sideUv, sideTint);
                 }
             }
@@ -7224,6 +7272,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
 
             for (int r = 0; r < gameMap->getRows(); ++r) {
                 for (int c = 0; c < gameMap->getCols(); ++c) {
+                    if (shouldSkipStage2BorderTile(gameMap, r, c)) {
+                        continue;
+                    }
                     // Dibujamos el suelo en todas las celdas para que no haya huecos bajo los bloques
                     // y así las sombras caigan correctamente sobre la base de los muros.
                     const bool checker = (((r + c) % 2) == 0);
