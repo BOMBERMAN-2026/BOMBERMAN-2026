@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -230,6 +230,7 @@ static const char* kDronVerdeGlbPath = "models/3D/green robot 3d model.glb";
 static const char* kDronAmarilloGlbPath = "models/3D/yellow robot 3d model.glb";
 static const char* kSolGlbPath = "models/3D/cartoon sun star 3d model.glb";
 static const char* kDragonGlbPath = "models/3D/teal creature 3d model.glb";
+static const char* kDestructibleStage3GlbPath = "models/3D/bloqueDestructibleStage3.glb";
 static const char* kHorizonBackgroundCandidates[] = {
     "models/3D/Fondo3D.jpeg",
     "models/Fondo3D.jpeg",
@@ -398,6 +399,14 @@ GLuint dragonGlbVBO = 0;
 GLuint dragonGlbEBO = 0;
 GLsizei dragonGlbIndexCount = 0;
 GLuint dragonGlbTexture = 0;
+GLuint destructibleStage3GlbVAO = 0;
+GLuint destructibleStage3GlbVBO = 0;
+GLuint destructibleStage3GlbEBO = 0;
+GLsizei destructibleStage3GlbIndexCount = 0;
+GLuint destructibleStage3GlbTexture = 0;
+GLuint destructibleStage3InstanceVBO = 0;
+bool destructibleStage3InstanceLayoutReady = false;
+int gCurrentLoadedStageNum = 1;
 GLuint shader3D = 0;
 GLuint shader3DTextured = 0;
 GLuint uniform3DModel = 0;
@@ -423,6 +432,7 @@ GLuint uniform3DTexturedShininess = 0;
 GLuint uniform3DTexturedTintColor = 0;
 GLuint uniform3DTexturedLightSpaceMatrix = 0;
 GLuint uniform3DTexturedShadowMap = 0;
+GLuint uniform3DTexturedUseInstancing = 0;
 
 GLuint shadowMapFBO = 0;
 GLuint shadowMapTex = 0;
@@ -2058,6 +2068,7 @@ void Compile3DTexturedShaders()
     uniform3DTexturedTintColor = glGetUniformLocation(shader3DTextured, "objectTintColor");
     uniform3DTexturedLightSpaceMatrix = glGetUniformLocation(shader3DTextured, "lightSpaceMatrix");
     uniform3DTexturedShadowMap = glGetUniformLocation(shader3DTextured, "shadowMap");
+    uniform3DTexturedUseInstancing = glGetUniformLocation(shader3DTextured, "useInstancing");
 }
 
 static glm::vec3 gridToWorld3D(const GameMap* map, int row, int col, float y)
@@ -2600,6 +2611,7 @@ void Game::ensureRenderResources() {
     
     addTask("solGLB", kSolGlbPath, &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
     addTask("dragonGLB", kDragonGlbPath, &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
+    addTask("destructibleStage3GLB", kDestructibleStage3GlbPath, &destructibleStage3GlbVAO, &destructibleStage3GlbVBO, &destructibleStage3GlbEBO, &destructibleStage3GlbIndexCount, &destructibleStage3GlbTexture);
 
     for (auto& t : loadingThreads) {
         if (t.joinable()) t.join();
@@ -3528,6 +3540,7 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     }
 
     std::string stageNumStr = std::to_string(stageNum);
+    gCurrentLoadedStageNum = stageNum;
 
     if (mapTexture != 0) {
         glDeleteTextures(1, &mapTexture);
@@ -4207,6 +4220,11 @@ Game::~Game() {
         glDeleteVertexArrays(1, &VAO);
         VAO = 0;
     }
+    if (destructibleStage3InstanceVBO != 0) {
+        glDeleteBuffers(1, &destructibleStage3InstanceVBO);
+        destructibleStage3InstanceVBO = 0;
+        destructibleStage3InstanceLayoutReady = false;
+    }
 
     if (actorGlbTexture != 0) {
         glDeleteTextures(1, &actorGlbTexture);
@@ -4299,6 +4317,10 @@ Game::~Game() {
     if (dragonGlbTexture != 0) {
         glDeleteTextures(1, &dragonGlbTexture);
         dragonGlbTexture = 0;
+    }
+    if (destructibleStage3GlbTexture != 0) {
+        glDeleteTextures(1, &destructibleStage3GlbTexture);
+        destructibleStage3GlbTexture = 0;
     }
     if (overlayWhiteTexture != 0) {
         glDeleteTextures(1, &overlayWhiteTexture);
@@ -4401,6 +4423,11 @@ Game::~Game() {
     dragonGlbVAO = dragonGlbVBO = dragonGlbEBO = 0;
     dragonGlbIndexCount = 0;
     dragonGlbTexture = 0;
+    destructibleStage3GlbVAO = destructibleStage3GlbVBO = destructibleStage3GlbEBO = 0;
+    destructibleStage3GlbIndexCount = 0;
+    destructibleStage3GlbTexture = 0;
+    destructibleStage3InstanceVBO = 0;
+    destructibleStage3InstanceLayoutReady = false;
 
     // Apaga el sistema de audio (libera miniaudio)
     AudioManager::get().shutdown();
@@ -6377,6 +6404,13 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             if (walkable) continue; // Saltamos suelo, se dibuja abajo.
 
             const bool destructible = gameMap->isDestructible(r, c);
+            const bool useStage3DestructibleModel =
+                (gCurrentLoadedStageNum == 3 && destructible &&
+                 destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
+                 destructibleStage3GlbTexture != 0 && shader3DTextured != 0);
+            if (useStage3DestructibleModel) {
+                continue;
+            }
             const bool checker = (((r + c) % 2) == 0);
 
             float h = 1.00f;
@@ -6435,6 +6469,10 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         for (int c = 0; c < gameMap->getCols(); ++c) {
             const bool walkable = gameMap->isWalkable(r, c);
             const BlockType blockType = gameMap->getBlockType(r, c);
+            const bool useStage3DestructibleModel =
+                (gCurrentLoadedStageNum == 3 && blockType == BlockType::DESTRUCTIBLE &&
+                 destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
+                 destructibleStage3GlbTexture != 0 && shader3DTextured != 0);
             const bool isBorderTile = (r == 0 || c == 0 || r == mapRows - 1 || c == mapCols - 1);
             const float h = walkable ? 0.08f : 1.00f;
 
@@ -6444,7 +6482,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             }
 
             // Cara superior: SOLO para bloques no walkable (techo de muros).
-            if (!walkable) {
+            if (!walkable && !useStage3DestructibleModel) {
                 const glm::vec3 centerTop = gridToWorld3D(gameMap, r, c, h + sideOutward);
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, centerTop);
@@ -6458,7 +6496,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             }
 
             // Caras laterales para bloques no walkable.
-            if (!walkable) {
+            if (!walkable && !useStage3DestructibleModel) {
                 glm::vec4 sideUv = uvRect;
                 if (blockType == BlockType::BARRIER && isBorderTile && hasIndestructibleSideUv) {
                     sideUv = indestructibleSideUv;
@@ -6968,6 +7006,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         (solGlbVAO != 0 && solGlbIndexCount > 0 && solGlbTexture != 0 && shader3DTextured != 0);
     const bool canRenderDragonGlb =
         (dragonGlbVAO != 0 && dragonGlbIndexCount > 0 && dragonGlbTexture != 0 && shader3DTextured != 0);
+    const bool canRenderDestructibleStage3Glb =
+        (destructibleStage3GlbVAO != 0 && destructibleStage3GlbIndexCount > 0 &&
+         destructibleStage3GlbTexture != 0 && shader3DTextured != 0);
 
     auto resolvePlayerGlbResource = [&](const Player* p,
                                         GLuint& outVao,
@@ -7006,7 +7047,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         return false;
     };
 
-    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderBombRcGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || (floor3DTexture != 0)) {
+    if (canRenderPlayerGlb || canRenderRedPlayerGlb || canRenderBluePlayerGlb || canRenderYellowPlayerGlb || canRenderLeonGlb || canRenderFantasmaGlb || canRenderBebeGlb || canRenderBabosaGlb || canRenderSolGlb || canRenderDragonGlb || canRenderKingBomber3D || canRenderDrones3D || canRenderBombGlb || canRenderBombRcGlb || canRenderNextLevelBombGlb || canRenderFlameGlb || canRenderAnyPowerUpGlb || canRenderDestructibleStage3Glb || (floor3DTexture != 0)) {
         const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
         if (wasBlendEnabled) {
             glDisable(GL_BLEND);
@@ -7024,6 +7065,9 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
         glUniform1f(uniform3DTexturedShininess, 28.0f);
         glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
+        if (uniform3DTexturedUseInstancing != (GLuint)-1) {
+            glUniform1i(uniform3DTexturedUseInstancing, 0);
+        }
 
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, shadowMapTex);
@@ -7062,6 +7106,67 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             glUniform1f(uniform3DTexturedSpecularStrength, 0.24f);
             glUniform1f(uniform3DTexturedShininess, 28.0f);
             glUniform3f(uniform3DTexturedTintColor, 1.0f, 1.0f, 1.0f);
+        }
+
+        if (gCurrentLoadedStageNum == 3 && canRenderDestructibleStage3Glb) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, destructibleStage3GlbTexture);
+            glBindVertexArray(destructibleStage3GlbVAO);
+
+            if (destructibleStage3InstanceVBO == 0) {
+                glGenBuffers(1, &destructibleStage3InstanceVBO);
+            }
+            glBindBuffer(GL_ARRAY_BUFFER, destructibleStage3InstanceVBO);
+
+            if (!destructibleStage3InstanceLayoutReady) {
+                const GLsizei stride = static_cast<GLsizei>(sizeof(glm::mat4));
+                for (GLuint i = 0; i < 4; ++i) {
+                    glEnableVertexAttribArray(3 + i);
+                    glVertexAttribPointer(3 + i,
+                                          4,
+                                          GL_FLOAT,
+                                          GL_FALSE,
+                                          stride,
+                                          (void*)(sizeof(GLfloat) * 4 * i));
+                    glVertexAttribDivisor(3 + i, 1);
+                }
+                destructibleStage3InstanceLayoutReady = true;
+            }
+
+            std::vector<glm::mat4> instanceModels;
+            instanceModels.reserve(static_cast<std::size_t>(gameMap->getRows() * gameMap->getCols()));
+
+            for (int r = 0; r < gameMap->getRows(); ++r) {
+                for (int c = 0; c < gameMap->getCols(); ++c) {
+                    if (!gameMap->isDestructible(r, c)) {
+                        continue;
+                    }
+
+                    const glm::vec3 center = gridToWorld3D(gameMap, r, c, 0.06f);
+                    glm::mat4 model(1.0f);
+                    model = glm::translate(model, center);
+                    model = glm::scale(model, glm::vec3(1.55f, 1.55f, 1.55f));
+                    instanceModels.push_back(model);
+                }
+            }
+
+            if (!instanceModels.empty()) {
+                glBufferData(GL_ARRAY_BUFFER,
+                             static_cast<GLsizeiptr>(instanceModels.size() * sizeof(glm::mat4)),
+                             instanceModels.data(),
+                             GL_STREAM_DRAW);
+                if (uniform3DTexturedUseInstancing != (GLuint)-1) {
+                    glUniform1i(uniform3DTexturedUseInstancing, 1);
+                }
+                glDrawElementsInstanced(GL_TRIANGLES,
+                                        destructibleStage3GlbIndexCount,
+                                        GL_UNSIGNED_INT,
+                                        0,
+                                        static_cast<GLsizei>(instanceModels.size()));
+                if (uniform3DTexturedUseInstancing != (GLuint)-1) {
+                    glUniform1i(uniform3DTexturedUseInstancing, 0);
+                }
+            }
         }
 
         if (canRenderAnyBombGlb) {
