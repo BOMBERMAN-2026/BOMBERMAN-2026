@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -3489,6 +3489,7 @@ void Game::startNewRun(GameMode newMode) {
     vsCinematicPostAction = VsCinematicPostAction::None;
 
     if (VersusMode::isVersusMode(mode)) {
+        CpuBomberman::loadQLearning();
         playerScores.assign(4, 0);
         //this->state = GAME_PLAYING;
         //loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
@@ -3617,6 +3618,7 @@ void Game::advanceToNextLevel() {
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
     AudioManager::get().resetPlaceBombSpecialSound();
+    CpuBomberman::discardQLearningSession();
 
     customGameMode.deactivate();
     continueSequenceActive = false;
@@ -3921,6 +3923,8 @@ void Game::refreshWindowTitle() const {
 }
 
 Game::~Game() {
+    CpuBomberman::discardQLearningSession();
+
     for (auto* b : gBombs) {
         delete b;
     }
@@ -5297,6 +5301,9 @@ void Game::update() {
             customGameMode.activate(customGameMenu.getSettings(), customGameMenu.getEnemyCounts());
             customGameMenu.resetFlowFlags();
 
+            CpuBomberman::resetEvolutionState();
+            CpuBomberman::loadQLearning();
+
             // 1P + Comp se trata como 1P de momento.
             mode = (customGameMode.getPlayerCount() == 2)
                 ? GameMode::HistoryTwoPlayers
@@ -5669,6 +5676,12 @@ void Game::update() {
                         deathReason = CpuBomberman::DeathReason::ExplosionSelfBomb;
                     }
                     CpuBomberman::recordCpuDeath(p->playerId, deathReason);
+
+                    // Recompensa a la CPU que mató a otro jugador (si el dueño de la bomba es CPU)
+                    if (b && b->ownerIndex >= 0 && b->ownerIndex < 4 && b->ownerIndex != p->playerId) {
+                        CpuBomberman::rewardCpu(b->ownerIndex, 80.0f); // Gran premio por matar rivales
+                    }
+
                     p->killByExplosion();
                 }
             }
@@ -5687,9 +5700,11 @@ void Game::update() {
                 if (explosionHitsEntity(gameMap, b, enemy->position)) {
                     const SpriteAtlas& damageAtlas = CpuBomberman::isAgent(enemy) ? gPlayerAtlas : gEnemyAtlas;
                     if (enemy->takeDamage(damageAtlas, 999)) {
-                        // Puntuaci├│n: s├│lo suma una vez cuando el enemigo pasa de Alive -> Dying.
-                        // `takeDamage` devuelve true justo en ese cambio de estado.
                         if (hostileEnemy && b && b->ownerIndex >= 0 && b->ownerIndex < (int)playerScores.size()) {
+                            // Recompensa por matar enemigo CPU/Mob
+                            if (b->ownerIndex < 4) {
+                                CpuBomberman::rewardCpu(b->ownerIndex, 40.0f); // Premio por matar monstruos
+                            }
                             int multiplier = 1 << b->enemiesKilled; // 1, 2, 4, 8...
                             int pointsEarned = enemy->scoreValue * multiplier;
                             b->enemiesKilled++;

@@ -151,6 +151,7 @@ public:
 
     // Destruye una celda (si es destructible). Devuelve true si se destruyó.
     bool destroyTile(int row, int col);
+    bool destroyTile(int row, int col, int killerId);
 
     // Convierte posición NDC a celda (row, col) del grid.
     void ndcToGrid(glm::vec2 ndc, int& row, int& col) const;

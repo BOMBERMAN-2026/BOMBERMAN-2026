@@ -1,4 +1,5 @@
 #include "cpu_bomberman.hpp"
+#include "q_learning.hpp"
 
 #include "bomb.hpp"
 #include "game_map.hpp"
@@ -7,6 +8,8 @@
 #include <GLFW/glfw3.h>
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <queue>
@@ -23,6 +26,7 @@ extern SpriteAtlas gPlayerAtlas;
 extern GLuint texture;
 extern GLuint enemyTexture;
 extern std::vector<Enemy*> gEnemies;
+extern std::string resolveAssetPath(const std::string& path);
 
 namespace CpuBomberman {
 
@@ -38,6 +42,14 @@ struct CpuState {
     AiEvolutionCaps profileCaps{};
     Difficulty sourceDifficulty = Difficulty::Medium;
     bool profileInitialized = false;
+
+    // ── Q-Learning (aprendizaje por refuerzo) ──
+    QState  lastQState;
+    int     lastQAction = -1;
+    float   accumulatedReward = 0.0f;
+    float   qlDecisionTimer = 0.0f;
+    bool    qlInitialized = false;
+    QLearningConfig qlConfig;
 };
 
 static CpuState gCpuStateByPlayerId[4];
@@ -48,6 +60,76 @@ static std::array<DeathReason, 4> gRoundDeathByPlayerId = {
     DeathReason::Unknown
 };
 static std::array<bool, 4> gCpuControlledByPlayerId = {false, false, false, false};
+
+// ── Q-Learning: tablas compartidas por dificultad ──
+static QTable gQTableByDifficulty[3]; // Q-network MLP: [0]=Easy, [1]=Medium, [2]=Hard
+static bool   gQTablesLoaded = false;
+static bool   gQLearningSessionActive = false;
+static std::array<float, 4> gPendingRewards = {0.0f, 0.0f, 0.0f, 0.0f};
+
+static const char* kBaseModelPaths[3] = {
+    "../resources/ai/mlp_easy.bin",
+    "../resources/ai/mlp_medium.bin",
+    "../resources/ai/mlp_hard.bin"
+};
+
+static const char* kTempModelPaths[3] = {
+    "../resources/ai/mlp_easy_tmp.bin",
+    "../resources/ai/mlp_medium_tmp.bin",
+    "../resources/ai/mlp_hard_tmp.bin"
+};
+
+static std::string baseModelPath(int difficultyIndex)
+{
+    return resolveAssetPath(kBaseModelPaths[difficultyIndex]);
+}
+
+static std::string tempModelPath(int difficultyIndex)
+{
+    return resolveAssetPath(kTempModelPaths[difficultyIndex]);
+}
+
+static bool copyBinaryFile(const std::string& fromPath, const std::string& toPath)
+{
+    std::ifstream in(fromPath.c_str(), std::ios::binary);
+    if (!in) return false;
+
+    std::ofstream out(toPath.c_str(), std::ios::binary | std::ios::trunc);
+    if (!out) return false;
+
+    out << in.rdbuf();
+    return out.good();
+}
+
+static void deleteTempModelFiles()
+{
+    for (int d = 0; d < 3; ++d) {
+        const std::string path = tempModelPath(d);
+        std::remove(path.c_str());
+    }
+}
+
+static void prepareQLearningTempModels()
+{
+    deleteTempModelFiles();
+    for (int d = 0; d < 3; ++d) {
+        const std::string basePath = baseModelPath(d);
+        const std::string tmpPath = tempModelPath(d);
+        if (!copyBinaryFile(basePath, tmpPath)) {
+            std::cout << "[CPU-AI][MLP] No se pudo copiar modelo base a temporal: "
+                      << basePath << " -> " << tmpPath << std::endl;
+        }
+    }
+}
+
+static int difficultyToIndex(Difficulty d) {
+    switch (d) {
+        case Difficulty::Easy:   return 0;
+        case Difficulty::Medium: return 1;
+        case Difficulty::Hard:   return 2;
+        default: return 1;
+    }
+}
 
 // Generador aleatorio único para decisiones de la IA.
 static std::mt19937& rng()
@@ -279,31 +361,89 @@ void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths)
         const AiProfile before = st.runtimeProfile;
 
         if (playerWon) {
-            st.runtimeProfile.aggressiveness += 0.015f;
-            st.runtimeProfile.pathfindingPrecision += 0.020f;
-            st.runtimeProfile.itemClairvoyance += 0.020f;
-            st.runtimeProfile.dangerAversion += 0.012f;
+            // El jugador ganó, la CPU debe mejorar MUCHO más rápido para alcanzarlo.
+            st.runtimeProfile.aggressiveness += 0.10f; 
+            st.runtimeProfile.pathfindingPrecision += 0.08f; 
+            st.runtimeProfile.itemClairvoyance += 0.06f;
+            st.runtimeProfile.dangerAversion += 0.03f;
         } else {
-            st.runtimeProfile.aggressiveness += 0.006f;
-            st.runtimeProfile.pathfindingPrecision += 0.008f;
+            // La CPU ganó o sobrevivió, sigue mejorando su agresividad y técnica.
+            st.runtimeProfile.aggressiveness += 0.06f;
+            st.runtimeProfile.pathfindingPrecision += 0.05f;
         }
 
         if (reason == DeathReason::ExplosionSelfBomb) {
-            st.runtimeProfile.dangerAversion += 0.080f;
-            st.runtimeProfile.aggressiveness -= 0.020f;
+            st.runtimeProfile.dangerAversion += 0.04f; 
+            st.runtimeProfile.aggressiveness -= 0.005f; // Casi nada de penalización por intentar ser agresiva
         } else if (reason == DeathReason::ExplosionOther) {
-            st.runtimeProfile.dangerAversion += 0.030f;
+            st.runtimeProfile.dangerAversion += 0.015f;
         } else if (reason == DeathReason::EnemyContact) {
-            st.runtimeProfile.pathfindingPrecision += 0.010f;
+            st.runtimeProfile.pathfindingPrecision += 0.04f;
         } else {
-            // Si sobrevive la ronda, una mejora mínima de confianza.
-            st.runtimeProfile.aggressiveness += 0.005f;
+            // Si sobrevive, que se vuelva una auténtica bestia agresiva.
+            st.runtimeProfile.aggressiveness += 0.12f;
         }
 
         st.runtimeProfile = clampProfile(st.runtimeProfile, st.profileCaps);
 
         logCpuProfileEvolution(playerId, diff, before, st.runtimeProfile, st.profileCaps, playerWon, reason);
+
+        // ── Q-Learning: recompensa terminal y persistencia ──
+        if (st.qlInitialized) {
+            // Recompensa terminal según resultado de la ronda.
+            float terminalReward = 0.0f;
+            if (playerWon) {
+                // El jugador humano ganó → la CPU perdió.
+                terminalReward = -20.0f; 
+            } else {
+                // La CPU sobrevivió / ganó la ronda.
+                terminalReward = 40.0f; // Bajamos el premio por "solo sobrevivir"
+            }
+
+            // Penalización adicional según causa de muerte.
+            if (reason == DeathReason::ExplosionSelfBomb) {
+                terminalReward -= 100.0f; // Menos penalización por suicidio para fomentar riesgo
+            } else if (reason == DeathReason::ExplosionOther) {
+                terminalReward -= 30.0f;
+            } else if (reason == DeathReason::EnemyContact) {
+                terminalReward -= 20.0f;
+            }
+
+            st.accumulatedReward += terminalReward;
+
+            // Actualización final de la Q-table.
+            const int diffIdx = difficultyToIndex(diff);
+            QTable& qTable = gQTableByDifficulty[diffIdx];
+
+            if (st.lastQAction >= 0) {
+                QState terminalState; // Estado terminal (ceros).
+                qTable.update(st.lastQState.encode(), st.lastQAction,
+                              st.accumulatedReward, terminalState.encode(),
+                              st.qlConfig.alpha, st.qlConfig.gamma);
+            }
+
+            // Decaer epsilon (menos exploración con el tiempo).
+            st.qlConfig.epsilon = std::max(
+                st.qlConfig.epsilonMin,
+                st.qlConfig.epsilon * st.qlConfig.epsilonDecay
+            );
+
+            if (kAiDebugEnabled) {
+                std::cout << "[CPU-AI][QL] CPU" << (playerId + 1)
+                          << " round end: terminalReward=" << terminalReward
+                          << " newEpsilon=" << st.qlConfig.epsilon
+                          << std::endl;
+            }
+
+            // Reset para la siguiente ronda.
+            st.lastQAction = -1;
+            st.accumulatedReward = 0.0f;
+            st.qlDecisionTimer = 0.0f;
+        }
     }
+
+    // Guardar Q-tables al disco tras cada ronda.
+    saveQLearning();
 }
 
 static GLint moveToFacingDirKey(Move mov)
@@ -422,6 +562,65 @@ static bool isDangerousCell(const std::vector<uint8_t>& danger, int row, int col
     return danger[idx] != 0;
 }
 
+static bool maskContainsCell(const std::vector<uint8_t>& mask, int row, int col, int cols)
+{
+    if (row < 0 || col < 0 || cols <= 0) return false;
+    const size_t idx = (size_t)row * (size_t)cols + (size_t)col;
+    return idx < mask.size() && mask[idx] != 0;
+}
+
+static bool moveTargetCell(Move move, int sr, int sc, int& outRow, int& outCol)
+{
+    outRow = sr;
+    outCol = sc;
+    switch (move) {
+        case MOVE_UP:    --outRow; return true;
+        case MOVE_DOWN:  ++outRow; return true;
+        case MOVE_LEFT:  --outCol; return true;
+        case MOVE_RIGHT: ++outCol; return true;
+        default: return false;
+    }
+}
+
+static int moveOrderValue(Move move)
+{
+    switch (move) {
+        case MOVE_UP: return 0;
+        case MOVE_RIGHT: return 1;
+        case MOVE_DOWN: return 2;
+        case MOVE_LEFT: return 3;
+        default: return 4;
+    }
+}
+
+static int moveTieRank(Move move, int salt)
+{
+    const int order = moveOrderValue(move);
+    if (order >= 4) return order;
+    const int offset = ((salt % 4) + 4) % 4;
+    return (order + offset) % 4;
+}
+
+static bool remoteBlastCanOpenTile(const GameMap& map, const Bomb& bomb)
+{
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    const int dr[4] = {0, -1, 0, 1};
+    const int dc[4] = {1, 0, -1, 0};
+
+    for (int i = 0; i < 4; ++i) {
+        for (int d = 1; d <= bomb.power; ++d) {
+            const int r = bomb.gridRow + dr[i] * d;
+            const int c = bomb.gridCol + dc[i] * d;
+            if (r < 0 || c < 0 || r >= rows || c >= cols) break;
+            if (map.isDestructible(r, c)) return true;
+            if (!map.isWalkable(r, c)) break;
+        }
+    }
+
+    return false;
+}
+
 static std::vector<Move> validMoves(const GameMap& map,
                                    const std::vector<uint8_t>& danger,
                                    const Player& self,
@@ -453,6 +652,51 @@ static std::vector<Move> validMoves(const GameMap& map,
     }
 
     return out;
+}
+
+static bool playerOccupiesCell(const GameMap& map, const Player& player, int row, int col)
+{
+    if (!player.isAlive() || player.isGameOver()) return false;
+
+    int pr = 0;
+    int pc = 0;
+    map.ndcToGrid(player.position, pr, pc);
+    if (pr == row && pc == col) return true;
+
+    if (player.movingToTarget) {
+        map.ndcToGrid(player.targetPos, pr, pc);
+        if (pr == row && pc == col) return true;
+    }
+
+    return false;
+}
+
+static bool cellOccupiedByOtherPlayer(const GameMap& map,
+                                      const std::vector<Player*>& players,
+                                      const Player& self,
+                                      int row,
+                                      int col)
+{
+    for (Player* other : players) {
+        if (!other || other == &self) continue;
+        if (playerOccupiesCell(map, *other, row, col)) return true;
+    }
+    return false;
+}
+
+static bool moveEntersOtherPlayerCell(const GameMap& map,
+                                      const std::vector<Player*>& players,
+                                      const Player& self,
+                                      Move move)
+{
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+
+    int nr = sr;
+    int nc = sc;
+    if (!moveTargetCell(move, sr, sc, nr, nc)) return false;
+    return cellOccupiedByOtherPlayer(map, players, self, nr, nc);
 }
 
 static Move pickRandomMove(const std::vector<Move>& moves)
@@ -644,6 +888,26 @@ static Bomb* findOwnedRemoteBomb(const Player& self)
     return nullptr;
 }
 
+static bool remoteBlastHitsOpponent(const GameMap& map,
+                                    const std::vector<uint8_t>& blast,
+                                    int cols,
+                                    const Player& self,
+                                    const std::vector<Player*>& players)
+{
+    for (Player* other : players) {
+        if (!other || other == &self) continue;
+        if (!other->isAlive() || other->isGameOver()) continue;
+        if (other->invincible) continue;
+
+        int row = 0;
+        int col = 0;
+        map.ndcToGrid(other->position, row, col);
+        if (maskContainsCell(blast, row, col, cols)) return true;
+    }
+
+    return false;
+}
+
 static Move bfsNextStepToEscapeBlast(const GameMap& map,
                                      const Player& self,
                                      const std::vector<uint8_t>& blastMask)
@@ -656,6 +920,9 @@ static Move bfsNextStepToEscapeBlast(const GameMap& map,
 
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
+
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
 
     auto idx = [&](int r, int c) { return r * cols + c; };
 
@@ -735,6 +1002,9 @@ static Move bfsNextStepToNearestPowerUp(const GameMap& map,
 
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
+
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
 
     auto idx = [&](int r, int c) { return r * cols + c; };
 
@@ -909,6 +1179,9 @@ static Move bfsNextStepToAdjacentDestructible(const GameMap& map,
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
 
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
+
     auto idx = [&](int r, int c) { return r * cols + c; };
 
     std::vector<int> prev((size_t)rows * (size_t)cols, -1);
@@ -985,6 +1258,9 @@ static Move bfsNextStepToAdjacentHiddenPowerUp(const GameMap& map,
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
 
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
+
     auto idx = [&](int r, int c) { return r * cols + c; };
 
     std::vector<int> prev((size_t)rows * (size_t)cols, -1);
@@ -1051,40 +1327,6 @@ static Move bfsNextStepToAdjacentHiddenPowerUp(const GameMap& map,
     return MOVE_NONE;
 }
 
-static bool tryDetonateRemoteBombIfSafe(Player& self, const GameMap& map, float deltaTime, float perSecond)
-{
-    if (!self.hasRemoteControl) return false;
-    if (perSecond <= 0.0f) return false;
-    if (rand01() >= perSecond * std::max(0.0f, deltaTime)) return false;
-
-    Bomb* owned = nullptr;
-    for (auto* b : gBombs) {
-        if (!b) continue;
-        if (b->state != BombState::FUSE) continue;
-        if (b->remoteControlled != true) continue;
-        if (b->ownerIndex != self.playerId) continue;
-        owned = b;
-        break;
-    }
-    if (!owned) return false;
-
-    int sr = 0, sc = 0;
-    map.ndcToGrid(self.position, sr, sc);
-
-    const int rows = map.getRows();
-    const int cols = map.getCols();
-    std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
-    markBlastArea(map, owned->gridRow, owned->gridCol, owned->power, blast, rows, cols);
-
-    const size_t selfIdx = (size_t)sr * (size_t)cols + (size_t)sc;
-    if (selfIdx < blast.size() && blast[selfIdx] != 0) {
-        return false;
-    }
-
-    owned->detonate();
-    return true;
-}
-
 static bool clearLineWalkable(const GameMap& map, int r1, int c1, int r2, int c2)
 {
     if (r1 == r2) {
@@ -1126,6 +1368,51 @@ static bool canHitTargetWithBomb(const GameMap& map,
     return clearLineWalkable(map, selfRow, selfCol, targetRow, targetCol);
 }
 
+static int manhattanDistance(int r1, int c1, int r2, int c2);
+
+static Move chooseUnoccupiedCombatMove(const GameMap& map,
+                                       const std::vector<uint8_t>& danger,
+                                       const Player& self,
+                                       const std::vector<Player*>& players,
+                                       int targetRow,
+                                       int targetCol,
+                                       bool avoidDanger)
+{
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+
+    std::vector<Move> candidates = validMoves(map, danger, self, avoidDanger);
+    if (candidates.empty() && avoidDanger) {
+        candidates = validMoves(map, danger, self, false);
+    }
+
+    Move bestMove = MOVE_NONE;
+    int bestScore = 1000000;
+    int bestTie = 1000000;
+
+    for (Move move : candidates) {
+        int nr = sr;
+        int nc = sc;
+        if (!moveTargetCell(move, sr, sc, nr, nc)) continue;
+        if (cellOccupiedByOtherPlayer(map, players, self, nr, nc)) continue;
+
+        int score = manhattanDistance(nr, nc, targetRow, targetCol) * 4;
+        if (canHitTargetWithBomb(map, self, nr, nc, targetRow, targetCol)) {
+            score -= 10;
+        }
+
+        const int tie = moveTieRank(move, self.playerId);
+        if (score < bestScore || (score == bestScore && tie < bestTie)) {
+            bestScore = score;
+            bestTie = tie;
+            bestMove = move;
+        }
+    }
+
+    return bestMove;
+}
+
 static bool opponentCouldHitCellWithBombNow(const GameMap& map,
                                            const Player& opponent,
                                            int oppRow,
@@ -1148,6 +1435,473 @@ static bool opponentCouldHitCellWithBombNow(const GameMap& map,
     if (dist > opponent.explosionPower) return false;
 
     return clearLineWalkable(map, oppRow, oppCol, cellRow, cellCol);
+}
+
+static int manhattanDistance(int r1, int c1, int r2, int c2)
+{
+    return std::abs(r1 - r2) + std::abs(c1 - c2);
+}
+
+static bool canEscapeBombFromCellForPlayer(const GameMap& map,
+                                           int playerId,
+                                           float speed,
+                                           int bombRow,
+                                           int bombCol,
+                                           int bombPower)
+{
+    static constexpr float kFuseTimeSeconds = 3.0f;
+
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    if (rows <= 0 || cols <= 0) return false;
+    if (bombRow < 0 || bombCol < 0 || bombRow >= rows || bombCol >= cols) return false;
+
+    std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
+    markBlastArea(map, bombRow, bombCol, bombPower, blast, rows, cols);
+
+    const float tileSize = map.getTileSize();
+    if (tileSize <= 0.0001f) return false;
+
+    const float tilesPerSecond = std::max(0.1f, speed / tileSize);
+    const int maxSteps = std::max(1, (int)std::floor(tilesPerSecond * kFuseTimeSeconds));
+
+    auto idx = [&](int r, int c) { return r * cols + c; };
+
+    std::vector<int> dist((size_t)rows * (size_t)cols, -1);
+    std::queue<std::pair<int, int> > q;
+
+    dist[(size_t)idx(bombRow, bombCol)] = 0;
+    q.push(std::make_pair(bombRow, bombCol));
+
+    while (!q.empty()) {
+        const int r = q.front().first;
+        const int c = q.front().second;
+        q.pop();
+
+        const int d = dist[(size_t)idx(r, c)];
+        if (d > maxSteps) continue;
+        if (blast[(size_t)idx(r, c)] == 0) return true;
+
+        const int nr[4] = {r - 1, r + 1, r, r};
+        const int nc[4] = {c, c, c - 1, c + 1};
+
+        for (int k = 0; k < 4; ++k) {
+            const int rr = nr[k];
+            const int cc = nc[k];
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            if (!map.isWalkable(rr, cc)) continue;
+            if (bombBlocksCellForPlayer(rr, cc, playerId)) continue;
+
+            const int ii = idx(rr, cc);
+            if (dist[(size_t)ii] != -1) continue;
+            dist[(size_t)ii] = d + 1;
+            q.push(std::make_pair(rr, cc));
+        }
+    }
+
+    return false;
+}
+
+static Move bfsNextStepToBestCombatBombCell(const GameMap& map,
+                                            const std::vector<uint8_t>& danger,
+                                            const Player& self,
+                                            int targetRow,
+                                            int targetCol)
+{
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    if (rows <= 0 || cols <= 0) return MOVE_NONE;
+
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+    if (sr < 0 || sc < 0 || sr >= rows || sc >= cols) return MOVE_NONE;
+
+    auto idx = [&](int r, int c) { return r * cols + c; };
+
+    std::vector<int> prev((size_t)rows * (size_t)cols, -1);
+    std::vector<int> dist((size_t)rows * (size_t)cols, -1);
+    std::queue<std::pair<int, int> > q;
+
+    prev[(size_t)idx(sr, sc)] = idx(sr, sc);
+    dist[(size_t)idx(sr, sc)] = 0;
+    q.push(std::make_pair(sr, sc));
+
+    int bestR = -1;
+    int bestC = -1;
+    int bestScore = 1000000;
+
+    while (!q.empty()) {
+        const int r = q.front().first;
+        const int c = q.front().second;
+        q.pop();
+
+        const int d = dist[(size_t)idx(r, c)];
+        const bool startCell = (r == sr && c == sc);
+        if (!startCell &&
+            !cellHasAnyBomb(r, c) &&
+            !isDangerousCell(danger, r, c, cols) &&
+            canHitTargetWithBomb(map, self, r, c, targetRow, targetCol) &&
+            canEscapeBombFromCellForPlayer(map, self.playerId, self.speed, r, c, self.explosionPower))
+        {
+            const int score = d * 4 + manhattanDistance(r, c, targetRow, targetCol);
+            if (score < bestScore) {
+                bestScore = score;
+                bestR = r;
+                bestC = c;
+            }
+        }
+
+        const int nr[4] = {r - 1, r + 1, r, r};
+        const int nc[4] = {c, c, c - 1, c + 1};
+
+        for (int k = 0; k < 4; ++k) {
+            const int rr = nr[k];
+            const int cc = nc[k];
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            if (prev[(size_t)idx(rr, cc)] != -1) continue;
+            if (!map.isWalkable(rr, cc)) continue;
+            if (bombBlocksCellForPlayer(rr, cc, self.playerId)) continue;
+            if (isDangerousCell(danger, rr, cc, cols)) continue;
+
+            prev[(size_t)idx(rr, cc)] = idx(r, c);
+            dist[(size_t)idx(rr, cc)] = d + 1;
+            q.push(std::make_pair(rr, cc));
+        }
+    }
+
+    if (bestR < 0) return MOVE_NONE;
+
+    int cur = idx(bestR, bestC);
+    const int start = idx(sr, sc);
+    while (prev[(size_t)cur] != start && cur != start) {
+        cur = prev[(size_t)cur];
+    }
+
+    if (cur == start) return MOVE_NONE;
+
+    const int rr = cur / cols;
+    const int cc = cur % cols;
+    if (rr == sr - 1 && cc == sc) return MOVE_UP;
+    if (rr == sr + 1 && cc == sc) return MOVE_DOWN;
+    if (rr == sr && cc == sc - 1) return MOVE_LEFT;
+    if (rr == sr && cc == sc + 1) return MOVE_RIGHT;
+    return MOVE_NONE;
+}
+
+static Move chooseAggressiveCombatMove(const GameMap& map,
+                                       const std::vector<uint8_t>& danger,
+                                       Player& self,
+                                       const AiProfile& profile,
+                                       int sr,
+                                       int sc,
+                                       Player* target,
+                                       int tr,
+                                       int tc,
+                                       float bestDist,
+                                       bool bombReady,
+                                       bool& wantBomb)
+{
+    wantBomb = false;
+
+    const bool canBombNow = bombReady && self.canPlaceBomb() && !cellHasAnyBomb(sr, sc);
+    const bool hasLivingTarget = target != nullptr;
+    const bool enemyNearby = hasLivingTarget && bestDist <= 5.0f;
+    const bool directShot = hasLivingTarget && canHitTargetWithBomb(map, self, sr, sc, tr, tc);
+
+    if (canBombNow && directShot) {
+        wantBomb = true;
+        return MOVE_NONE;
+    }
+
+    if (enemyNearby) {
+        Move attackMove = bfsNextStepToBestCombatBombCell(map, danger, self, tr, tc);
+        if (attackMove != MOVE_NONE) return attackMove;
+
+        Move chaseMove = bfsNextStepToTargetCell(map, danger, self, tr, tc);
+        if (chaseMove != MOVE_NONE) return chaseMove;
+    }
+
+    Move powerMove = bfsNextStepToNearestPowerUp(map, danger, self);
+    if (powerMove != MOVE_NONE) return powerMove;
+
+    const bool seesHiddenPowerUp = profile.itemClairvoyance >= 0.25f && hasAdjacentHiddenPowerUp(map, self);
+    if (canBombNow &&
+        (seesHiddenPowerUp || hasAdjacentDestructible(map, self)) &&
+        canEscapeOwnBomb(map, self))
+    {
+        wantBomb = true;
+        return MOVE_NONE;
+    }
+
+    if (profile.itemClairvoyance >= 0.25f) {
+        Move hiddenPowerMove = bfsNextStepToAdjacentHiddenPowerUp(map, danger, self);
+        if (hiddenPowerMove != MOVE_NONE) return hiddenPowerMove;
+    }
+
+    Move breakMove = bfsNextStepToAdjacentDestructible(map, danger, self);
+    if (breakMove != MOVE_NONE) return breakMove;
+
+    if (hasLivingTarget && bestDist <= 8.0f) {
+        Move pressureMove = bfsNextStepToTargetCell(map, danger, self, tr, tc);
+        if (pressureMove != MOVE_NONE) return pressureMove;
+    }
+
+    if (canBombNow && hasAdjacentDestructible(map, self) && canEscapeOwnBomb(map, self)) {
+        wantBomb = true;
+        return MOVE_NONE;
+    }
+
+    return MOVE_NONE;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Q-Learning: Extracción de estado, ejecución de acciones, persistencia
+// ═══════════════════════════════════════════════════════════════════════════
+
+static QState extractQState(const GameMap& map,
+                            const std::vector<uint8_t>& danger,
+                            const Player& self,
+                            int sr, int sc,
+                            const Player* target, int tr, int tc,
+                            float bestDist,
+                            const std::vector<Player*>& players)
+{
+    const int cols = map.getCols();
+    QState qs;
+
+    // dangerLevel: 0=seguro, 1=peligro cercano, 2=peligro inmediato
+    const bool selfDanger = isDangerousCell(danger, sr, sc, cols);
+    if (selfDanger) {
+        qs.dangerLevel = 2;
+    } else {
+        // Revisar celdas adyacentes
+        bool nearbyDanger = false;
+        const int dr[4] = {-1, 1, 0, 0};
+        const int dc[4] = {0, 0, -1, 1};
+        for (int k = 0; k < 4; ++k) {
+            if (isDangerousCell(danger, sr + dr[k], sc + dc[k], cols)) {
+                nearbyDanger = true;
+                break;
+            }
+        }
+        qs.dangerLevel = nearbyDanger ? 1 : 0;
+    }
+
+    // opponentDir y opponentDist
+    if (target && target->isAlive() && !target->isGameOver()) {
+        const int drow = tr - sr;
+        const int dcol = tc - sc;
+        // Dirección dominante
+        if (std::abs(drow) >= std::abs(dcol)) {
+            qs.opponentDir = (drow < 0) ? 1 : 2; // 1=arriba, 2=abajo
+        } else {
+            qs.opponentDir = (dcol < 0) ? 3 : 4; // 3=izq, 4=der
+        }
+        // Distancia
+        if (bestDist <= 1.5f)      qs.opponentDist = 3; // adyacente
+        else if (bestDist <= 3.5f) qs.opponentDist = 2; // cerca
+        else if (bestDist <= 8.0f) qs.opponentDist = 1; // medio
+        else                       qs.opponentDist = 0; // lejos
+    } else {
+        qs.opponentDir  = 0;
+        qs.opponentDist = 0;
+    }
+
+    // adjDestructibles
+    int adjCount = 0;
+    const int ar[4] = {sr - 1, sr + 1, sr, sr};
+    const int ac[4] = {sc, sc, sc - 1, sc + 1};
+    for (int k = 0; k < 4; ++k) {
+        if (map.isDestructible(ar[k], ac[k])) ++adjCount;
+    }
+    qs.adjDestructibles = (uint8_t)std::min(adjCount, 2);
+
+    // visiblePowerUp: ¿hay power-up visible alcanzable?
+    PowerUpType tmpType;
+    qs.visiblePowerUp = (bfsNextStepToNearestPowerUp(map, danger, self) != MOVE_NONE) ? 1 : 0;
+
+    // canBomb
+    qs.canBomb = self.canPlaceBomb() ? 1 : 0;
+
+    // hasEscape
+    qs.hasEscape = canEscapeOwnBomb(map, self) ? 1 : 0;
+
+    // ownBombActive
+    bool hasBomb = false;
+    for (auto* b : gBombs) {
+        if (b && b->state != BombState::DONE && b->ownerIndex == self.playerId) {
+            hasBomb = true;
+            break;
+        }
+    }
+    qs.ownBombActive = hasBomb ? 1 : 0;
+
+    // hpAdvantage: ¿tiene igual o más vidas que el rival más cercano?
+    if (target) {
+        qs.hpAdvantage = (self.lives >= target->lives) ? 1 : 0;
+    } else {
+        qs.hpAdvantage = 1;
+    }
+
+    return qs;
+}
+
+// Traduce una QAction a movimiento + bomba usando las funciones BFS existentes.
+// Devuelve el Move deseado y pone wantBomb a true si la acción implica bombardear.
+static Move executeQAction(int action,
+                           const GameMap& map,
+                           const std::vector<uint8_t>& danger,
+                           Player& self,
+                           int sr, int sc,
+                           Player* target, int tr, int tc,
+                           bool& wantBomb,
+                           bool& holdPosition)
+{
+    wantBomb = false;
+    holdPosition = false;
+    const QAction qa = static_cast<QAction>(action);
+
+   switch (qa) {
+        case QAction::FLEE_DANGER: {
+            // Construir máscara de blast de todas las bombas y escapar.
+            const int rows = map.getRows();
+            const int cols = map.getCols();
+            std::vector<uint8_t> allBlast((size_t)rows * (size_t)cols, 0);
+            for (auto* b : gBombs) {
+                if (!b || b->state == BombState::DONE) continue;
+                markBlastArea(map, b->gridRow, b->gridCol, b->power, allBlast, rows, cols);
+            }
+            Move esc = bfsNextStepToEscapeBlast(map, self, allBlast);
+            if (esc != MOVE_NONE) return esc;
+            // Si no hay escape, mover a cualquier celda segura.
+            std::vector<Move> safe = validMoves(map, danger, self, true);
+            return pickRandomMove(safe);
+        }
+
+        case QAction::CHASE_OPPONENT:
+            if (target) return bfsNextStepToTargetCell(map, danger, self, tr, tc);
+            return MOVE_NONE;
+
+        case QAction::COLLECT_POWERUP:
+            return bfsNextStepToNearestPowerUp(map, danger, self);
+
+        case QAction::DESTROY_BLOCK: {
+            // Quitamos el 'canEscapeOwnBomb'
+            wantBomb = hasAdjacentDestructible(map, self) && self.canPlaceBomb();
+            if (wantBomb) {
+                holdPosition = true;
+                return MOVE_NONE;
+            }
+            return bfsNextStepToAdjacentDestructible(map, danger, self);
+        }
+
+        case QAction::PLACE_BOMB_COMBAT:
+            // Quitamos 'canEscapeOwnBomb' y atacamos si está a 2 casillas o menos
+            if (target && self.canPlaceBomb()) {
+                float dist = std::abs(tr - sr) + std::abs(tc - sc);
+                if (canHitTargetWithBomb(map, self, sr, sc, tr, tc) || dist <= 2.0f) {
+                    wantBomb = true;
+                    holdPosition = true;
+                    return MOVE_NONE;
+                }
+                return bfsNextStepToTargetCell(map, danger, self, tr, tc);
+            }
+            return MOVE_NONE;
+
+        case QAction::WANDER: {
+            std::vector<Move> moves = validMoves(map, danger, self, true);
+            if (moves.empty()) moves = validMoves(map, danger, self, false);
+            return pickRandomMove(moves);
+        }
+
+        case QAction::HOLD_POSITION:
+            holdPosition = true;
+            return MOVE_NONE;
+
+        default:
+            return MOVE_NONE;
+    }
+}
+
+static void ensureQTablesLoaded()
+{
+    if (!gQLearningSessionActive) {
+        gQLearningSessionActive = true;
+        prepareQLearningTempModels();
+    }
+
+    if (gQTablesLoaded) return;
+    gQTablesLoaded = true;
+
+    for (int d = 0; d < 3; ++d) {
+        const std::string tmpPath = tempModelPath(d);
+        if (!gQTableByDifficulty[d].load(tmpPath)) {
+            const std::string basePath = baseModelPath(d);
+            if (gQTableByDifficulty[d].load(basePath)) {
+                gQTableByDifficulty[d].save(tmpPath);
+                continue;
+            }
+
+            // No existe fichero: seed con heurísticas según dificultad.
+            const QLearningConfig cfg = qlConfigForDifficulty(d);
+            gQTableByDifficulty[d].seedWithHeuristics(cfg.heuristicSeed);
+            std::cout << "[CPU-AI][MLP] Sin modelo para dificultad " << d
+                      << " -> pretrain strength=" << cfg.heuristicSeed << std::endl;
+            gQTableByDifficulty[d].save(tmpPath);
+        }
+    }
+}
+
+void loadQLearning()
+{
+    if (gQLearningSessionActive) {
+        deleteTempModelFiles();
+    }
+
+    gQLearningSessionActive = true;
+    prepareQLearningTempModels();
+    gQTablesLoaded = false; // Forzar recarga desde los temporales recien creados.
+    ensureQTablesLoaded();
+}
+
+void saveQLearning()
+{
+    ensureQTablesLoaded();
+    for (int d = 0; d < 3; ++d) {
+        gQTableByDifficulty[d].save(tempModelPath(d));
+    }
+}
+
+void discardQLearningSession()
+{
+    deleteTempModelFiles();
+    for (int d = 0; d < 3; ++d) {
+        gQTableByDifficulty[d].clear();
+    }
+    gQTablesLoaded = false;
+    gQLearningSessionActive = false;
+}
+
+void rewardCpu(int playerId, float reward)
+{
+    if (playerId < 0 || playerId >= 4) return;
+    gPendingRewards[(size_t)playerId] += reward;
+}
+
+// Nombre de la acción para logs.
+static const char* qActionName(int action)
+{
+    switch (static_cast<QAction>(action)) {
+        case QAction::FLEE_DANGER:       return "FLEE";
+        case QAction::CHASE_OPPONENT:    return "CHASE";
+        case QAction::COLLECT_POWERUP:   return "COLLECT";
+        case QAction::DESTROY_BLOCK:     return "DESTROY";
+        case QAction::PLACE_BOMB_COMBAT: return "BOMB_COMBAT";
+        case QAction::WANDER:            return "WANDER";
+        case QAction::HOLD_POSITION:     return "HOLD";
+        default:                         return "?";
+    }
 }
 
 void updateCpuPlayers(GameMode mode,
@@ -1196,8 +1950,19 @@ void updateCpuPlayers(GameMode mode,
 
         // Movimiento por tiles (como los enemigos): mientras tenga target, seguirlo.
         if (p->movingToTarget) {
-            cpuContinueTileMove(*p, *map, st, deltaTime);
-            continue;
+            int targetR = 0;
+            int targetC = 0;
+            map->ndcToGrid(p->targetPos, targetR, targetC);
+            if (cellOccupiedByOtherPlayer(*map, players, *p, targetR, targetC)) {
+                p->movingToTarget = false;
+                p->isWalking = false;
+                st.currentMove = MOVE_NONE;
+                st.moveLockSeconds = 0.0f;
+                snapPlayerToTileCenter(*p, *map);
+            } else {
+                cpuContinueTileMove(*p, *map, st, deltaTime);
+                continue;
+            }
         }
 
         const bool avoidDanger = profile.dangerAversion > 0.15f;
@@ -1251,125 +2016,167 @@ void updateCpuPlayers(GameMode mode,
             st.remoteBombArmedSeconds = -1.0f;
         }
 
-        const bool adjDestr = hasAdjacentDestructible(*map, *p);
-        const bool canUseClairvoyance = (rand01() < profile.itemClairvoyance);
-        const bool adjHidden = canUseClairvoyance ? hasAdjacentHiddenPowerUp(*map, *p) : false;
+        // ═════════════════════════════════════════════════════════════════════
+        // Q-Learning: decisión estratégica basada en aprendizaje por refuerzo
+        // ═════════════════════════════════════════════════════════════════════
 
-        PowerUpType tmp;
-        const bool standingOnVisiblePowerUp = map->getVisiblePowerUpType(sr, sc, tmp);
+        ensureQTablesLoaded();
 
-        desired = bfsNextStepToNearestPowerUp(*map, danger, *p);
-        if (desired == MOVE_NONE) {
-            if (standingOnVisiblePowerUp) {
-                holdPosition = true;
-            } else if (adjDestr) {
-                holdPosition = true;
-            } else if (adjHidden) {
-                holdPosition = true;
-            }
+        // Inicializar estado QL del CPU si es la primera vez.
+        if (!st.qlInitialized) {
+            const Difficulty diff = difficultyFor(settings, pid);
+            st.qlConfig = qlConfigForDifficulty(difficultyToIndex(diff));
+            st.lastQAction = -1;
+            st.accumulatedReward = 0.0f;
+            st.qlDecisionTimer = 0.0f;
+            st.qlInitialized = true;
         }
 
-        if (desired == MOVE_NONE && !holdPosition && adjDestr) {
-            desired = bfsNextStepToAdjacentDestructible(*map, danger, *p);
+        const int diffIdx = difficultyToIndex(difficultyFor(settings, pid));
+        QTable& qTable = gQTableByDifficulty[diffIdx];
+
+        // Acumular recompensas pendientes inyectadas externamente.
+        if (pid >= 0 && pid < 4) {
+            st.accumulatedReward += gPendingRewards[(size_t)pid];
+            gPendingRewards[(size_t)pid] = 0.0f;
         }
 
-        if (desired == MOVE_NONE && !holdPosition && canUseClairvoyance) {
-            desired = bfsNextStepToAdjacentHiddenPowerUp(*map, danger, *p);
+        // Recompensa por tick: +0.05 por sobrevivir, -0.6 si está en peligro.
+        st.accumulatedReward += 0.05f;
+        if (isDangerousCell(danger, sr, sc, cols)) {
+            st.accumulatedReward -= 0.6f;
         }
 
-        if (desired == MOVE_NONE && !holdPosition && target != nullptr) {
-            desired = bfsNextStepToTargetCell(*map, danger, *p, tr, tc);
-        }
+        // Temporizador de decisión: solo recalcular estrategia cada N segundos.
+        st.qlDecisionTimer -= deltaTime;
 
-        if (target != nullptr &&
-            profile.pathfindingPrecision >= 0.72f &&
-            opponentCouldHitCellWithBombNow(*map, *target, tr, tc, sr, sc)) {
-            Move breakLine = MOVE_NONE;
-            if (sr == tr) {
-                if (std::find(moves.begin(), moves.end(), MOVE_UP) != moves.end()) breakLine = MOVE_UP;
-                else if (std::find(moves.begin(), moves.end(), MOVE_DOWN) != moves.end()) breakLine = MOVE_DOWN;
-            } else if (sc == tc) {
-                if (std::find(moves.begin(), moves.end(), MOVE_LEFT) != moves.end()) breakLine = MOVE_LEFT;
-                else if (std::find(moves.begin(), moves.end(), MOVE_RIGHT) != moves.end()) breakLine = MOVE_RIGHT;
-            }
-
-            if (breakLine != MOVE_NONE) {
-                desired = breakLine;
-                holdPosition = false;
-                st.moveLockSeconds = 0.0f;
-            }
-        }
-
-        if (desired != MOVE_NONE && rand01() > profile.pathfindingPrecision) {
-            desired = pickRandomMove(moves);
-        }
-
-        // Si estás en peligro, no sostengas posición.
-        if (holdPosition && avoidDanger && isDangerousCell(danger, sr, sc, cols)) {
-            holdPosition = false;
-        }
-
-        // Fallback/wander (si no estamos sosteniendo posición por objetivo).
-        if (desired == MOVE_NONE && !holdPosition) {
-            if (st.moveLockSeconds <= 0.0f || !moveIsStillValid(st.currentMove)) {
-                desired = pickRandomMove(moves);
-                st.currentMove = desired;
-                // Mantener un poquito la dirección para evitar “temblor”.
-                st.moveLockSeconds = 0.25f + rand01() * 0.55f;
-            } else {
-                desired = st.currentMove;
-            }
-        }
-
-        // Bombas: probabilidades por segundo (FPS independiente).
         bool wantBomb = false;
+        float nextActionReward = 0.0f;
 
-        // Si está sosteniendo posición para romper bloque objetivo y tiene escape,
-        // no esperar a la tirada aleatoria: colocar bomba de forma determinista.
-        const bool holdingToBreakTarget =
-            holdPosition &&
-            !standingOnVisiblePowerUp &&
-            (adjDestr || adjHidden);
+        if (st.qlDecisionTimer <= 0.0f) {
+            // Extraer estado actual del juego.
+            QState newState = extractQState(*map, danger, *p, sr, sc,
+                                           target, tr, tc, bestDist, players);
+            const uint32_t newStateId = newState.encode();
 
-        if (holdingToBreakTarget && st.bombCooldownSeconds <= 0.0f && p->canPlaceBomb()) {
-            wantBomb = (profile.aggressiveness >= 0.20f) && canEscapeOwnBomb(*map, *p);
-        }
-
-        if (st.bombCooldownSeconds <= 0.0f && p->canPlaceBomb()) {
-            // Combate: si puedo matar a alguien con una bomba en mi tile ahora mismo, priorizarlo.
-            if (target != nullptr &&
-                !target->invincible &&
-                canHitTargetWithBomb(*map, *p, sr, sc, tr, tc))
-            {
-                const float combatPerSecond = 0.30f + 1.10f * profile.aggressiveness;
-                if (rand01() < combatPerSecond * deltaTime) {
-                    wantBomb = canEscapeOwnBomb(*map, *p);
-                }
+            // Actualizar Q-table con el resultado de la acción anterior.
+            if (st.lastQAction >= 0) {
+                qTable.update(st.lastQState.encode(), st.lastQAction,
+                              st.accumulatedReward, newStateId,
+                              st.qlConfig.alpha, st.qlConfig.gamma);
             }
 
-            if (!wantBomb) {
-                float perSecond = 0.08f + 0.42f * profile.aggressiveness;
-                if (adjHidden) perSecond += 0.18f;
-                if (holdingToBreakTarget) perSecond += 0.14f;
-                
-                // En VS: si hay target (oponente) cercano, aumentar mucho la agresividad
-                // para forzar combate entre CPUs incluso sin alineación directa.
-                if (target != nullptr && bestDist < 8.0f) {
-                    perSecond += 0.50f; // Impulso fuerte de combate en VS
-                }
-                
-                wantBomb = (rand01() < perSecond * deltaTime);
-                if (wantBomb) {
-                    wantBomb = canEscapeOwnBomb(*map, *p);
+            // Elegir nueva acción (ε-greedy).
+            const int action = qTable.chooseAction(newStateId, st.qlConfig.epsilon);
+
+           // Ejecutar la acción elegida.
+            desired = executeQAction(action, *map, danger, *p, sr, sc,
+                                     target, tr, tc, wantBomb, holdPosition);
+
+            if (wantBomb) {
+                // Le damos los puntos YA, para que entienda que poner bombas es BUENO.
+                if (action == (int)QAction::DESTROY_BLOCK) nextActionReward += 15.0f;
+                if (action == (int)QAction::PLACE_BOMB_COMBAT) nextActionReward += 50.0f;
+            }
+            // ----------------------------------------------------
+
+            // Penalización inmediata si la acción es imposible.
+            if (action == (int)QAction::PLACE_BOMB_COMBAT && !wantBomb && desired == MOVE_NONE) {
+                nextActionReward -= 2.0f; // accion inutil
+            }
+            if (action == (int)QAction::COLLECT_POWERUP && desired == MOVE_NONE) {
+                nextActionReward -= 1.0f; // no hay power-up
+            }
+
+            // Log de decisión (solo en debug).
+            if (kAiDebugEnabled && st.lastQAction != action) {
+                std::cout << "[CPU-AI][QL] CPU" << (pid + 1)
+                          << " state=" << newStateId
+                          << " action=" << qActionName(action)
+                          << " eps=" << st.qlConfig.epsilon
+                          << " reward=" << nextActionReward
+                          << std::endl;
+            }
+
+            // Guardar estado para la siguiente actualización.
+            st.lastQState = newState;
+            st.lastQAction = action;
+            st.accumulatedReward = nextActionReward;
+            st.qlDecisionTimer = st.qlConfig.decisionInterval;
+        } else {
+            // Entre decisiones: continuar ejecutando la última acción elegida.
+            if (st.lastQAction >= 0) {
+                desired = executeQAction(st.lastQAction, *map, danger, *p, sr, sc,
+                                         target, tr, tc, wantBomb, holdPosition);
+            }
+        }
+
+        if (!isDangerousCell(danger, sr, sc, cols) && target) {
+            bool tacticalBomb = false;
+            const Move tacticalMove = chooseAggressiveCombatMove(*map,
+                                                                  danger,
+                                                                  *p,
+                                                                  profile,
+                                                                  sr,
+                                                                  sc,
+                                                                  target,
+                                                                  tr,
+                                                                  tc,
+                                                                  bestDist,
+                                                                  st.bombCooldownSeconds <= 0.0f,
+                                                                  tacticalBomb);
+            if (tacticalBomb || tacticalMove != MOVE_NONE) {
+                desired = tacticalMove;
+                wantBomb = tacticalBomb;
+                holdPosition = false;
+                st.lastQAction = tacticalBomb
+                    ? (int)QAction::PLACE_BOMB_COMBAT
+                    : (int)QAction::CHASE_OPPONENT;
+                if (tacticalBomb) {
+                    st.accumulatedReward += 50.0f;
                 }
             }
         }
 
-        if (wantBomb) {
-            // Evitar spam.
-            st.bombCooldownSeconds = 0.65f;
+        // Override de seguridad: si está en peligro inmediato, forzar escape
+        // independientemente de lo que diga el Q-Learner.
+        if (isDangerousCell(danger, sr, sc, cols) && st.lastQAction != (int)QAction::FLEE_DANGER) {
+            const int rows_local = map->getRows();
+            const int cols_local = map->getCols();
+            std::vector<uint8_t> allBlast((size_t)rows_local * (size_t)cols_local, 0);
+            for (auto* b : gBombs) {
+                if (!b || b->state == BombState::DONE) continue;
+                markBlastArea(*map, b->gridRow, b->gridCol, b->power, allBlast, rows_local, cols_local);
+            }
+            Move esc = bfsNextStepToEscapeBlast(*map, *p, allBlast);
+            if (esc != MOVE_NONE) {
+                desired = esc;
+                holdPosition = false;
+                wantBomb = false;
+                st.lastQAction = (int)QAction::FLEE_DANGER;
+            }
+        }
+
+        if (desired != MOVE_NONE && moveEntersOtherPlayerCell(*map, players, *p, desired)) {
+            desired = chooseUnoccupiedCombatMove(*map,
+                                                danger,
+                                                *p,
+                                                players,
+                                                target ? tr : sr,
+                                                target ? tc : sc,
+                                                avoidDanger);
+            holdPosition = false;
+            st.currentMove = desired;
+            st.moveLockSeconds = 0.0f;
+        }
+
+        bool plantedBomb = false;
+        if (wantBomb && st.bombCooldownSeconds <= 0.0f) {
             const bool placed = tryPlaceBomb(*p, *map);
             if (placed) {
+                plantedBomb = true;
+                // Evitar spam.
+                st.bombCooldownSeconds = 0.65f;
                 if (p->hasRemoteControl) {
                     st.remoteBombArmedSeconds = 0.0f;
                 }
@@ -1397,10 +2204,15 @@ void updateCpuPlayers(GameMode mode,
                         st.moveLockSeconds = 0.0f;
                     }
                 }
+            } else {
+                holdPosition = false;
             }
+        } else if (wantBomb) {
+            holdPosition = false;
+            wantBomb = false;
         }
 
-        // Remote Control: una vez fuera del blast, detonar sin dejar la bomba colgada.
+        // Remote Control: detonar por valor tactico, no apenas salga del blast.
         if (ownedRemoteBomb) {
             int br = 0, bc = 0;
             map->ndcToGrid(p->position, br, bc);
@@ -1408,12 +2220,17 @@ void updateCpuPlayers(GameMode mode,
             std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
             markBlastArea(*map, ownedRemoteBomb->gridRow, ownedRemoteBomb->gridCol, ownedRemoteBomb->power, blast, rows, cols);
 
-            const size_t selfIdx = (size_t)br * (size_t)cols + (size_t)bc;
-            const bool selfInBlast = (selfIdx < blast.size() && blast[selfIdx] != 0);
+            const bool selfInBlast = maskContainsCell(blast, br, bc, cols);
+            const bool opponentInBlast = remoteBlastHitsOpponent(*map, blast, cols, *p, players);
+            const bool opensTile = remoteBlastCanOpenTile(*map, *ownedRemoteBomb);
+            const bool staleRemoteBomb = st.remoteBombArmedSeconds >= 2.25f;
 
             // Si está fuera del blast, detonar apenas alcance 0.15 segundos.
             if (!selfInBlast) {
-                if (st.remoteBombArmedSeconds >= 0.15f) {
+                if (opponentInBlast ||
+                    (opensTile && st.remoteBombArmedSeconds >= 0.30f) ||
+                    staleRemoteBomb)
+                {
                     ownedRemoteBomb->detonate();
                     st.remoteBombArmedSeconds = -1.0f;
                     continue;
@@ -1421,14 +2238,8 @@ void updateCpuPlayers(GameMode mode,
             } else {
                 // Si sigue dentro del blast, intentar escapar continuamente.
                 // Si ya ha pasado demasiado tiempo atrapado (0.85s), fuerza detonación para no quedarse quieta.
-                if (st.remoteBombArmedSeconds >= 0.85f) {
-                    ownedRemoteBomb->detonate();
-                    st.remoteBombArmedSeconds = -1.0f;
-                    continue;
-                }
-                
                 // Mantener la prioridad de escape si está atrapado.
-                if (desired == MOVE_NONE || holdPosition) {
+                if (desired == MOVE_NONE || holdPosition || opponentInBlast) {
                     const Move escapeMove = bfsNextStepToEscapeBlast(*map, *p, blast);
                     if (escapeMove != MOVE_NONE) {
                         desired = escapeMove;
@@ -1442,6 +2253,54 @@ void updateCpuPlayers(GameMode mode,
 
         // Refrescar peligro tras posibles cambios de bombas en este mismo ciclo.
         danger = buildDangerMask(*map, profile);
+
+        if (holdPosition && !plantedBomb) {
+            holdPosition = false;
+        }
+
+        if (desired == MOVE_NONE && !holdPosition) {
+            bool waitingToBomb = false;
+            if (target) {
+                bool fallbackBomb = false;
+                desired = chooseAggressiveCombatMove(*map,
+                                                     danger,
+                                                     *p,
+                                                     profile,
+                                                     sr,
+                                                     sc,
+                                                     target,
+                                                     tr,
+                                                     tc,
+                                                     bestDist,
+                                                     st.bombCooldownSeconds <= 0.0f,
+                                                     fallbackBomb);
+                if (fallbackBomb && st.bombCooldownSeconds <= 0.0f) {
+                    wantBomb = true;
+                    holdPosition = false;
+                    waitingToBomb = true;
+                }
+            }
+
+            if (desired == MOVE_NONE && !waitingToBomb) {
+                std::vector<Move> fallbackMoves = validMoves(*map, danger, *p, /*avoidDanger=*/avoidDanger);
+                if (fallbackMoves.empty() && avoidDanger) {
+                    fallbackMoves = validMoves(*map, danger, *p, /*avoidDanger=*/false);
+                }
+                desired = pickRandomMove(fallbackMoves);
+            }
+        }
+
+        if (desired != MOVE_NONE && moveEntersOtherPlayerCell(*map, players, *p, desired)) {
+            desired = chooseUnoccupiedCombatMove(*map,
+                                                danger,
+                                                *p,
+                                                players,
+                                                target ? tr : sr,
+                                                target ? tc : sc,
+                                                avoidDanger);
+            st.currentMove = desired;
+            st.moveLockSeconds = 0.0f;
+        }
 
         if (holdPosition) {
             p->isWalking = false;
@@ -1710,6 +2569,342 @@ static bool canHitTargetWithBombForAgent(const GameMap& map,
     return clearLineWalkable(map, selfRow, selfCol, targetRow, targetCol);
 }
 
+static int agentMoveSalt(const Agent& self)
+{
+    int salt = 0;
+    const std::string& prefix = self.getSpritePrefix();
+    for (char ch : prefix) {
+        salt += (int)(unsigned char)ch;
+    }
+    return salt;
+}
+
+static bool enemyOccupiesCell(const GameMap& map, const Enemy& enemy, int row, int col)
+{
+    if (enemy.lifeState != EnemyLifeState::Alive) return false;
+
+    int er = 0;
+    int ec = 0;
+    map.ndcToGrid(enemy.position, er, ec);
+    if (er == row && ec == col) return true;
+
+    if (enemy.movingToTarget) {
+        map.ndcToGrid(enemy.targetPos, er, ec);
+        if (er == row && ec == col) return true;
+    }
+
+    return false;
+}
+
+static bool cellOccupiedByOtherAgentCombatant(const Agent& self, int row, int col)
+{
+    if (!self.gameMap) return false;
+    const GameMap& map = *self.gameMap;
+
+    if (self.playersList) {
+        for (Player* player : *self.playersList) {
+            if (!player) continue;
+            if (playerOccupiesCell(map, *player, row, col)) return true;
+        }
+    }
+
+    for (Enemy* enemy : gEnemies) {
+        if (!enemy || enemy == &self) continue;
+        if (dynamic_cast<const Agent*>(enemy) == nullptr) continue;
+        if (enemyOccupiesCell(map, *enemy, row, col)) return true;
+    }
+
+    return false;
+}
+
+static bool moveEntersOtherAgentCell(const Agent& self, Move move)
+{
+    if (!self.gameMap) return false;
+
+    int sr = 0;
+    int sc = 0;
+    self.gameMap->ndcToGrid(self.position, sr, sc);
+
+    int nr = sr;
+    int nc = sc;
+    if (!moveTargetCell(move, sr, sc, nr, nc)) return false;
+    return cellOccupiedByOtherAgentCombatant(self, nr, nc);
+}
+
+static Move chooseUnoccupiedCombatMoveForAgent(const GameMap& map,
+                                               const std::vector<uint8_t>& danger,
+                                               const Agent& self,
+                                               int targetRow,
+                                               int targetCol,
+                                               int bombPower,
+                                               bool avoidDanger)
+{
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+
+    std::vector<Move> candidates = validMovesForAgent(map, danger, self, avoidDanger);
+    if (candidates.empty() && avoidDanger) {
+        candidates = validMovesForAgent(map, danger, self, false);
+    }
+
+    Move bestMove = MOVE_NONE;
+    int bestScore = 1000000;
+    int bestTie = 1000000;
+    const int salt = agentMoveSalt(self);
+
+    for (Move move : candidates) {
+        int nr = sr;
+        int nc = sc;
+        if (!moveTargetCell(move, sr, sc, nr, nc)) continue;
+        if (cellOccupiedByOtherAgentCombatant(self, nr, nc)) continue;
+
+        int score = manhattanDistance(nr, nc, targetRow, targetCol) * 4;
+        if (canHitTargetWithBombForAgent(map, bombPower, nr, nc, targetRow, targetCol)) {
+            score -= 10;
+        }
+
+        const int tie = moveTieRank(move, salt);
+        if (score < bestScore || (score == bestScore && tie < bestTie)) {
+            bestScore = score;
+            bestTie = tie;
+            bestMove = move;
+        }
+    }
+
+    return bestMove;
+}
+
+static bool canEscapeBombFromCellForAgent(const GameMap& map,
+                                          float speed,
+                                          int bombRow,
+                                          int bombCol,
+                                          int bombPower)
+{
+    static constexpr float kFuseTimeSeconds = 3.0f;
+
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    if (rows <= 0 || cols <= 0) return false;
+    if (bombRow < 0 || bombCol < 0 || bombRow >= rows || bombCol >= cols) return false;
+
+    std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
+    markBlastArea(map, bombRow, bombCol, bombPower, blast, rows, cols);
+
+    const float tileSize = map.getTileSize();
+    if (tileSize <= 0.0001f) return false;
+
+    const float tilesPerSecond = std::max(0.1f, speed / tileSize);
+    const int maxSteps = std::max(1, (int)std::floor(tilesPerSecond * kFuseTimeSeconds));
+
+    auto idx = [&](int r, int c) { return r * cols + c; };
+
+    std::vector<int> dist((size_t)rows * (size_t)cols, -1);
+    std::queue<std::pair<int, int> > q;
+
+    dist[(size_t)idx(bombRow, bombCol)] = 0;
+    q.push(std::make_pair(bombRow, bombCol));
+
+    while (!q.empty()) {
+        const int r = q.front().first;
+        const int c = q.front().second;
+        q.pop();
+
+        const int d = dist[(size_t)idx(r, c)];
+        if (d > maxSteps) continue;
+        if (blast[(size_t)idx(r, c)] == 0) return true;
+
+        const int nr[4] = {r - 1, r + 1, r, r};
+        const int nc[4] = {c, c, c - 1, c + 1};
+
+        for (int k = 0; k < 4; ++k) {
+            const int rr = nr[k];
+            const int cc = nc[k];
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            if (!map.isWalkable(rr, cc)) continue;
+            if (bombBlocksCellForAgent(rr, cc)) continue;
+
+            const int ii = idx(rr, cc);
+            if (dist[(size_t)ii] != -1) continue;
+            dist[(size_t)ii] = d + 1;
+            q.push(std::make_pair(rr, cc));
+        }
+    }
+
+    return false;
+}
+
+static Move bfsNextStepToEscapeBlastForAgent(const GameMap& map,
+                                             const Agent& self,
+                                             const std::vector<uint8_t>& blastMask)
+{
+    static constexpr float kFuseTimeSeconds = 3.0f;
+
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    if (rows <= 0 || cols <= 0) return MOVE_NONE;
+
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+    if (sr < 0 || sc < 0 || sr >= rows || sc >= cols) return MOVE_NONE;
+
+    auto idx = [&](int r, int c) { return r * cols + c; };
+
+    const float tileSize = map.getTileSize();
+    if (tileSize <= 0.0001f) return MOVE_NONE;
+    const float tilesPerSecond = std::max(0.1f, self.speed / tileSize);
+    const int maxSteps = std::max(1, (int)std::floor(tilesPerSecond * kFuseTimeSeconds));
+
+    std::vector<int> prev((size_t)rows * (size_t)cols, -1);
+    std::vector<int> dist((size_t)rows * (size_t)cols, -1);
+    std::queue<std::pair<int, int> > q;
+
+    prev[(size_t)idx(sr, sc)] = idx(sr, sc);
+    dist[(size_t)idx(sr, sc)] = 0;
+    q.push(std::make_pair(sr, sc));
+
+    int foundR = -1;
+    int foundC = -1;
+
+    while (!q.empty()) {
+        const int r = q.front().first;
+        const int c = q.front().second;
+        q.pop();
+
+        const int d = dist[(size_t)idx(r, c)];
+        if (d > maxSteps) continue;
+
+        if (blastMask[(size_t)idx(r, c)] == 0) {
+            foundR = r;
+            foundC = c;
+            break;
+        }
+
+        const int nr[4] = {r - 1, r + 1, r, r};
+        const int nc[4] = {c, c, c - 1, c + 1};
+
+        for (int k = 0; k < 4; ++k) {
+            const int rr = nr[k];
+            const int cc = nc[k];
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            if (!map.isWalkable(rr, cc)) continue;
+            if (bombBlocksCellForAgent(rr, cc)) continue;
+            if (dist[(size_t)idx(rr, cc)] != -1) continue;
+
+            dist[(size_t)idx(rr, cc)] = d + 1;
+            prev[(size_t)idx(rr, cc)] = idx(r, c);
+            q.push(std::make_pair(rr, cc));
+        }
+    }
+
+    if (foundR < 0) return MOVE_NONE;
+
+    int cur = idx(foundR, foundC);
+    const int start = idx(sr, sc);
+    while (prev[(size_t)cur] != start && cur != start) {
+        cur = prev[(size_t)cur];
+    }
+
+    if (cur == start) return MOVE_NONE;
+
+    const int rr = cur / cols;
+    const int cc = cur % cols;
+    if (rr == sr - 1 && cc == sc) return MOVE_UP;
+    if (rr == sr + 1 && cc == sc) return MOVE_DOWN;
+    if (rr == sr && cc == sc - 1) return MOVE_LEFT;
+    if (rr == sr && cc == sc + 1) return MOVE_RIGHT;
+    return MOVE_NONE;
+}
+
+static Move bfsNextStepToBestCombatBombCellForAgent(const GameMap& map,
+                                                    const std::vector<uint8_t>& danger,
+                                                    const Agent& self,
+                                                    int targetRow,
+                                                    int targetCol,
+                                                    int bombPower)
+{
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    if (rows <= 0 || cols <= 0) return MOVE_NONE;
+
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+    if (sr < 0 || sc < 0 || sr >= rows || sc >= cols) return MOVE_NONE;
+
+    auto idx = [&](int r, int c) { return r * cols + c; };
+
+    std::vector<int> prev((size_t)rows * (size_t)cols, -1);
+    std::vector<int> dist((size_t)rows * (size_t)cols, -1);
+    std::queue<std::pair<int, int> > q;
+
+    prev[(size_t)idx(sr, sc)] = idx(sr, sc);
+    dist[(size_t)idx(sr, sc)] = 0;
+    q.push(std::make_pair(sr, sc));
+
+    int bestR = -1;
+    int bestC = -1;
+    int bestScore = 1000000;
+
+    while (!q.empty()) {
+        const int r = q.front().first;
+        const int c = q.front().second;
+        q.pop();
+
+        const int d = dist[(size_t)idx(r, c)];
+        const bool startCell = (r == sr && c == sc);
+        if (!startCell &&
+            !cellHasAnyBomb(r, c) &&
+            !isDangerousCell(danger, r, c, cols) &&
+            canHitTargetWithBombForAgent(map, bombPower, r, c, targetRow, targetCol) &&
+            canEscapeBombFromCellForAgent(map, self.speed, r, c, bombPower))
+        {
+            const int score = d * 4 + manhattanDistance(r, c, targetRow, targetCol);
+            if (score < bestScore) {
+                bestScore = score;
+                bestR = r;
+                bestC = c;
+            }
+        }
+
+        const int nr[4] = {r - 1, r + 1, r, r};
+        const int nc[4] = {c, c, c - 1, c + 1};
+
+        for (int k = 0; k < 4; ++k) {
+            const int rr = nr[k];
+            const int cc = nc[k];
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            if (prev[(size_t)idx(rr, cc)] != -1) continue;
+            if (!map.isWalkable(rr, cc)) continue;
+            if (bombBlocksCellForAgent(rr, cc)) continue;
+            if (isDangerousCell(danger, rr, cc, cols)) continue;
+
+            prev[(size_t)idx(rr, cc)] = idx(r, c);
+            dist[(size_t)idx(rr, cc)] = d + 1;
+            q.push(std::make_pair(rr, cc));
+        }
+    }
+
+    if (bestR < 0) return MOVE_NONE;
+
+    int cur = idx(bestR, bestC);
+    const int start = idx(sr, sc);
+    while (prev[(size_t)cur] != start && cur != start) {
+        cur = prev[(size_t)cur];
+    }
+
+    if (cur == start) return MOVE_NONE;
+
+    const int rr = cur / cols;
+    const int cc = cur % cols;
+    if (rr == sr - 1 && cc == sc) return MOVE_UP;
+    if (rr == sr + 1 && cc == sc) return MOVE_DOWN;
+    if (rr == sr && cc == sc - 1) return MOVE_LEFT;
+    if (rr == sr && cc == sc + 1) return MOVE_RIGHT;
+    return MOVE_NONE;
+}
+
 static bool hasAdjacentDestructibleForAgent(const GameMap& map, const Agent& self)
 {
     int sr = 0;
@@ -1725,6 +2920,83 @@ static bool hasAdjacentDestructibleForAgent(const GameMap& map, const Agent& sel
     }
 
     return false;
+}
+
+static Move bfsNextStepToAdjacentDestructibleForAgent(const GameMap& map,
+                                                      const std::vector<uint8_t>& danger,
+                                                      const Agent& self,
+                                                      bool avoidDanger)
+{
+    const int rows = map.getRows();
+    const int cols = map.getCols();
+    if (rows <= 0 || cols <= 0) return MOVE_NONE;
+
+    int sr = 0;
+    int sc = 0;
+    map.ndcToGrid(self.position, sr, sc);
+    if (sr < 0 || sc < 0 || sr >= rows || sc >= cols) return MOVE_NONE;
+
+    auto idx = [&](int r, int c) { return r * cols + c; };
+
+    std::vector<int> prev((size_t)rows * (size_t)cols, -1);
+    std::queue<std::pair<int, int> > q;
+
+    prev[(size_t)idx(sr, sc)] = idx(sr, sc);
+    q.push(std::make_pair(sr, sc));
+
+    int foundR = -1;
+    int foundC = -1;
+
+    while (!q.empty()) {
+        const int r = q.front().first;
+        const int c = q.front().second;
+        q.pop();
+
+        const int ar[4] = {r - 1, r + 1, r, r};
+        const int ac[4] = {c, c, c - 1, c + 1};
+        for (int k = 0; k < 4; ++k) {
+            if (map.isDestructible(ar[k], ac[k])) {
+                foundR = r;
+                foundC = c;
+                break;
+            }
+        }
+        if (foundR >= 0) break;
+
+        const int nr[4] = {r - 1, r + 1, r, r};
+        const int nc[4] = {c, c, c - 1, c + 1};
+
+        for (int k = 0; k < 4; ++k) {
+            const int rr = nr[k];
+            const int cc = nc[k];
+            if (rr < 0 || cc < 0 || rr >= rows || cc >= cols) continue;
+            if (prev[(size_t)idx(rr, cc)] != -1) continue;
+            if (!map.isWalkable(rr, cc)) continue;
+            if (bombBlocksCellForAgent(rr, cc)) continue;
+            if (avoidDanger && isDangerousCell(danger, rr, cc, cols)) continue;
+
+            prev[(size_t)idx(rr, cc)] = idx(r, c);
+            q.push(std::make_pair(rr, cc));
+        }
+    }
+
+    if (foundR < 0) return MOVE_NONE;
+
+    int cur = idx(foundR, foundC);
+    const int start = idx(sr, sc);
+    while (prev[(size_t)cur] != start && cur != start) {
+        cur = prev[(size_t)cur];
+    }
+
+    if (cur == start) return MOVE_NONE;
+
+    const int rr = cur / cols;
+    const int cc = cur % cols;
+    if (rr == sr - 1 && cc == sc) return MOVE_UP;
+    if (rr == sr + 1 && cc == sc) return MOVE_DOWN;
+    if (rr == sr && cc == sc - 1) return MOVE_LEFT;
+    if (rr == sr && cc == sc + 1) return MOVE_RIGHT;
+    return MOVE_NONE;
 }
 
 static bool isHostileToAgent(const Agent& bot, const Player* player)
@@ -1846,6 +3118,18 @@ void Agent::Update()
     int sr = 0, sc = 0;
     gameMap->ndcToGrid(position, sr, sc);
 
+    if (movingToTarget) {
+        int targetR = 0;
+        int targetC = 0;
+        gameMap->ndcToGrid(targetPos, targetR, targetC);
+        if (cellOccupiedByOtherAgentCombatant(*this, targetR, targetC)) {
+            movingToTarget = false;
+            currentMove = MOVE_NONE;
+            moveLockSeconds = 0.0f;
+            position = gameMap->gridToNDC(sr, sc);
+        }
+    }
+
     const AiProfile agentProfile = configForDifficulty(difficulty).initialProfile;
     const std::vector<uint8_t> danger = buildDangerMask(*gameMap, agentProfile);
     const int cols = gameMap->getCols();
@@ -1869,32 +3153,215 @@ void Agent::Update()
         return std::find(moves.begin(), moves.end(), m) != moves.end();
     };
 
+    // ── Q-Learning para Agent ──
+    ensureQTablesLoaded();
+
+    if (!qlInitialized) {
+        const int diffIdx = difficultyToIndex(difficulty);
+        qlConfig = qlConfigForDifficulty(diffIdx);
+        qlDecisionTimer = 0.0f;
+        accumulatedReward = 0.0f;
+        lastQAction = -1;
+        qlInitialized = true;
+    }
+
+    const int diffIdx = difficultyToIndex(difficulty);
+    QTable& qTable = gQTableByDifficulty[diffIdx];
+
+    accumulatedReward += 0.05f;
+    if (selfDanger) accumulatedReward -= 0.6f;
+
+    qlDecisionTimer -= deltaTime;
+    qlConfig.epsilon = std::max(
+        qlConfig.epsilonMin,
+        qlConfig.epsilon * std::pow(qlConfig.epsilonDecay, std::max(0.0f, deltaTime))
+    );
+
     Move desired = MOVE_NONE;
-    if (difficulty == Difficulty::Easy) {
-        if (selfDanger || moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
-            desired = pickRandomMove(moves);
-            currentMove = desired;
-            moveLockSeconds = 0.45f + rand01() * 0.55f;
-        } else {
-            desired = currentMove;
+    bool wantBomb = false;
+    float nextActionReward = 0.0f;
+
+    if (qlDecisionTimer <= 0.0f) {
+        // Extraer estado del juego para el Agent.
+        QState qs;
+        qs.dangerLevel = selfDanger ? 2 : 0;
+        if (!selfDanger) {
+            const int drs[4] = {-1, 1, 0, 0};
+            const int dcs[4] = {0, 0, -1, 1};
+            for (int k = 0; k < 4; ++k) {
+                if (isDangerousCell(danger, sr + drs[k], sc + dcs[k], cols)) {
+                    qs.dangerLevel = 1;
+                    break;
+                }
+            }
         }
+
+        if (hasTarget) {
+            const int drow = tr - sr;
+            const int dcol = tc - sc;
+            if (std::abs(drow) >= std::abs(dcol))
+                qs.opponentDir = (drow < 0) ? 1 : 2;
+            else
+                qs.opponentDir = (dcol < 0) ? 3 : 4;
+            const float dist = (float)(std::abs(drow) + std::abs(dcol));
+            if (dist <= 1.5f)      qs.opponentDist = 3;
+            else if (dist <= 3.5f) qs.opponentDist = 2;
+            else if (dist <= 8.0f) qs.opponentDist = 1;
+            else                   qs.opponentDist = 0;
+        }
+
+        qs.adjDestructibles = (uint8_t)std::min(adjacentDestructible ? 1 : 0, 2);
+        qs.visiblePowerUp = 0;
+        qs.canBomb = ((int)ownedBombTiles.size() < maxOwnedBombs) ? 1 : 0;
+        qs.hasEscape = canEscapeOwnBombForAgent(*gameMap, *this, bombPower) ? 1 : 0;
+        qs.ownBombActive = ownedBombTiles.empty() ? 0 : 1;
+        qs.hpAdvantage = 1;
+
+        const uint32_t newStateId = qs.encode();
+
+        if (lastQAction >= 0) {
+            qTable.update(lastQState.encode(), lastQAction,
+                          accumulatedReward, newStateId,
+                          qlConfig.alpha, qlConfig.gamma);
+        }
+
+        const int action = qTable.chooseAction(newStateId, qlConfig.epsilon);
+        const QAction qa = static_cast<QAction>(action);
+
+        switch (qa) {
+            case QAction::FLEE_DANGER:
+                desired = pickRandomMove(moves);
+                break;
+            case QAction::CHASE_OPPONENT:
+                if (hasTarget)
+                    desired = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+                break;
+            case QAction::DESTROY_BLOCK:
+                // Sin 'qs.hasEscape'
+                if (adjacentDestructible && qs.canBomb) wantBomb = true;
+                break;
+            case QAction::PLACE_BOMB_COMBAT:
+                // Sin 'qs.hasEscape' y atacando a quemarropa (distancia <= 2)
+                if (hasTarget && qs.canBomb) {
+                    if (canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc) || 
+                        (std::abs(tr - sr) + std::abs(tc - sc)) <= 2) {
+                        wantBomb = true;
+                    } else {
+                        desired = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+                    }
+                }
+                break;
+            case QAction::WANDER:
+                desired = pickRandomMove(moves);
+                break;
+            case QAction::HOLD_POSITION:
+                break;
+            default:
+                desired = pickRandomMove(moves);
+                break;
+        }
+
+        // --- RECOMPENSA INMEDIATA AL AGENTE (CUSTOM MODE) ---
+        if (wantBomb) {
+            if (qa == QAction::DESTROY_BLOCK) nextActionReward += 15.0f;
+            if (qa == QAction::PLACE_BOMB_COMBAT) nextActionReward += 50.0f;
+        }
+        // ----------------------------------------------------
+
+        lastQState = qs;
+        lastQAction = action;
+        accumulatedReward = nextActionReward;
+        qlDecisionTimer = qlConfig.decisionInterval;
     } else {
-        // Dificultades Medium/Hard: estar alerta incluso bajo peligro.
-        if (selfDanger) {
-            // Si hay peligro, intentar escapar en cualquier caso.
-            desired = pickRandomMove(moves);
-        } else if (hasTarget) {
-            // Si no hay peligro y hay objetivo hostil, perseguirlo activamente.
-            desired = bfsNextStepToTargetCellForAgent(*gameMap,
-                                                      danger,
-                                                      *this,
-                                                      tr,
-                                                      tc,
-                                                      /*avoidDanger=*/true);
+        // Entre decisiones: continuar la última acción.
+        if (lastQAction >= 0) {
+            const QAction qa = static_cast<QAction>(lastQAction);
+            if (qa == QAction::CHASE_OPPONENT && hasTarget) {
+                desired = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+            } else if (qa == QAction::FLEE_DANGER || qa == QAction::WANDER) {
+                if (moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
+                    desired = pickRandomMove(moves);
+                    currentMove = desired;
+                    moveLockSeconds = 0.25f + rand01() * 0.35f;
+                } else {
+                    desired = currentMove;
+                }
+            }
         }
     }
 
-    if (desired == MOVE_NONE) {
+    if (!selfDanger && hasTarget) {
+        const int targetDist = std::abs(tr - sr) + std::abs(tc - sc);
+        const bool enemyNearby = targetDist <= 5;
+        const bool bombReady =
+            bombCooldownSeconds <= 0.0f &&
+            (int)ownedBombTiles.size() < maxOwnedBombs &&
+            !cellHasAnyBomb(sr, sc);
+        const bool directShot = canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
+
+        if (bombReady && directShot) {
+            wantBomb = true;
+            desired = MOVE_NONE;
+            lastQAction = (int)QAction::PLACE_BOMB_COMBAT;
+            accumulatedReward += 50.0f;
+        } else if (enemyNearby) {
+            const Move attackMove = bfsNextStepToBestCombatBombCellForAgent(*gameMap,
+                                                                            danger,
+                                                                            *this,
+                                                                            tr,
+                                                                            tc,
+                                                                            bombPower);
+            if (attackMove != MOVE_NONE) {
+                desired = attackMove;
+                lastQAction = (int)QAction::CHASE_OPPONENT;
+            } else {
+                Move chaseMove = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+                if (chaseMove == MOVE_NONE) {
+                    chaseMove = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, false);
+                }
+                if (chaseMove != MOVE_NONE) {
+                    desired = chaseMove;
+                    lastQAction = (int)QAction::CHASE_OPPONENT;
+                } else if (bombReady && adjacentDestructible && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
+                    wantBomb = true;
+                    desired = MOVE_NONE;
+                    lastQAction = (int)QAction::DESTROY_BLOCK;
+                    accumulatedReward += 15.0f;
+                }
+            }
+        } else {
+            if (bombReady && adjacentDestructible && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
+                wantBomb = true;
+                desired = MOVE_NONE;
+                lastQAction = (int)QAction::DESTROY_BLOCK;
+                accumulatedReward += 15.0f;
+            } else {
+                Move breakMove = bfsNextStepToAdjacentDestructibleForAgent(*gameMap,
+                                                                           danger,
+                                                                           *this,
+                                                                           /*avoidDanger=*/true);
+                if (breakMove == MOVE_NONE) {
+                    breakMove = bfsNextStepToAdjacentDestructibleForAgent(*gameMap,
+                                                                          danger,
+                                                                          *this,
+                                                                          /*avoidDanger=*/false);
+                }
+                if (breakMove != MOVE_NONE) {
+                    desired = breakMove;
+                    lastQAction = (int)QAction::DESTROY_BLOCK;
+                }
+            }
+        }
+    }
+
+    // Override de seguridad.
+    if (selfDanger && lastQAction != (int)QAction::FLEE_DANGER) {
+        desired = pickRandomMove(moves);
+        lastQAction = (int)QAction::FLEE_DANGER;
+    }
+
+    // Fallback.
+    if (desired == MOVE_NONE && !wantBomb) {
         if (moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
             desired = pickRandomMove(moves);
             currentMove = desired;
@@ -1904,90 +3371,47 @@ void Agent::Update()
         }
     }
 
-    if (adjacentDestructible && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const float breakBlockPerSecond = 0.38f + 0.65f * agentProfile.aggressiveness;
-        if (rand01() < breakBlockPerSecond * std::max(0.0f, deltaTime) &&
-            cellHasAnyBomb(sr, sc) == false &&
-            canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                  sr,
-                                  sc,
-                                  /*owner=*/nullptr,
-                                  /*power=*/bombPower,
-                                  /*remote=*/false);
+    if (desired != MOVE_NONE && moveEntersOtherAgentCell(*this, desired)) {
+        desired = chooseUnoccupiedCombatMoveForAgent(*gameMap,
+                                                     danger,
+                                                     *this,
+                                                     hasTarget ? tr : sr,
+                                                     hasTarget ? tc : sc,
+                                                     bombPower,
+                                                     agentProfile.dangerAversion > 0.15f);
+        currentMove = desired;
+        moveLockSeconds = 0.0f;
+    }
+
+    // Bomba (decidida por Q-Learning).
+    if (wantBomb && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
+        const bool lethalCombatBomb =
+            hasTarget && canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
+        if (!cellHasAnyBomb(sr, sc) &&
+            (canEscapeOwnBombForAgent(*gameMap, *this, bombPower) || lethalCombatBomb))
+        {
+            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc), sr, sc,
+                                  /*owner=*/nullptr, /*power=*/bombPower, /*remote=*/false);
             bomb->ownerIndex = -1;
             bomb->ownerLeftTile = true;
             gBombs.push_back(bomb);
             ownedBombTiles.push_back(glm::ivec2(sr, sc));
             bombCooldownSeconds = 0.75f;
-        }
-    }
 
-    if (difficulty == Difficulty::Easy && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const float perSecond = 0.28f;
-        if (rand01() < perSecond * std::max(0.0f, deltaTime) &&
-            cellHasAnyBomb(sr, sc) == false &&
-            canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                  sr,
-                                  sc,
-                                  /*owner=*/nullptr,
-                                  /*power=*/bombPower,
-                                  /*remote=*/false);
-            bomb->ownerIndex = -1;
-            bomb->ownerLeftTile = true;
-            gBombs.push_back(bomb);
-            ownedBombTiles.push_back(glm::ivec2(sr, sc));
-            bombCooldownSeconds = 0.75f;
-        }
-    }
+            std::vector<uint8_t> ownBlast((size_t)gameMap->getRows() * (size_t)gameMap->getCols(), 0);
+            markBlastArea(*gameMap, sr, sc, bombPower, ownBlast, gameMap->getRows(), gameMap->getCols());
 
-    // Combate contra targets hostiles (Medium/Hard).
-    if (hasTarget && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const bool inRange = canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
-        const float distToTarget = std::abs(tr - sr) + std::abs(tc - sc);
-        
-        if (inRange) {
-            const float perSecond = isAlly() ? 0.50f : 0.45f;
-            const bool trigger = (rand01() < perSecond * std::max(0.0f, deltaTime));
-            if (trigger && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-                if (!cellHasAnyBomb(sr, sc)) {
-                    Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                          sr,
-                                          sc,
-                                          /*owner=*/nullptr,
-                                          /*power=*/bombPower,
-                                          /*remote=*/false);
-                    bomb->ownerIndex = -1;
-                    bomb->ownerLeftTile = true;
-                    gBombs.push_back(bomb);
-                    ownedBombTiles.push_back(glm::ivec2(sr, sc));
-                    bombCooldownSeconds = 0.75f;
-                }
-            }
-        } else if (difficulty != Difficulty::Easy) {
-            // Medium/Hard: incluso si no está en rango, considera bombardear para control territorial.
-            float controlPerSecond = 0.18f + 0.25f * agentProfile.aggressiveness;
-            
-            // Si target muy cercano, aumentar agresividad para forzar combate.
-            if (distToTarget < 8.0f) {
-                controlPerSecond += 0.35f; // Impulso de combate cuando hay target cerca
-            }
-            
-            if (rand01() < controlPerSecond * std::max(0.0f, deltaTime) &&
-                !cellHasAnyBomb(sr, sc) &&
-                canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-                Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                      sr,
-                                      sc,
-                                      /*owner=*/nullptr,
-                                      /*power=*/bombPower,
-                                      /*remote=*/false);
-                bomb->ownerIndex = -1;
-                bomb->ownerLeftTile = true;
-                gBombs.push_back(bomb);
-                ownedBombTiles.push_back(glm::ivec2(sr, sc));
-                bombCooldownSeconds = 0.75f;
+            const Move escapeMove = bfsNextStepToEscapeBlastForAgent(*gameMap, *this, ownBlast);
+            if (escapeMove != MOVE_NONE) {
+                desired = escapeMove;
+                currentMove = escapeMove;
+                moveLockSeconds = 0.0f;
+            } else if (desired == MOVE_NONE) {
+                std::vector<Move> emergencyMoves = validMovesForAgent(*gameMap,
+                                                                      ownBlast,
+                                                                      *this,
+                                                                      /*avoidDanger=*/false);
+                desired = pickRandomMove(emergencyMoves);
             }
         }
     }
