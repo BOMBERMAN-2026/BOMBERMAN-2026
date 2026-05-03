@@ -3465,6 +3465,7 @@ void Game::startNewRun(GameMode newMode) {
     vsCinematicPostAction = VsCinematicPostAction::None;
 
     if (VersusMode::isVersusMode(mode)) {
+        CpuBomberman::loadQLearning();
         playerScores.assign(4, 0);
         //this->state = GAME_PLAYING;
         //loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
@@ -3593,6 +3594,7 @@ void Game::advanceToNextLevel() {
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
     AudioManager::get().resetPlaceBombSpecialSound();
+    CpuBomberman::discardQLearningSession();
 
     customGameMode.deactivate();
     continueSequenceActive = false;
@@ -3823,6 +3825,8 @@ void Game::refreshWindowTitle() const {
 }
 
 Game::~Game() {
+    CpuBomberman::discardQLearningSession();
+
     for (auto* b : gBombs) {
         delete b;
     }
@@ -5122,6 +5126,9 @@ void Game::update() {
         if (customGameMenu.shouldLaunchCustomGame()) {
             customGameMode.activate(customGameMenu.getSettings(), customGameMenu.getEnemyCounts());
             customGameMenu.resetFlowFlags();
+
+            CpuBomberman::resetEvolutionState();
+            CpuBomberman::loadQLearning();
 
             // 1P + Comp se trata como 1P de momento.
             mode = (customGameMode.getPlayerCount() == 2)

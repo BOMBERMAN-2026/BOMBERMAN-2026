@@ -88,6 +88,7 @@ private:
     float   accumulatedReward = 0.0f;
     float   qlDecisionTimer = 0.0f;
     bool    qlInitialized = false;
+    QLearningConfig qlConfig;
 };
 
 // Devuelve true si el puntero apunta a un agente CPU.
@@ -132,6 +133,9 @@ void loadQLearning();
 
 // Guarda las Q-tables compartidas a disco (llamar al final de ronda).
 void saveQLearning();
+
+// Borra los modelos temporales de aprendizaje de la partida actual.
+void discardQLearningSession();
 
 } // namespace CpuBomberman
 
