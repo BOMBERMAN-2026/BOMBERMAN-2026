@@ -2,6 +2,7 @@
 #include "sprite_atlas.hpp" // for resolveAssetPath, loadSpriteAtlasMinimal, getUvRectForSprite
 #include "player.hpp"
 #include "audio_manager.hpp"
+#include "cpu_bomberman.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -697,6 +698,15 @@ bool GameMap::destroyTile(int row, int col) {
 
     // Si tenia un power-up, el sistema de juego deberia spawnearlo aqui cuando acabe
     return true;
+}
+
+// Sobrecarga para premiar a la CPU que destruyó el bloque
+bool GameMap::destroyTile(int row, int col, int killerId) {
+    bool ok = destroyTile(row, col);
+    if (ok && killerId >= 0 && killerId < 4) {
+        CpuBomberman::rewardCpu(killerId, 15.0f); // Premio por romper bloques
+    }
+    return ok;
 }
 
 // ============================== Spawn de jugadores ==============================
@@ -1492,6 +1502,17 @@ bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
 
     // Reproducir sonido instantáneo de recogida
     AudioManager::get().playVfx(VfxSound::Pickup);
+
+    // Recompensar a la CPU si es un agente de IA
+    if (player->playerId >= 0 && player->playerId < 4) {
+        float reward = 5.0f; // Por defecto para items de puntos
+        int pType = (int)b.powerUpType;
+        // Power-ups funcionales (primeros 6 en el enum según names[])
+        if (pType >= 0 && pType <= 5) {
+            reward = 10.0f;
+        }
+        CpuBomberman::rewardCpu(player->playerId, reward);
+    }
 
     // Aplicar el power-up y marcarlo como recogido
     player->applyPowerUp(b.powerUpType);

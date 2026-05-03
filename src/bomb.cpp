@@ -178,7 +178,7 @@ void Bomb::detonate() {
             if (!gameMap->isWalkable(r, c)) {
                 // Muro: destruirlo si es destructible (su propia animación se encarga),
                 // pero NO dibujar fuego encima del bloque.
-                gameMap->destroyTile(r, c);
+                gameMap->destroyTile(r, c, ownerIndex);
                 break;
             }
 

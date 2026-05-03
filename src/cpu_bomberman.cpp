@@ -1,4 +1,5 @@
 #include "cpu_bomberman.hpp"
+#include "q_learning.hpp"
 
 #include "bomb.hpp"
 #include "game_map.hpp"
@@ -23,6 +24,7 @@ extern SpriteAtlas gPlayerAtlas;
 extern GLuint texture;
 extern GLuint enemyTexture;
 extern std::vector<Enemy*> gEnemies;
+extern std::string resolveAssetPath(const std::string& path);
 
 namespace CpuBomberman {
 
@@ -38,6 +40,14 @@ struct CpuState {
     AiEvolutionCaps profileCaps{};
     Difficulty sourceDifficulty = Difficulty::Medium;
     bool profileInitialized = false;
+
+    // ── Q-Learning (aprendizaje por refuerzo) ──
+    QState  lastQState;
+    int     lastQAction = -1;
+    float   accumulatedReward = 0.0f;
+    float   qlDecisionTimer = 0.0f;
+    bool    qlInitialized = false;
+    QLearningConfig qlConfig;
 };
 
 static CpuState gCpuStateByPlayerId[4];
@@ -48,6 +58,26 @@ static std::array<DeathReason, 4> gRoundDeathByPlayerId = {
     DeathReason::Unknown
 };
 static std::array<bool, 4> gCpuControlledByPlayerId = {false, false, false, false};
+
+// ── Q-Learning: tablas compartidas por dificultad ──
+static QTable gQTableByDifficulty[3]; // [0]=Easy, [1]=Medium, [2]=Hard
+static bool   gQTablesLoaded = false;
+static std::array<float, 4> gPendingRewards = {0.0f, 0.0f, 0.0f, 0.0f};
+
+static const char* kQTablePaths[3] = {
+    "../resources/ai/qtable_easy.bin",
+    "../resources/ai/qtable_medium.bin",
+    "../resources/ai/qtable_hard.bin"
+};
+
+static int difficultyToIndex(Difficulty d) {
+    switch (d) {
+        case Difficulty::Easy:   return 0;
+        case Difficulty::Medium: return 1;
+        case Difficulty::Hard:   return 2;
+        default: return 1;
+    }
+}
 
 // Generador aleatorio único para decisiones de la IA.
 static std::mt19937& rng()
@@ -279,31 +309,89 @@ void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths)
         const AiProfile before = st.runtimeProfile;
 
         if (playerWon) {
-            st.runtimeProfile.aggressiveness += 0.015f;
-            st.runtimeProfile.pathfindingPrecision += 0.020f;
-            st.runtimeProfile.itemClairvoyance += 0.020f;
-            st.runtimeProfile.dangerAversion += 0.012f;
+            // El jugador ganó, la CPU debe mejorar más para alcanzarlo.
+            st.runtimeProfile.aggressiveness += 0.04f;
+            st.runtimeProfile.pathfindingPrecision += 0.03f;
+            st.runtimeProfile.itemClairvoyance += 0.03f;
+            st.runtimeProfile.dangerAversion += 0.01f;
         } else {
-            st.runtimeProfile.aggressiveness += 0.006f;
-            st.runtimeProfile.pathfindingPrecision += 0.008f;
+            // La CPU ganó o sobrevivió, sigue mejorando su agresividad.
+            st.runtimeProfile.aggressiveness += 0.02f;
+            st.runtimeProfile.pathfindingPrecision += 0.015f;
         }
 
         if (reason == DeathReason::ExplosionSelfBomb) {
-            st.runtimeProfile.dangerAversion += 0.080f;
-            st.runtimeProfile.aggressiveness -= 0.020f;
+            st.runtimeProfile.dangerAversion += 0.05f; // Un poco más de cuidado si se suicida
+            st.runtimeProfile.aggressiveness -= 0.01f; // Pero no demasiado castigo
         } else if (reason == DeathReason::ExplosionOther) {
-            st.runtimeProfile.dangerAversion += 0.030f;
+            st.runtimeProfile.dangerAversion += 0.02f;
         } else if (reason == DeathReason::EnemyContact) {
-            st.runtimeProfile.pathfindingPrecision += 0.010f;
+            st.runtimeProfile.pathfindingPrecision += 0.02f;
         } else {
-            // Si sobrevive la ronda, una mejora mínima de confianza.
-            st.runtimeProfile.aggressiveness += 0.005f;
+            // Si sobrevive, que sea MUCHO más agresiva para la siguiente.
+            st.runtimeProfile.aggressiveness += 0.03f;
         }
 
         st.runtimeProfile = clampProfile(st.runtimeProfile, st.profileCaps);
 
         logCpuProfileEvolution(playerId, diff, before, st.runtimeProfile, st.profileCaps, playerWon, reason);
+
+        // ── Q-Learning: recompensa terminal y persistencia ──
+        if (st.qlInitialized) {
+            // Recompensa terminal según resultado de la ronda.
+            float terminalReward = 0.0f;
+            if (playerWon) {
+                // El jugador humano ganó → la CPU perdió.
+                terminalReward = -20.0f; 
+            } else {
+                // La CPU sobrevivió / ganó la ronda.
+                terminalReward = 40.0f; // Bajamos el premio por "solo sobrevivir"
+            }
+
+            // Penalización adicional según causa de muerte.
+            if (reason == DeathReason::ExplosionSelfBomb) {
+                terminalReward -= 100.0f; // Menos penalización por suicidio para fomentar riesgo
+            } else if (reason == DeathReason::ExplosionOther) {
+                terminalReward -= 30.0f;
+            } else if (reason == DeathReason::EnemyContact) {
+                terminalReward -= 20.0f;
+            }
+
+            st.accumulatedReward += terminalReward;
+
+            // Actualización final de la Q-table.
+            const int diffIdx = difficultyToIndex(diff);
+            QTable& qTable = gQTableByDifficulty[diffIdx];
+
+            if (st.lastQAction >= 0) {
+                QState terminalState; // Estado terminal (ceros).
+                qTable.update(st.lastQState.encode(), st.lastQAction,
+                              st.accumulatedReward, terminalState.encode(),
+                              st.qlConfig.alpha, st.qlConfig.gamma);
+            }
+
+            // Decaer epsilon (menos exploración con el tiempo).
+            st.qlConfig.epsilon = std::max(
+                st.qlConfig.epsilonMin,
+                st.qlConfig.epsilon * st.qlConfig.epsilonDecay
+            );
+
+            if (kAiDebugEnabled) {
+                std::cout << "[CPU-AI][QL] CPU" << (playerId + 1)
+                          << " round end: terminalReward=" << terminalReward
+                          << " newEpsilon=" << st.qlConfig.epsilon
+                          << std::endl;
+            }
+
+            // Reset para la siguiente ronda.
+            st.lastQAction = -1;
+            st.accumulatedReward = 0.0f;
+            st.qlDecisionTimer = 0.0f;
+        }
     }
+
+    // Guardar Q-tables al disco tras cada ronda.
+    saveQLearning();
 }
 
 static GLint moveToFacingDirKey(Move mov)
@@ -657,6 +745,9 @@ static Move bfsNextStepToEscapeBlast(const GameMap& map,
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
 
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
+
     auto idx = [&](int r, int c) { return r * cols + c; };
 
     const float tileSize = map.getTileSize();
@@ -735,6 +826,9 @@ static Move bfsNextStepToNearestPowerUp(const GameMap& map,
 
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
+
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
 
     auto idx = [&](int r, int c) { return r * cols + c; };
 
@@ -909,6 +1003,9 @@ static Move bfsNextStepToAdjacentDestructible(const GameMap& map,
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
 
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
+
     auto idx = [&](int r, int c) { return r * cols + c; };
 
     std::vector<int> prev((size_t)rows * (size_t)cols, -1);
@@ -984,6 +1081,9 @@ static Move bfsNextStepToAdjacentHiddenPowerUp(const GameMap& map,
 
     int sr = 0, sc = 0;
     map.ndcToGrid(self.position, sr, sc);
+
+    // --- LA LÍNEA QUE TE FALTA ---
+    if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return MOVE_NONE;
 
     auto idx = [&](int r, int c) { return r * cols + c; };
 
@@ -1150,6 +1250,227 @@ static bool opponentCouldHitCellWithBombNow(const GameMap& map,
     return clearLineWalkable(map, oppRow, oppCol, cellRow, cellCol);
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Q-Learning: Extracción de estado, ejecución de acciones, persistencia
+// ═══════════════════════════════════════════════════════════════════════════
+
+static QState extractQState(const GameMap& map,
+                            const std::vector<uint8_t>& danger,
+                            const Player& self,
+                            int sr, int sc,
+                            const Player* target, int tr, int tc,
+                            float bestDist,
+                            const std::vector<Player*>& players)
+{
+    const int cols = map.getCols();
+    QState qs;
+
+    // dangerLevel: 0=seguro, 1=peligro cercano, 2=peligro inmediato
+    const bool selfDanger = isDangerousCell(danger, sr, sc, cols);
+    if (selfDanger) {
+        qs.dangerLevel = 2;
+    } else {
+        // Revisar celdas adyacentes
+        bool nearbyDanger = false;
+        const int dr[4] = {-1, 1, 0, 0};
+        const int dc[4] = {0, 0, -1, 1};
+        for (int k = 0; k < 4; ++k) {
+            if (isDangerousCell(danger, sr + dr[k], sc + dc[k], cols)) {
+                nearbyDanger = true;
+                break;
+            }
+        }
+        qs.dangerLevel = nearbyDanger ? 1 : 0;
+    }
+
+    // opponentDir y opponentDist
+    if (target && target->isAlive() && !target->isGameOver()) {
+        const int drow = tr - sr;
+        const int dcol = tc - sc;
+        // Dirección dominante
+        if (std::abs(drow) >= std::abs(dcol)) {
+            qs.opponentDir = (drow < 0) ? 1 : 2; // 1=arriba, 2=abajo
+        } else {
+            qs.opponentDir = (dcol < 0) ? 3 : 4; // 3=izq, 4=der
+        }
+        // Distancia
+        if (bestDist <= 1.5f)      qs.opponentDist = 3; // adyacente
+        else if (bestDist <= 3.5f) qs.opponentDist = 2; // cerca
+        else if (bestDist <= 8.0f) qs.opponentDist = 1; // medio
+        else                       qs.opponentDist = 0; // lejos
+    } else {
+        qs.opponentDir  = 0;
+        qs.opponentDist = 0;
+    }
+
+    // adjDestructibles
+    int adjCount = 0;
+    const int ar[4] = {sr - 1, sr + 1, sr, sr};
+    const int ac[4] = {sc, sc, sc - 1, sc + 1};
+    for (int k = 0; k < 4; ++k) {
+        if (map.isDestructible(ar[k], ac[k])) ++adjCount;
+    }
+    qs.adjDestructibles = (uint8_t)std::min(adjCount, 2);
+
+    // visiblePowerUp: ¿hay power-up visible alcanzable?
+    PowerUpType tmpType;
+    qs.visiblePowerUp = (bfsNextStepToNearestPowerUp(map, danger, self) != MOVE_NONE) ? 1 : 0;
+
+    // canBomb
+    qs.canBomb = self.canPlaceBomb() ? 1 : 0;
+
+    // hasEscape
+    qs.hasEscape = canEscapeOwnBomb(map, self) ? 1 : 0;
+
+    // ownBombActive
+    bool hasBomb = false;
+    for (auto* b : gBombs) {
+        if (b && b->state != BombState::DONE && b->ownerIndex == self.playerId) {
+            hasBomb = true;
+            break;
+        }
+    }
+    qs.ownBombActive = hasBomb ? 1 : 0;
+
+    // hpAdvantage: ¿tiene igual o más vidas que el rival más cercano?
+    if (target) {
+        qs.hpAdvantage = (self.lives >= target->lives) ? 1 : 0;
+    } else {
+        qs.hpAdvantage = 1;
+    }
+
+    return qs;
+}
+
+// Traduce una QAction a movimiento + bomba usando las funciones BFS existentes.
+// Devuelve el Move deseado y pone wantBomb a true si la acción implica bombardear.
+static Move executeQAction(int action,
+                           const GameMap& map,
+                           const std::vector<uint8_t>& danger,
+                           Player& self,
+                           int sr, int sc,
+                           Player* target, int tr, int tc,
+                           bool& wantBomb,
+                           bool& holdPosition)
+{
+    wantBomb = false;
+    holdPosition = false;
+    const QAction qa = static_cast<QAction>(action);
+
+   switch (qa) {
+        case QAction::FLEE_DANGER: {
+            // Construir máscara de blast de todas las bombas y escapar.
+            const int rows = map.getRows();
+            const int cols = map.getCols();
+            std::vector<uint8_t> allBlast((size_t)rows * (size_t)cols, 0);
+            for (auto* b : gBombs) {
+                if (!b || b->state == BombState::DONE) continue;
+                markBlastArea(map, b->gridRow, b->gridCol, b->power, allBlast, rows, cols);
+            }
+            Move esc = bfsNextStepToEscapeBlast(map, self, allBlast);
+            if (esc != MOVE_NONE) return esc;
+            // Si no hay escape, mover a cualquier celda segura.
+            std::vector<Move> safe = validMoves(map, danger, self, true);
+            return pickRandomMove(safe);
+        }
+
+        case QAction::CHASE_OPPONENT:
+            if (target) return bfsNextStepToTargetCell(map, danger, self, tr, tc);
+            return MOVE_NONE;
+
+        case QAction::COLLECT_POWERUP:
+            return bfsNextStepToNearestPowerUp(map, danger, self);
+
+        case QAction::DESTROY_BLOCK: {
+            // Quitamos el 'canEscapeOwnBomb'
+            wantBomb = hasAdjacentDestructible(map, self) && self.canPlaceBomb();
+            if (wantBomb) {
+                holdPosition = true;
+                return MOVE_NONE;
+            }
+            return bfsNextStepToAdjacentDestructible(map, danger, self);
+        }
+
+        case QAction::PLACE_BOMB_COMBAT:
+            // Quitamos 'canEscapeOwnBomb' y atacamos si está a 2 casillas o menos
+            if (target && self.canPlaceBomb()) {
+                float dist = std::abs(tr - sr) + std::abs(tc - sc);
+                if (canHitTargetWithBomb(map, self, sr, sc, tr, tc) || dist <= 2.0f) {
+                    wantBomb = true;
+                    holdPosition = true;
+                    return MOVE_NONE;
+                }
+                return bfsNextStepToTargetCell(map, danger, self, tr, tc);
+            }
+            return MOVE_NONE;
+
+        case QAction::WANDER: {
+            std::vector<Move> moves = validMoves(map, danger, self, true);
+            if (moves.empty()) moves = validMoves(map, danger, self, false);
+            return pickRandomMove(moves);
+        }
+
+        case QAction::HOLD_POSITION:
+            holdPosition = true;
+            return MOVE_NONE;
+
+        default:
+            return MOVE_NONE;
+    }
+}
+
+static void ensureQTablesLoaded()
+{
+    if (gQTablesLoaded) return;
+    gQTablesLoaded = true;
+
+    for (int d = 0; d < 3; ++d) {
+        // CAMBIO: Envolver kQTablePaths[d] en resolveAssetPath
+        if (!gQTableByDifficulty[d].load(resolveAssetPath(kQTablePaths[d]))) {
+            // No existe fichero: seed con heurísticas según dificultad.
+            const QLearningConfig cfg = qlConfigForDifficulty(d);
+            gQTableByDifficulty[d].seedWithHeuristics(cfg.heuristicSeed);
+            std::cout << "[CPU-AI][QL] Sin fichero para dificultad " << d
+                      << " -> seeded con strength=" << cfg.heuristicSeed << std::endl;
+        }
+    }
+}
+
+void loadQLearning()
+{
+    gQTablesLoaded = false; // Forzar recarga.
+    ensureQTablesLoaded();
+}
+
+void saveQLearning()
+{
+    for (int d = 0; d < 3; ++d) {
+        // Guardamos directamente en kQTablePaths[d] (que ahora tiene el ../)
+        gQTableByDifficulty[d].save(kQTablePaths[d]);
+    }
+}
+
+void rewardCpu(int playerId, float reward)
+{
+    if (playerId < 0 || playerId >= 4) return;
+    gPendingRewards[(size_t)playerId] += reward;
+}
+
+// Nombre de la acción para logs.
+static const char* qActionName(int action)
+{
+    switch (static_cast<QAction>(action)) {
+        case QAction::FLEE_DANGER:       return "FLEE";
+        case QAction::CHASE_OPPONENT:    return "CHASE";
+        case QAction::COLLECT_POWERUP:   return "COLLECT";
+        case QAction::DESTROY_BLOCK:     return "DESTROY";
+        case QAction::PLACE_BOMB_COMBAT: return "BOMB_COMBAT";
+        case QAction::WANDER:            return "WANDER";
+        case QAction::HOLD_POSITION:     return "HOLD";
+        default:                         return "?";
+    }
+}
+
 void updateCpuPlayers(GameMode mode,
                       const GameMap* map,
                       std::vector<Player*>& players,
@@ -1251,117 +1572,115 @@ void updateCpuPlayers(GameMode mode,
             st.remoteBombArmedSeconds = -1.0f;
         }
 
-        const bool adjDestr = hasAdjacentDestructible(*map, *p);
-        const bool canUseClairvoyance = (rand01() < profile.itemClairvoyance);
-        const bool adjHidden = canUseClairvoyance ? hasAdjacentHiddenPowerUp(*map, *p) : false;
+        // ═════════════════════════════════════════════════════════════════════
+        // Q-Learning: decisión estratégica basada en aprendizaje por refuerzo
+        // ═════════════════════════════════════════════════════════════════════
 
-        PowerUpType tmp;
-        const bool standingOnVisiblePowerUp = map->getVisiblePowerUpType(sr, sc, tmp);
+        ensureQTablesLoaded();
 
-        desired = bfsNextStepToNearestPowerUp(*map, danger, *p);
-        if (desired == MOVE_NONE) {
-            if (standingOnVisiblePowerUp) {
-                holdPosition = true;
-            } else if (adjDestr) {
-                holdPosition = true;
-            } else if (adjHidden) {
-                holdPosition = true;
-            }
+        // Inicializar estado QL del CPU si es la primera vez.
+        if (!st.qlInitialized) {
+            const Difficulty diff = difficultyFor(settings, pid);
+            st.qlConfig = qlConfigForDifficulty(difficultyToIndex(diff));
+            st.lastQAction = -1;
+            st.accumulatedReward = 0.0f;
+            st.qlDecisionTimer = 0.0f;
+            st.qlInitialized = true;
         }
 
-        if (desired == MOVE_NONE && !holdPosition && adjDestr) {
-            desired = bfsNextStepToAdjacentDestructible(*map, danger, *p);
+        const int diffIdx = difficultyToIndex(difficultyFor(settings, pid));
+        QTable& qTable = gQTableByDifficulty[diffIdx];
+
+        // Acumular recompensas pendientes inyectadas externamente.
+        if (pid >= 0 && pid < 4) {
+            st.accumulatedReward += gPendingRewards[(size_t)pid];
+            gPendingRewards[(size_t)pid] = 0.0f;
         }
 
-        if (desired == MOVE_NONE && !holdPosition && canUseClairvoyance) {
-            desired = bfsNextStepToAdjacentHiddenPowerUp(*map, danger, *p);
+        // Recompensa por tick: +0.05 por sobrevivir, -0.6 si está en peligro.
+        st.accumulatedReward += 0.05f;
+        if (isDangerousCell(danger, sr, sc, cols)) {
+            st.accumulatedReward -= 0.6f;
         }
 
-        if (desired == MOVE_NONE && !holdPosition && target != nullptr) {
-            desired = bfsNextStepToTargetCell(*map, danger, *p, tr, tc);
-        }
+        // Temporizador de decisión: solo recalcular estrategia cada N segundos.
+        st.qlDecisionTimer -= deltaTime;
 
-        if (target != nullptr &&
-            profile.pathfindingPrecision >= 0.72f &&
-            opponentCouldHitCellWithBombNow(*map, *target, tr, tc, sr, sc)) {
-            Move breakLine = MOVE_NONE;
-            if (sr == tr) {
-                if (std::find(moves.begin(), moves.end(), MOVE_UP) != moves.end()) breakLine = MOVE_UP;
-                else if (std::find(moves.begin(), moves.end(), MOVE_DOWN) != moves.end()) breakLine = MOVE_DOWN;
-            } else if (sc == tc) {
-                if (std::find(moves.begin(), moves.end(), MOVE_LEFT) != moves.end()) breakLine = MOVE_LEFT;
-                else if (std::find(moves.begin(), moves.end(), MOVE_RIGHT) != moves.end()) breakLine = MOVE_RIGHT;
-            }
-
-            if (breakLine != MOVE_NONE) {
-                desired = breakLine;
-                holdPosition = false;
-                st.moveLockSeconds = 0.0f;
-            }
-        }
-
-        if (desired != MOVE_NONE && rand01() > profile.pathfindingPrecision) {
-            desired = pickRandomMove(moves);
-        }
-
-        // Si estás en peligro, no sostengas posición.
-        if (holdPosition && avoidDanger && isDangerousCell(danger, sr, sc, cols)) {
-            holdPosition = false;
-        }
-
-        // Fallback/wander (si no estamos sosteniendo posición por objetivo).
-        if (desired == MOVE_NONE && !holdPosition) {
-            if (st.moveLockSeconds <= 0.0f || !moveIsStillValid(st.currentMove)) {
-                desired = pickRandomMove(moves);
-                st.currentMove = desired;
-                // Mantener un poquito la dirección para evitar “temblor”.
-                st.moveLockSeconds = 0.25f + rand01() * 0.55f;
-            } else {
-                desired = st.currentMove;
-            }
-        }
-
-        // Bombas: probabilidades por segundo (FPS independiente).
         bool wantBomb = false;
 
-        // Si está sosteniendo posición para romper bloque objetivo y tiene escape,
-        // no esperar a la tirada aleatoria: colocar bomba de forma determinista.
-        const bool holdingToBreakTarget =
-            holdPosition &&
-            !standingOnVisiblePowerUp &&
-            (adjDestr || adjHidden);
+        if (st.qlDecisionTimer <= 0.0f) {
+            // Extraer estado actual del juego.
+            QState newState = extractQState(*map, danger, *p, sr, sc,
+                                           target, tr, tc, bestDist, players);
+            const uint32_t newStateId = newState.encode();
 
-        if (holdingToBreakTarget && st.bombCooldownSeconds <= 0.0f && p->canPlaceBomb()) {
-            wantBomb = (profile.aggressiveness >= 0.20f) && canEscapeOwnBomb(*map, *p);
-        }
-
-        if (st.bombCooldownSeconds <= 0.0f && p->canPlaceBomb()) {
-            // Combate: si puedo matar a alguien con una bomba en mi tile ahora mismo, priorizarlo.
-            if (target != nullptr &&
-                !target->invincible &&
-                canHitTargetWithBomb(*map, *p, sr, sc, tr, tc))
-            {
-                const float combatPerSecond = 0.30f + 1.10f * profile.aggressiveness;
-                if (rand01() < combatPerSecond * deltaTime) {
-                    wantBomb = canEscapeOwnBomb(*map, *p);
-                }
+            // Actualizar Q-table con el resultado de la acción anterior.
+            if (st.lastQAction >= 0) {
+                qTable.update(st.lastQState.encode(), st.lastQAction,
+                              st.accumulatedReward, newStateId,
+                              st.qlConfig.alpha, st.qlConfig.gamma);
             }
 
-            if (!wantBomb) {
-                float perSecond = 0.08f + 0.42f * profile.aggressiveness;
-                if (adjHidden) perSecond += 0.18f;
-                if (holdingToBreakTarget) perSecond += 0.14f;
-                
-                // En VS: si hay target (oponente) cercano, aumentar mucho la agresividad
-                // para forzar combate entre CPUs incluso sin alineación directa.
-                if (target != nullptr && bestDist < 8.0f) {
-                    perSecond += 0.50f; // Impulso fuerte de combate en VS
-                }
-                
-                wantBomb = (rand01() < perSecond * deltaTime);
-                if (wantBomb) {
-                    wantBomb = canEscapeOwnBomb(*map, *p);
-                }
+            // Elegir nueva acción (ε-greedy).
+            const int action = qTable.chooseAction(newStateId, st.qlConfig.epsilon);
+
+           // Ejecutar la acción elegida.
+            desired = executeQAction(action, *map, danger, *p, sr, sc,
+                                     target, tr, tc, wantBomb, holdPosition);
+
+            if (wantBomb) {
+                // Le damos los puntos YA, para que entienda que poner bombas es BUENO.
+                if (action == (int)QAction::DESTROY_BLOCK) st.accumulatedReward += 15.0f;
+                if (action == (int)QAction::PLACE_BOMB_COMBAT) st.accumulatedReward += 50.0f;
+            }
+            // ----------------------------------------------------
+
+            // Penalización inmediata si la acción es imposible.
+            if (action == (int)QAction::PLACE_BOMB_COMBAT && !wantBomb && desired == MOVE_NONE) {
+                st.accumulatedReward -= 2.0f; // acción inútil
+            }
+            if (action == (int)QAction::COLLECT_POWERUP && desired == MOVE_NONE) {
+                st.accumulatedReward -= 1.0f; // no hay power-up
+            }
+
+            // Log de decisión (solo en debug).
+            if (kAiDebugEnabled && st.lastQAction != action) {
+                std::cout << "[CPU-AI][QL] CPU" << (pid + 1)
+                          << " state=" << newStateId
+                          << " action=" << qActionName(action)
+                          << " eps=" << st.qlConfig.epsilon
+                          << " reward=" << st.accumulatedReward
+                          << std::endl;
+            }
+
+            // Guardar estado para la siguiente actualización.
+            st.lastQState = newState;
+            st.lastQAction = action;
+            st.accumulatedReward = 0.0f;
+            st.qlDecisionTimer = st.qlConfig.decisionInterval;
+        } else {
+            // Entre decisiones: continuar ejecutando la última acción elegida.
+            if (st.lastQAction >= 0) {
+                desired = executeQAction(st.lastQAction, *map, danger, *p, sr, sc,
+                                         target, tr, tc, wantBomb, holdPosition);
+            }
+        }
+
+        // Override de seguridad: si está en peligro inmediato, forzar escape
+        // independientemente de lo que diga el Q-Learner.
+        if (isDangerousCell(danger, sr, sc, cols) && st.lastQAction != (int)QAction::FLEE_DANGER) {
+            const int rows_local = map->getRows();
+            const int cols_local = map->getCols();
+            std::vector<uint8_t> allBlast((size_t)rows_local * (size_t)cols_local, 0);
+            for (auto* b : gBombs) {
+                if (!b || b->state == BombState::DONE) continue;
+                markBlastArea(*map, b->gridRow, b->gridCol, b->power, allBlast, rows_local, cols_local);
+            }
+            Move esc = bfsNextStepToEscapeBlast(*map, *p, allBlast);
+            if (esc != MOVE_NONE) {
+                desired = esc;
+                holdPosition = false;
+                wantBomb = false;
             }
         }
 
@@ -1869,32 +2188,144 @@ void Agent::Update()
         return std::find(moves.begin(), moves.end(), m) != moves.end();
     };
 
+    // ── Q-Learning para Agent ──
+    ensureQTablesLoaded();
+
+    if (!qlInitialized) {
+        qlDecisionTimer = 0.0f;
+        accumulatedReward = 0.0f;
+        lastQAction = -1;
+        qlInitialized = true;
+    }
+
+    const int diffIdx = difficultyToIndex(difficulty);
+    QTable& qTable = gQTableByDifficulty[diffIdx];
+    const QLearningConfig qlCfg = qlConfigForDifficulty(diffIdx);
+
+    accumulatedReward += 0.05f;
+    if (selfDanger) accumulatedReward -= 0.6f;
+
+    qlDecisionTimer -= deltaTime;
+
     Move desired = MOVE_NONE;
-    if (difficulty == Difficulty::Easy) {
-        if (selfDanger || moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
-            desired = pickRandomMove(moves);
-            currentMove = desired;
-            moveLockSeconds = 0.45f + rand01() * 0.55f;
-        } else {
-            desired = currentMove;
+    bool wantBomb = false;
+
+    if (qlDecisionTimer <= 0.0f) {
+        // Extraer estado del juego para el Agent.
+        QState qs;
+        qs.dangerLevel = selfDanger ? 2 : 0;
+        if (!selfDanger) {
+            const int drs[4] = {-1, 1, 0, 0};
+            const int dcs[4] = {0, 0, -1, 1};
+            for (int k = 0; k < 4; ++k) {
+                if (isDangerousCell(danger, sr + drs[k], sc + dcs[k], cols)) {
+                    qs.dangerLevel = 1;
+                    break;
+                }
+            }
         }
+
+        if (hasTarget) {
+            const int drow = tr - sr;
+            const int dcol = tc - sc;
+            if (std::abs(drow) >= std::abs(dcol))
+                qs.opponentDir = (drow < 0) ? 1 : 2;
+            else
+                qs.opponentDir = (dcol < 0) ? 3 : 4;
+            const float dist = (float)(std::abs(drow) + std::abs(dcol));
+            if (dist <= 1.5f)      qs.opponentDist = 3;
+            else if (dist <= 3.5f) qs.opponentDist = 2;
+            else if (dist <= 8.0f) qs.opponentDist = 1;
+            else                   qs.opponentDist = 0;
+        }
+
+        qs.adjDestructibles = (uint8_t)std::min(adjacentDestructible ? 1 : 0, 2);
+        qs.visiblePowerUp = 0;
+        qs.canBomb = ((int)ownedBombTiles.size() < maxOwnedBombs) ? 1 : 0;
+        qs.hasEscape = canEscapeOwnBombForAgent(*gameMap, *this, bombPower) ? 1 : 0;
+        qs.ownBombActive = ownedBombTiles.empty() ? 0 : 1;
+        qs.hpAdvantage = 1;
+
+        const uint32_t newStateId = qs.encode();
+
+        if (lastQAction >= 0) {
+            qTable.update(lastQState.encode(), lastQAction,
+                          accumulatedReward, newStateId,
+                          qlCfg.alpha, qlCfg.gamma);
+        }
+
+        const int action = qTable.chooseAction(newStateId, qlCfg.epsilon);
+        const QAction qa = static_cast<QAction>(action);
+
+        switch (qa) {
+            case QAction::FLEE_DANGER:
+                desired = pickRandomMove(moves);
+                break;
+            case QAction::CHASE_OPPONENT:
+                if (hasTarget)
+                    desired = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+                break;
+            case QAction::DESTROY_BLOCK:
+                // Sin 'qs.hasEscape'
+                if (adjacentDestructible && qs.canBomb) wantBomb = true;
+                break;
+            case QAction::PLACE_BOMB_COMBAT:
+                // Sin 'qs.hasEscape' y atacando a quemarropa (distancia <= 2)
+                if (hasTarget && qs.canBomb) {
+                    if (canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc) || 
+                        (std::abs(tr - sr) + std::abs(tc - sc)) <= 2) {
+                        wantBomb = true;
+                    } else {
+                        desired = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+                    }
+                }
+                break;
+            case QAction::WANDER:
+                desired = pickRandomMove(moves);
+                break;
+            case QAction::HOLD_POSITION:
+                break;
+            default:
+                desired = pickRandomMove(moves);
+                break;
+        }
+
+        // --- RECOMPENSA INMEDIATA AL AGENTE (CUSTOM MODE) ---
+        if (wantBomb) {
+            if (qa == QAction::DESTROY_BLOCK) accumulatedReward += 15.0f;
+            if (qa == QAction::PLACE_BOMB_COMBAT) accumulatedReward += 50.0f;
+        }
+        // ----------------------------------------------------
+
+        lastQState = qs;
+        lastQAction = action;
+        accumulatedReward = 0.0f;
+        qlDecisionTimer = qlCfg.decisionInterval;
     } else {
-        // Dificultades Medium/Hard: estar alerta incluso bajo peligro.
-        if (selfDanger) {
-            // Si hay peligro, intentar escapar en cualquier caso.
-            desired = pickRandomMove(moves);
-        } else if (hasTarget) {
-            // Si no hay peligro y hay objetivo hostil, perseguirlo activamente.
-            desired = bfsNextStepToTargetCellForAgent(*gameMap,
-                                                      danger,
-                                                      *this,
-                                                      tr,
-                                                      tc,
-                                                      /*avoidDanger=*/true);
+        // Entre decisiones: continuar la última acción.
+        if (lastQAction >= 0) {
+            const QAction qa = static_cast<QAction>(lastQAction);
+            if (qa == QAction::CHASE_OPPONENT && hasTarget) {
+                desired = bfsNextStepToTargetCellForAgent(*gameMap, danger, *this, tr, tc, true);
+            } else if (qa == QAction::FLEE_DANGER || qa == QAction::WANDER) {
+                if (moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
+                    desired = pickRandomMove(moves);
+                    currentMove = desired;
+                    moveLockSeconds = 0.25f + rand01() * 0.35f;
+                } else {
+                    desired = currentMove;
+                }
+            }
         }
     }
 
-    if (desired == MOVE_NONE) {
+    // Override de seguridad.
+    if (selfDanger && lastQAction != (int)QAction::FLEE_DANGER) {
+        desired = pickRandomMove(moves);
+    }
+
+    // Fallback.
+    if (desired == MOVE_NONE && !wantBomb) {
         if (moveLockSeconds <= 0.0f || !moveIsStillValid(currentMove)) {
             desired = pickRandomMove(moves);
             currentMove = desired;
@@ -1904,91 +2335,16 @@ void Agent::Update()
         }
     }
 
-    if (adjacentDestructible && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const float breakBlockPerSecond = 0.38f + 0.65f * agentProfile.aggressiveness;
-        if (rand01() < breakBlockPerSecond * std::max(0.0f, deltaTime) &&
-            cellHasAnyBomb(sr, sc) == false &&
-            canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                  sr,
-                                  sc,
-                                  /*owner=*/nullptr,
-                                  /*power=*/bombPower,
-                                  /*remote=*/false);
+    // Bomba (decidida por Q-Learning).
+    if (wantBomb && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
+        if (!cellHasAnyBomb(sr, sc) && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
+            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc), sr, sc,
+                                  /*owner=*/nullptr, /*power=*/bombPower, /*remote=*/false);
             bomb->ownerIndex = -1;
             bomb->ownerLeftTile = true;
             gBombs.push_back(bomb);
             ownedBombTiles.push_back(glm::ivec2(sr, sc));
             bombCooldownSeconds = 0.75f;
-        }
-    }
-
-    if (difficulty == Difficulty::Easy && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const float perSecond = 0.28f;
-        if (rand01() < perSecond * std::max(0.0f, deltaTime) &&
-            cellHasAnyBomb(sr, sc) == false &&
-            canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-            Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                  sr,
-                                  sc,
-                                  /*owner=*/nullptr,
-                                  /*power=*/bombPower,
-                                  /*remote=*/false);
-            bomb->ownerIndex = -1;
-            bomb->ownerLeftTile = true;
-            gBombs.push_back(bomb);
-            ownedBombTiles.push_back(glm::ivec2(sr, sc));
-            bombCooldownSeconds = 0.75f;
-        }
-    }
-
-    // Combate contra targets hostiles (Medium/Hard).
-    if (hasTarget && bombCooldownSeconds <= 0.0f && (int)ownedBombTiles.size() < maxOwnedBombs) {
-        const bool inRange = canHitTargetWithBombForAgent(*gameMap, bombPower, sr, sc, tr, tc);
-        const float distToTarget = std::abs(tr - sr) + std::abs(tc - sc);
-        
-        if (inRange) {
-            const float perSecond = isAlly() ? 0.50f : 0.45f;
-            const bool trigger = (rand01() < perSecond * std::max(0.0f, deltaTime));
-            if (trigger && canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-                if (!cellHasAnyBomb(sr, sc)) {
-                    Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                          sr,
-                                          sc,
-                                          /*owner=*/nullptr,
-                                          /*power=*/bombPower,
-                                          /*remote=*/false);
-                    bomb->ownerIndex = -1;
-                    bomb->ownerLeftTile = true;
-                    gBombs.push_back(bomb);
-                    ownedBombTiles.push_back(glm::ivec2(sr, sc));
-                    bombCooldownSeconds = 0.75f;
-                }
-            }
-        } else if (difficulty != Difficulty::Easy) {
-            // Medium/Hard: incluso si no está en rango, considera bombardear para control territorial.
-            float controlPerSecond = 0.18f + 0.25f * agentProfile.aggressiveness;
-            
-            // Si target muy cercano, aumentar agresividad para forzar combate.
-            if (distToTarget < 8.0f) {
-                controlPerSecond += 0.35f; // Impulso de combate cuando hay target cerca
-            }
-            
-            if (rand01() < controlPerSecond * std::max(0.0f, deltaTime) &&
-                !cellHasAnyBomb(sr, sc) &&
-                canEscapeOwnBombForAgent(*gameMap, *this, bombPower)) {
-                Bomb* bomb = new Bomb(gameMap->gridToNDC(sr, sc),
-                                      sr,
-                                      sc,
-                                      /*owner=*/nullptr,
-                                      /*power=*/bombPower,
-                                      /*remote=*/false);
-                bomb->ownerIndex = -1;
-                bomb->ownerLeftTile = true;
-                gBombs.push_back(bomb);
-                ownedBombTiles.push_back(glm::ivec2(sr, sc));
-                bombCooldownSeconds = 0.75f;
-            }
         }
     }
 

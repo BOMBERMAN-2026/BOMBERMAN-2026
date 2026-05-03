@@ -8,6 +8,7 @@
 #include "ai_config.hpp"
 #include "bomberman.hpp" // GameMode
 #include "cpu_bomberman_difficulty.hpp"
+#include "q_learning.hpp"
 #include "enemy.hpp"     // Enemy
 #include "player.hpp"    // Player, Move
 
@@ -32,10 +33,10 @@ struct Settings {
     // Dificultad por playerId (0..3). Por defecto: CPU1 fácil, CPU2 media, CPU3 “hard”.
     // Nota: en VS 1P la CPU empieza en playerId=1; en VS 2P empieza en playerId=2.
     std::array<Difficulty, 4> difficultyByPlayerId = {
-        Difficulty::Easy,    // P1 (humano normalmente)
-        Difficulty::Easy,    // CPU #1
-        Difficulty::Medium,  // CPU #2
-        Difficulty::Hard     // CPU #3
+        Difficulty::Easy,    // P1 (Humano - Blanco)
+        Difficulty::Easy,    // CPU #1 (P2 - Rojo)
+        Difficulty::Medium,  // CPU #2 (P3 - Azul)
+        Difficulty::Hard     // CPU #3 (P4 - Amarillo)
     };
 };
 
@@ -81,6 +82,13 @@ private:
     int bombPower = 2; // Potencia de explosión de las bombas propias.
     int maxOwnedBombs = 2; // Límite de bombas que puede controlar a la vez.
     std::vector<glm::ivec2> ownedBombTiles; // Casillas ocupadas por bombas remotas activas.
+
+    // ── Q-Learning (aprendizaje por refuerzo) ──
+    QState  lastQState;
+    int     lastQAction = -1;
+    float   accumulatedReward = 0.0f;
+    float   qlDecisionTimer = 0.0f;
+    bool    qlInitialized = false;
 };
 
 // Devuelve true si el puntero apunta a un agente CPU.
@@ -114,6 +122,17 @@ std::vector<DeathReason> consumeRoundDeathReasons();
 
 // Ajusta los perfiles de CPU al cierre de cada ronda.
 void evolveCpuPlayers(bool playerWon, const std::vector<DeathReason>& deaths);
+
+// ── Q-Learning: interfaz pública ───────────────────────────────────────
+
+// Inyecta una recompensa al CPU indicado (se acumula hasta la siguiente decisión).
+void rewardCpu(int playerId, float reward);
+
+// Carga las Q-tables compartidas desde disco (llamar al inicio de partida VS/Custom).
+void loadQLearning();
+
+// Guarda las Q-tables compartidas a disco (llamar al final de ronda).
+void saveQLearning();
 
 } // namespace CpuBomberman
 
