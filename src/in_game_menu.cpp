@@ -201,10 +201,10 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
 
     if (keys[controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled) {
         result = 4;
-        // LOCKED -> BOMBERMAN -> 1ST PERSON -> FREE -> LOCKED -> ...
+        // LOCKED -> BOMBERMAN -> 1ST P -> FREE -> LOCKED -> ...
         if (currentOptionsSelected[3] == "LOCKED") currentOptionsSelected[3] = "BOMBERMAN";
-        else if (currentOptionsSelected[3] == "BOMBERMAN") currentOptionsSelected[3] = "1ST PERSON";
-        else if (currentOptionsSelected[3] == "1ST PERSON") currentOptionsSelected[3] = "FREE";
+        else if (currentOptionsSelected[3] == "BOMBERMAN") currentOptionsSelected[3] = "1ST P";
+        else if (currentOptionsSelected[3] == "1ST P") currentOptionsSelected[3] = "FREE";
         else currentOptionsSelected[3] = "LOCKED";
         keys[controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
         std::cout << "Salgo por allá" << std::endl;

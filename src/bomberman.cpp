@@ -3588,6 +3588,11 @@ void Game::advanceToNextLevel() {
             this->nextStateAfterCinematic = GAME_RANKING;
             std::string videoPath = resolveAssetPath("resources/video/HistoryEnd.mp4");
             cinematicPlayer.open(videoPath);
+
+            // Música de ending al iniciar la cinemática final
+            AudioManager::get().stopBgm();
+            AudioManager::get().playBgm(resolveAssetPath("resources/sounds/07 Normal Game ~ Ending.mp3"), /*loop=*/false, 0.6f);
+
         } else {
             // Sin cinematica: ir directamente al ranking.
             enterRankingScreen();
@@ -5502,9 +5507,12 @@ void Game::update() {
         if (isDone) {
             vsCinematicSkipRequested = false;
             cinematicPlayer.close();
-            
-            // Parar BGM de cinematica si hay una en curso
-            AudioManager::get().stopBgm();
+
+            // Parar BGM de cinematica salvo en HistoryEnd (su musica debe seguir al ranking)
+            if (currentCinematicType != CinematicType::HistoryEnd) {
+                AudioManager::get().stopBgm();
+            }
+
 
 
             if (currentCinematicType == CinematicType::Intro) {
@@ -5513,8 +5521,7 @@ void Game::update() {
             } else if (currentCinematicType == CinematicType::HistoryStart) {
                 startNewRun(mode); // Actualiza el state a GAME_PLAYING e inicia la partida con el modo seleccionado previamente.
             } else if (currentCinematicType == CinematicType::HistoryEnd) {
-                // Ultima cinematica de historia: reproducir musica de ending y luego ir al ranking.
-                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/07 Normal Game ~ Ending.mp3"), /*loop=*/false, 0.60f);
+                // La musica de ending ya esta sonando desde que empezo la cinematica.
                 enterRankingScreen();
             } else if (currentCinematicType == CinematicType::LevelStart) {
                 // Después de la cinemática del nivel, cargar el nivel y transicionar a GAME_PLAYING
