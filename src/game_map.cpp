@@ -1,6 +1,7 @@
 #include "game_map.hpp"
 #include "sprite_atlas.hpp" // for resolveAssetPath, loadSpriteAtlasMinimal, getUvRectForSprite
 #include "player.hpp"
+#include "audio_manager.hpp"
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -1486,8 +1487,6 @@ void GameMap::renderPowerUpExplosions(GLuint vao, GLuint uniformModel, GLuint un
     glBindVertexArray(0);
 }
 
-extern void PlayCogerPowerUpSound();
-
 bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
     if (!player) return false;
     if (row < 0 || row >= rows || col < 0 || col >= cols) return false;
@@ -1497,7 +1496,7 @@ bool GameMap::tryCollectPowerUp(int row, int col, Player* player) {
         return false;
 
     // Reproducir sonido instantáneo de recogida
-    PlayCogerPowerUpSound();
+    AudioManager::get().playVfx(VfxSound::Pickup);
 
     // Aplicar el power-up y marcarlo como recogido
     player->applyPowerUp(b.powerUpType);

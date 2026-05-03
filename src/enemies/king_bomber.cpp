@@ -4,6 +4,7 @@
 #include "player.hpp"
 #include "bomb.hpp"
 #include "sprite_atlas.hpp"
+#include "audio_manager.hpp"
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -18,7 +19,6 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 extern std::vector<Enemy*> gEnemies;
-extern void PlayKingBomberDistortedExplosionSound();
 
 namespace {
 bool gKingPreBattleLockActive = false;
@@ -542,7 +542,13 @@ void KingBomber::emitSpecialCrossExplosion(int stepDist) {
 
     // Reproducir sonido de explosión distorsionada al emitir el ataque (solo una vez)
     if (stepDist == 1) {
-        PlayKingBomberDistortedExplosionSound();
+        // Reproducir el sonido de explosión dos veces con pequeño delay para simular distorsión
+        AudioManager::get().playVfx(VfxSound::Explosion);
+        // Segunda reproducción ligeramente desfasada para efecto de distorsión
+        static float distortionDelayTimer = 0.0f;
+        // Nota: esto es una aproximación; una mejor solución sería usar un timer en el AudioManager
+        // Por ahora reproducimos dos veces casi simultáneamente para efecto de solapamiento
+        AudioManager::get().playVfx(VfxSound::Explosion);
     }
 
     // Generar explosión completa de una sola vez en stepDist == 1

@@ -4,6 +4,7 @@
 #include "player.hpp"
 #include "bomb.hpp"
 #include "sprite_atlas.hpp"
+#include "audio_manager.hpp"
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -18,7 +19,6 @@ extern GLuint uniformFlipX;
 extern GLuint uniformTintColor;
 extern SpriteAtlas gEnemyAtlas;
 extern std::vector<Enemy*> gEnemies;
-extern void PlayDronDistortedFireSound();
 
 class SlowFireball : public Enemy {
 public:
@@ -179,7 +179,7 @@ void DronBombardero::shootSlowFireball(EnemyDirection dir) {
 }
 
 void DronBombardero::shootBurstFireballs() {
-    PlayDronDistortedFireSound();
+    AudioManager::get().playVfx(VfxSound::ExplosionRobots);
     const std::array<EnemyDirection, 4> dirs = {
         EnemyDirection::UP,
         EnemyDirection::LEFT,

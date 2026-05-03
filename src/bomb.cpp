@@ -2,6 +2,7 @@
 #include "player.hpp"
 #include "game_map.hpp"
 #include "sprite_atlas.hpp"
+# include "audio_manager.hpp"
 
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -18,8 +19,6 @@ extern GLuint bombRcTexture;
 extern GameMap* gameMap;
 extern SpriteAtlas gBombAtlas;
 extern SpriteAtlas gBombRcAtlas;
-extern void PlayExplosionSound();
-extern void PlayPlaceBombSound();
 extern void DebugLogBombLifecycleEvent(const char* eventName, int ownerIndex, int row, int col, int power, bool remoteControlled);
 
 /*
@@ -53,7 +52,7 @@ Bomb::Bomb(glm::vec2 pos, int row, int col, Player* ownerPlayer, int bombPower, 
       owner(ownerPlayer),
       remoteControlled(remote)
 {
-    PlayPlaceBombSound();
+    AudioManager::get().playVfx(VfxSound::PlaceBomb);
     DebugLogBombLifecycleEvent("spawn", ownerIndex, gridRow, gridCol, power, remoteControlled);
 }
 
@@ -154,7 +153,7 @@ void Bomb::detonate() {
     }
 
     state = BombState::EXPLODING;
-    PlayExplosionSound();
+    AudioManager::get().playVfx(VfxSound::Explosion);
     animTimer = 0.0f;
     animStep = 0;
     animFrame = 0;
