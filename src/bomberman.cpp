@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -2256,7 +2256,7 @@ void Game::ensureRenderResources() {
     
     addTask("solGLB", kSolGlbPath, &solGlbVAO, &solGlbVBO, &solGlbEBO, &solGlbIndexCount, &solGlbTexture);
     addTask("dragonGLB", kDragonGlbPath, &dragonGlbVAO, &dragonGlbVBO, &dragonGlbEBO, &dragonGlbIndexCount, &dragonGlbTexture);
-    addTask("destructibleStage3GLB", kDestructibleStage3GlbPath, &destructibleStage3GlbVAO, &destructibleStage3GlbVBO, &destructibleStage3GlbEBO, &destructibleStage3GlbIndexCount, &destructibleStage3GlbTexture);
+    // addTask("destructibleStage3GLB", kDestructibleStage3GlbPath, &destructibleStage3GlbVAO, &destructibleStage3GlbVBO, &destructibleStage3GlbEBO, &destructibleStage3GlbIndexCount, &destructibleStage3GlbTexture);
 
     for (auto& t : loadingThreads) {
         if (t.joinable()) t.join();
