@@ -627,12 +627,13 @@ static bool isSameTile(const GameMap* map, const glm::vec2& a, const glm::vec2& 
     return ar == br && ac == bc;
 }
 
-// Colisi├│n enemigo-jugador (AABB simple por tile): detecta contacto.
+// Colisión enemigo-jugador: detecta contacto.
 static bool overlapsEnemyPlayer(const GameMap* map, const glm::vec2& enemyPos, const glm::vec2& playerPos) {
     if (!map) return false;
-    // AABB simple alrededor del centro del tile. Ajustable.
+    // Ampliamos el rango de contacto (antes 0.95f) para que abarque el tamaño visual
+    // de los sprites y se produzca la muerte desde el borde, sin esperar al centro.
     const float halfTile = map->getTileSize() / 2.0f;
-    const float r = halfTile * 0.95f;
+    const float r = halfTile * 1.45f; 
     return (std::abs(enemyPos.x - playerPos.x) <= r) && (std::abs(enemyPos.y - playerPos.y) <= r);
 }
 
