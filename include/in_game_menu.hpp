@@ -60,7 +60,7 @@ class InGameMenu {
                               SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture, 
                               SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture);
 
-        int processInputInGameMenu(std::map<int, int>& keys);
+        int processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEnabled);
 };
 
 #endif // IN_GAME_MENU_HPP

@@ -4249,11 +4249,15 @@ void Game::processInput() {
     }
 
     if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
         this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
         toggleViewMode();
     }
 
     if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
         this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
         cycleCamera3DType(); 
     }
@@ -4445,7 +4449,7 @@ void Game::processInput() {
             return;
         }
 
-        int result = this->inGameMenu.processInputInGameMenu(this->keys);
+        int result = this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
 
         // Mirar processInputInGameMenu para saber que devuelve
         switch (result) {
