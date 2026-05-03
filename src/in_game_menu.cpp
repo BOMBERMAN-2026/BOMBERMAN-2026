@@ -180,7 +180,7 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
 
 // ============================== INPUT ==============================
 
-int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
+int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEnabled) {
 
     // Devolvemos un valor entre los siguientes
     // -1 -> no hay que hacer nada en bomberman.cpp
@@ -190,6 +190,26 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
     //  4 -> hay que cambiar la camara
     //  6 -> hay que volver al menu de seleccion de juego
     int result = -1;
+
+    if (keys[controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
+        result = 3;
+        currentOptionsSelected[2] == "2D" ? currentOptionsSelected[2] = "3D" : currentOptionsSelected[2] = "2D";
+        keys[controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
+        std::cout << "Salgo por aqui" << std::endl;
+        return result;
+    }
+
+    if (keys[controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled) {
+        result = 4;
+        // LOCKED -> BOMBERMAN -> 1ST PERSON -> FREE -> LOCKED -> ...
+        if (currentOptionsSelected[3] == "LOCKED") currentOptionsSelected[3] = "BOMBERMAN";
+        else if (currentOptionsSelected[3] == "BOMBERMAN") currentOptionsSelected[3] = "1ST PERSON";
+        else if (currentOptionsSelected[3] == "1ST PERSON") currentOptionsSelected[3] = "FREE";
+        else currentOptionsSelected[3] = "LOCKED";
+        keys[controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
+        std::cout << "Salgo por allá" << std::endl;
+        return result;
+    }
 
     if (keys[controlsMenu.downKey_P1] == GLFW_PRESS) {
         posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
@@ -233,10 +253,12 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys) {
 
             // CAMERA
             case 4:
+                if (!is3DViewEnabled) {return -1;}
                 result = 4;
-                // LOCKED -> FREE -> BOMBERMAN -> LOCKED -> ...
-                if (currentOptionsSelected[posSeleccion - 1] == "LOCKED") currentOptionsSelected[posSeleccion - 1] = "FREE";
-                else if (currentOptionsSelected[posSeleccion - 1] == "FREE") currentOptionsSelected[posSeleccion - 1] = "BOMBERMAN";
+                // LOCKED -> BOMBERMAN -> 1ST PERSON -> FREE -> LOCKED -> ...
+                if (currentOptionsSelected[posSeleccion - 1] == "LOCKED") currentOptionsSelected[posSeleccion - 1] = "BOMBERMAN";
+                else if (currentOptionsSelected[posSeleccion - 1] == "BOMBERMAN") currentOptionsSelected[posSeleccion - 1] = "1ST P";
+                else if (currentOptionsSelected[posSeleccion - 1] == "1ST P") currentOptionsSelected[posSeleccion - 1] = "FREE";
                 else currentOptionsSelected[posSeleccion - 1] = "LOCKED";
                 break;
 
