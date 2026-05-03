@@ -243,7 +243,7 @@ void DronBombardero::updateFireMode(float dist, float step) {
     }
 
     if (dist > 0.1f) {
-        float fastStep = step * 1.4f;
+        float fastStep = 0.22f * deltaTime;
         EnemyDirection toPlayer = directionTowardPlayer();
         if (!tryMove(toPlayer, fastStep)) {
             EnemyDirection alt = randomDirection();
