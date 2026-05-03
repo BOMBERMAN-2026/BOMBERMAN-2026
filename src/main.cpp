@@ -5,6 +5,17 @@
 
 #include <iostream>
 #include <algorithm>
+#include <cstdint>
+#include <vector>
+
+#ifdef _WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 
 #include "bomberman.hpp"
 #include "audio_manager.hpp"
@@ -28,6 +39,15 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void window_focus_callback(GLFWwindow* window, int focused);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+#ifdef _WIN32
+static WNDPROC gPreviousWindowProc = nullptr;
+static HWND gRawInputHwnd = nullptr;
+
+LRESULT CALLBACK raw_input_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+bool setup_raw_input_for_mice(GLFWwindow* window);
+void shutdown_raw_input_hook();
+#endif
 
 #include <ctime>
 
@@ -81,6 +101,10 @@ int main() {
     glfwSetWindowFocusCallback(mainWindow, window_focus_callback);
     glfwSetScrollCallback(mainWindow, scroll_callback);
 
+#ifdef _WIN32
+    setup_raw_input_for_mice(mainWindow);
+#endif
+
     // OpenGL configuration
     glViewport(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT);
     glClearDepth(1.0f);
@@ -126,6 +150,11 @@ int main() {
 
     delete bomberman;
     bomberman = nullptr;
+
+#ifdef _WIN32
+    shutdown_raw_input_hook();
+#endif
+
     glfwDestroyWindow(mainWindow);
     glfwTerminate();
 
@@ -181,6 +210,7 @@ void window_focus_callback(GLFWwindow* window, int focused) {
 
     bomberman->lastDirKey = GLFW_KEY_UNKNOWN;
     bomberman->lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+    bomberman->resetRawMouseInputState(/*clearDeviceAssignments=*/false);
 }
 
 // Ajusta el viewport cuando cambia el tamaño de la ventana.
@@ -200,3 +230,80 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
         bomberman->onMouseScroll(yoffset);
     }
 }
+
+#ifdef _WIN32
+LRESULT CALLBACK raw_input_wnd_proc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    if (msg == WM_INPUT && bomberman != nullptr) {
+        UINT dataSize = 0;
+        const UINT headerSize = sizeof(RAWINPUTHEADER);
+        if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, nullptr, &dataSize, headerSize) == 0 && dataSize > 0) {
+            std::vector<BYTE> rawBuffer(dataSize);
+            if (GetRawInputData(reinterpret_cast<HRAWINPUT>(lParam), RID_INPUT, rawBuffer.data(), &dataSize, headerSize) == dataSize) {
+                const RAWINPUT* raw = reinterpret_cast<const RAWINPUT*>(rawBuffer.data());
+                if (raw != nullptr && raw->header.dwType == RIM_TYPEMOUSE) {
+                    const RAWMOUSE& mouse = raw->data.mouse;
+                    const int deltaX = (mouse.usFlags & MOUSE_MOVE_ABSOLUTE) ? 0 : static_cast<int>(mouse.lLastX);
+                    const int deltaY = (mouse.usFlags & MOUSE_MOVE_ABSOLUTE) ? 0 : static_cast<int>(mouse.lLastY);
+
+                    const bool leftDown = (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_DOWN) != 0;
+                    const bool leftUp = (mouse.usButtonFlags & RI_MOUSE_LEFT_BUTTON_UP) != 0;
+                    const bool rightDown = (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_DOWN) != 0;
+                    const bool rightUp = (mouse.usButtonFlags & RI_MOUSE_RIGHT_BUTTON_UP) != 0;
+
+                    if (deltaX != 0 || deltaY != 0 || leftDown || leftUp || rightDown || rightUp) {
+                        const std::uint64_t deviceId = static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(raw->header.hDevice));
+                        bomberman->onRawMouseInput(deviceId,
+                                                   deltaX,
+                                                   deltaY,
+                                                   leftDown,
+                                                   leftUp,
+                                                   rightDown,
+                                                   rightUp);
+                    }
+                }
+            }
+        }
+    }
+
+    if (gPreviousWindowProc != nullptr) {
+        return CallWindowProc(gPreviousWindowProc, hwnd, msg, wParam, lParam);
+    }
+    return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+
+bool setup_raw_input_for_mice(GLFWwindow* window) {
+    if (window == nullptr) {
+        return false;
+    }
+
+    gRawInputHwnd = glfwGetWin32Window(window);
+    if (gRawInputHwnd == nullptr) {
+        return false;
+    }
+
+    RAWINPUTDEVICE rid;
+    rid.usUsagePage = 0x01; // Generic desktop controls
+    rid.usUsage = 0x02;     // Mouse
+    rid.dwFlags = RIDEV_INPUTSINK;
+    rid.hwndTarget = gRawInputHwnd;
+    RegisterRawInputDevices(&rid, 1, sizeof(rid));
+
+    gPreviousWindowProc = reinterpret_cast<WNDPROC>(
+        SetWindowLongPtr(gRawInputHwnd,
+                         GWLP_WNDPROC,
+                         reinterpret_cast<LONG_PTR>(raw_input_wnd_proc)));
+
+    return gPreviousWindowProc != nullptr;
+}
+
+void shutdown_raw_input_hook() {
+    if (gRawInputHwnd != nullptr && gPreviousWindowProc != nullptr) {
+        SetWindowLongPtr(gRawInputHwnd,
+                         GWLP_WNDPROC,
+                         reinterpret_cast<LONG_PTR>(gPreviousWindowProc));
+    }
+
+    gPreviousWindowProc = nullptr;
+    gRawInputHwnd = nullptr;
+}
+#endif

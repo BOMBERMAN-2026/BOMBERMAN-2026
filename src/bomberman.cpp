@@ -484,6 +484,13 @@ static const char* camera3DTypeToString(Camera3DType type) {
     }
 }
 
+static bool isTwoHumanPlayersMode(GameMode mode)
+{
+    return mode == GameMode::HistoryTwoPlayers
+        || mode == GameMode::VsTwoPlayers
+        || mode == GameMode::TwoPlayers;
+}
+
 static float facingKeyToYawRadians(int facingKey)
 {
     switch (facingKey) {
@@ -568,7 +575,7 @@ static int yawToControlQuadrant(float yawRadians)
     return ((int)std::floor((wrapped + kQuarterPi) / kHalfPi)) % 4;
 }
 
-static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
+static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey, int playerIndex)
 {
     if (!game || game->viewMode != ViewMode::Mode3D) {
         return inputDirKey;
@@ -579,7 +586,7 @@ static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
         game->camera3DType == Camera3DType::PerspectiveMobile) {
         yawForControls = game->getCameraOrbitYaw();
     } else if (game->camera3DType == Camera3DType::FirstPerson) {
-        yawForControls = game->getFirstPersonYaw();
+        yawForControls = game->getFirstPersonYawForPlayer(playerIndex);
     } else if (game->camera3DType == Camera3DType::FreeCamera) {
         yawForControls = game->getFreeCameraYaw();
     } else {
@@ -617,6 +624,11 @@ static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
         default:
             return inputDirKey;
     }
+}
+
+static GLint remapDirectionFor3DCamera(const Game* game, GLint inputDirKey)
+{
+    return remapDirectionFor3DCamera(game, inputDirKey, 0);
 }
 
 static Move directionKeyToMove(GLint directionKey)
@@ -4041,6 +4053,73 @@ void Game::resetFreeCameraPose() {
     freeCameraRoll = 0.0f;
 }
 
+int Game::resolveRawMouseSlot(std::uint64_t deviceId)
+{
+    if (deviceId == 0) {
+        return 0;
+    }
+
+    if (rawMouseDeviceIdP1 == deviceId) {
+        return 0;
+    }
+    if (rawMouseDeviceIdP2 == deviceId) {
+        return 1;
+    }
+
+    if (rawMouseDeviceIdP1 == 0) {
+        rawMouseDeviceIdP1 = deviceId;
+        return 0;
+    }
+    if (rawMouseDeviceIdP2 == 0) {
+        rawMouseDeviceIdP2 = deviceId;
+        return 1;
+    }
+
+    // Si llegan más dispositivos, priorizamos el primero para no romper el control principal.
+    return 0;
+}
+
+void Game::resetRawMouseInputState(bool clearDeviceAssignments)
+{
+    rawMouseDeltaX[0] = rawMouseDeltaX[1] = 0;
+    rawMouseDeltaY[0] = rawMouseDeltaY[1] = 0;
+    rawMouseLeftPressed[0] = rawMouseLeftPressed[1] = false;
+    rawMouseRightPressed[0] = rawMouseRightPressed[1] = false;
+    firstPersonMouseP2LeftPressedLastFrame = false;
+    firstPersonMouseP2RightPressedLastFrame = false;
+
+    if (clearDeviceAssignments) {
+        rawMouseDeviceIdP1 = 0;
+        rawMouseDeviceIdP2 = 0;
+    }
+}
+
+void Game::onRawMouseInput(std::uint64_t deviceId,
+                           int deltaX,
+                           int deltaY,
+                           bool leftDown,
+                           bool leftUp,
+                           bool rightDown,
+                           bool rightUp)
+{
+    const int slot = resolveRawMouseSlot(deviceId);
+    rawMouseDeltaX[slot] += deltaX;
+    rawMouseDeltaY[slot] += deltaY;
+
+    if (leftDown) {
+        rawMouseLeftPressed[slot] = true;
+    }
+    if (leftUp) {
+        rawMouseLeftPressed[slot] = false;
+    }
+    if (rightDown) {
+        rawMouseRightPressed[slot] = true;
+    }
+    if (rightUp) {
+        rawMouseRightPressed[slot] = false;
+    }
+}
+
 void Game::setCamera3DType(Camera3DType newType) {
     camera3DType = newType;
 
@@ -4050,10 +4129,15 @@ void Game::setCamera3DType(Camera3DType newType) {
         if (!gPlayers.empty() && gPlayers[0] != nullptr) {
             firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
         }
+        if (gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+            firstPersonYawP2 = facingKeyToYawRadians(gPlayers[1]->facingDirKey);
+        }
         firstPersonPitch = -0.18f;
+        firstPersonPitchP2 = -0.18f;
         firstPersonMouseInitialized = false;
         firstPersonMouseLeftPressedLastFrame = false;
         firstPersonMouseRightPressedLastFrame = false;
+        resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     } else if (camera3DType == Camera3DType::FreeCamera) {
         if (!freeCameraInitialized) {
             resetFreeCameraPose();
@@ -4079,6 +4163,7 @@ void Game::setCamera3DType(Camera3DType newType) {
     firstPersonCursorLocked = shouldCaptureFirstPersonMouse;
     if (!shouldCaptureFirstPersonMouse) {
         firstPersonMouseInitialized = false;
+        resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     }
 
     refreshWindowTitle();
@@ -4150,6 +4235,7 @@ void Game::toggleViewMode() {
     firstPersonMouseInitialized = false;
     firstPersonMouseLeftPressedLastFrame = false;
     firstPersonMouseRightPressedLastFrame = false;
+    resetRawMouseInputState(/*clearDeviceAssignments=*/false);
 
     refreshWindowTitle();
     std::cout << "[Render] View mode -> " << viewModeToString(viewMode) << "\n";
@@ -4481,7 +4567,11 @@ void Game::init() {
     if (!gPlayers.empty() && gPlayers[0] != nullptr) {
         firstPersonYaw = facingKeyToYawRadians(gPlayers[0]->facingDirKey);
     }
+    if (gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+        firstPersonYawP2 = facingKeyToYawRadians(gPlayers[1]->facingDirKey);
+    }
     firstPersonPitch = -0.18f;
+    firstPersonPitchP2 = -0.18f;
     cameraOrbitPitch = -0.18f;
     cameraOrbitDistance = 0.0f;
     cameraFollowDistance = 6.8f;
@@ -4490,6 +4580,7 @@ void Game::init() {
     firstPersonCursorLocked = false;
     firstPersonMouseLeftPressedLastFrame = false;
     firstPersonMouseRightPressedLastFrame = false;
+    resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     freeCameraInitialized = false;
     freeCameraAnchored = false;
     gFirstPersonBlockedHintTimer[0] = 0.0f;
@@ -4605,6 +4696,13 @@ void Game::processInput() {
         (this->viewMode == ViewMode::Mode3D &&
          this->camera3DType == Camera3DType::FirstPerson &&
          this->window != nullptr);
+    const bool twoHumanPlayersMode = isTwoHumanPlayersMode(this->mode);
+    const bool shouldUseDualMouseFirstPerson =
+        (shouldCaptureFirstPersonMouse &&
+         twoHumanPlayersMode &&
+         gPlayers.size() >= 2 &&
+         gPlayers[0] != nullptr &&
+         gPlayers[1] != nullptr);
 
     const bool keepScreenFacingForCameraRelative3D =
         (this->viewMode == ViewMode::Mode3D &&
@@ -4786,7 +4884,7 @@ void Game::processInput() {
         std::cout << "[Render] Camara libre reiniciada\n";
     }
 
-    if (shouldCaptureFirstPersonMouse) {
+    if (shouldCaptureFirstPersonMouse && !shouldUseDualMouseFirstPerson) {
         double mouseX = 0.0;
         double mouseY = 0.0;
         glfwGetCursorPos(this->window, &mouseX, &mouseY);
@@ -4806,18 +4904,51 @@ void Game::processInput() {
             this->firstPersonPitch = std::max(-1.30f, std::min(1.10f, this->firstPersonPitch));
             this->firstPersonYaw = wrapAnglePi(this->firstPersonYaw);
         }
+    } else if (shouldUseDualMouseFirstPerson) {
+        const int deltaXP1 = rawMouseDeltaX[0];
+        const int deltaYP1 = rawMouseDeltaY[0];
+        const int deltaXP2 = rawMouseDeltaX[1];
+        const int deltaYP2 = rawMouseDeltaY[1];
+        rawMouseDeltaX[0] = rawMouseDeltaX[1] = 0;
+        rawMouseDeltaY[0] = rawMouseDeltaY[1] = 0;
+
+        this->firstPersonYaw -= (float)deltaXP1 * kFirstPersonMouseYawSensitivity;
+        this->firstPersonPitch -= (float)deltaYP1 * kFirstPersonMousePitchSensitivity;
+        this->firstPersonPitch = std::max(-1.30f, std::min(1.10f, this->firstPersonPitch));
+        this->firstPersonYaw = wrapAnglePi(this->firstPersonYaw);
+
+        this->firstPersonYawP2 -= (float)deltaXP2 * kFirstPersonMouseYawSensitivity;
+        this->firstPersonPitchP2 -= (float)deltaYP2 * kFirstPersonMousePitchSensitivity;
+        this->firstPersonPitchP2 = std::max(-1.30f, std::min(1.10f, this->firstPersonPitchP2));
+        this->firstPersonYawP2 = wrapAnglePi(this->firstPersonYawP2);
+
+        this->firstPersonMouseInitialized = false;
+    } else {
+        rawMouseDeltaX[0] = rawMouseDeltaX[1] = 0;
+        rawMouseDeltaY[0] = rawMouseDeltaY[1] = 0;
     }
 
     const bool mouseLeftPressedNow = (this->window != nullptr)
         && (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
     const bool mouseRightPressedNow = (this->window != nullptr)
         && (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+    const bool p1MouseLeftPressedNow = shouldUseDualMouseFirstPerson ? rawMouseLeftPressed[0] : mouseLeftPressedNow;
+    const bool p1MouseRightPressedNow = shouldUseDualMouseFirstPerson ? rawMouseRightPressed[0] : mouseRightPressedNow;
+    const bool p2MouseLeftPressedNow = shouldUseDualMouseFirstPerson ? rawMouseLeftPressed[1] : false;
+    const bool p2MouseRightPressedNow = shouldUseDualMouseFirstPerson ? rawMouseRightPressed[1] : false;
+
     const bool firstPersonLeftClick = shouldCaptureFirstPersonMouse
-        && mouseLeftPressedNow
+        && p1MouseLeftPressedNow
         && !this->firstPersonMouseLeftPressedLastFrame;
     const bool firstPersonRightClick = shouldCaptureFirstPersonMouse
-        && mouseRightPressedNow
+        && p1MouseRightPressedNow
         && !this->firstPersonMouseRightPressedLastFrame;
+    const bool firstPersonP2LeftClick = shouldUseDualMouseFirstPerson
+        && p2MouseLeftPressedNow
+        && !this->firstPersonMouseP2LeftPressedLastFrame;
+    const bool firstPersonP2RightClick = shouldUseDualMouseFirstPerson
+        && p2MouseRightPressedNow
+        && !this->firstPersonMouseP2RightPressedLastFrame;
 
     auto bombBlocksCellForPlayer = [&](int row, int col, int playerId) {
         for (auto* bomb : gBombs) {
@@ -4902,8 +5033,10 @@ void Game::processInput() {
     };
 
     if (gPlayers.empty() || gPlayers[0] == nullptr) {
-        this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
-        this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+        this->firstPersonMouseLeftPressedLastFrame = p1MouseLeftPressedNow;
+        this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
+        this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
+        this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
         return;
     }
     Player* p1 = gPlayers[0];
@@ -5016,7 +5149,7 @@ void Game::processInput() {
     }
 
     // ======================= Jugador 2 (rojo): WASD =======================
-    if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if (twoHumanPlayersMode && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
         if (!p2->isAlive()) {
@@ -5042,7 +5175,7 @@ void Game::processInput() {
                     }
                     const GLint idleFacingDir2 = keepScreenFacingForCameraRelative3D
                         ? screenDir2
-                        : remapDirectionFor3DCamera(this, screenDir2);
+                        : remapDirectionFor3DCamera(this, screenDir2, 1);
                     p2->facingDirKey = idleFacingDir2;
                 }
             } else {
@@ -5052,21 +5185,21 @@ void Game::processInput() {
                     GLint primaryKey2 = GLFW_KEY_UNKNOWN;
 
                     if (up2 && !down2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_UP);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_UP, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         primaryKey2 = GLFW_KEY_W;
                     } else if (down2 && !up2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_DOWN);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_DOWN, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         primaryKey2 = GLFW_KEY_S;
                     }
 
                     if (left2 && !right2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_LEFT);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_LEFT, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         if (primaryKey2 == GLFW_KEY_UNKNOWN || this->lastDirKeyP2 == GLFW_KEY_A) primaryKey2 = GLFW_KEY_A;
                     } else if (right2 && !left2) {
-                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_RIGHT);
+                        const GLint mapped = remapDirectionFor3DCamera(this, GLFW_KEY_RIGHT, 1);
                         if (movePlayerWithCrossRule(p2, directionKeyToMove(mapped))) movedAny2 = true;
                         if (primaryKey2 == GLFW_KEY_UNKNOWN || this->lastDirKeyP2 == GLFW_KEY_D) primaryKey2 = GLFW_KEY_D;
                     }
@@ -5080,7 +5213,7 @@ void Game::processInput() {
                             case GLFW_KEY_A: screenDir2 = GLFW_KEY_LEFT; break;
                             case GLFW_KEY_D: screenDir2 = GLFW_KEY_RIGHT; break;
                         }
-                        const GLint facingDir2 = remapDirectionFor3DCamera(this, screenDir2);
+                        const GLint facingDir2 = remapDirectionFor3DCamera(this, screenDir2, 1);
                         if (!p2->isWalking || p2->facingDirKey != facingDir2) {
                             p2->walkTimer = 0.0f;
                             p2->walkPhase = 0;
@@ -5121,7 +5254,7 @@ void Game::processInput() {
                             case GLFW_KEY_D: dir2Screen = GLFW_KEY_RIGHT; break;
                         }
 
-                        const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen);
+                        const GLint dir2 = remapDirectionFor3DCamera(this, dir2Screen, 1);
                         const Move mov2 = directionKeyToMove(dir2);
 
                         if (mov2 != MOVE_NONE) {
@@ -5160,8 +5293,10 @@ void Game::processInput() {
     if (this->keys[GLFW_KEY_F3] == GLFW_PRESS) {
         this->keys[GLFW_KEY_F3] = GLFW_REPEAT;
         advanceToNextLevel();
-        this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
-        this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+        this->firstPersonMouseLeftPressedLastFrame = p1MouseLeftPressedNow;
+        this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
+        this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
+        this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
         return;
     }
 
@@ -5210,11 +5345,15 @@ void Game::processInput() {
     }
 
     // ======================= Bombas (Jugador 2) =======================
-    if ((this->mode == GameMode::HistoryTwoPlayers || this->mode == GameMode::VsTwoPlayers) && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
+    if (twoHumanPlayersMode && gPlayers.size() >= 2 && gPlayers[1] != nullptr) {
         Player* p2 = gPlayers[1];
 
-        if (p2->isAlive() && !p2->isGameOver() && this->keys[inGameMenu.controlsMenu.bombKey_P2] == GLFW_PRESS) {
-            this->keys[inGameMenu.controlsMenu.bombKey_P2] = GLFW_REPEAT;
+        const bool p2BombByKeyboard = (this->keys[inGameMenu.controlsMenu.bombKey_P2] == GLFW_PRESS);
+        const bool p2BombByMouse = (firstPersonP2LeftClick || firstPersonP2RightClick);
+        if (p2->isAlive() && !p2->isGameOver() && (p2BombByKeyboard || p2BombByMouse)) {
+            if (p2BombByKeyboard) {
+                this->keys[inGameMenu.controlsMenu.bombKey_P2] = GLFW_REPEAT;
+            }
 
             if (p2->canPlaceBomb()) {
                 int bombRow, bombCol;
@@ -5384,8 +5523,10 @@ void Game::processInput() {
         }
     }
 
-    this->firstPersonMouseLeftPressedLastFrame = mouseLeftPressedNow;
-    this->firstPersonMouseRightPressedLastFrame = mouseRightPressedNow;
+    this->firstPersonMouseLeftPressedLastFrame = p1MouseLeftPressedNow;
+    this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
+    this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
+    this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
 
 }
 
@@ -5395,20 +5536,19 @@ void Game::update() {
     gFirstPersonBlockedHintTimer[0] = std::max(0.0f, gFirstPersonBlockedHintTimer[0] - deltaTime);
     gFirstPersonBlockedHintTimer[1] = std::max(0.0f, gFirstPersonBlockedHintTimer[1] - deltaTime);
 
-    // Actualizar intensidad del head bobbing para suavizar transiciones
-    bool isAnyoneWalking = false;
-    if (this->camera3DType == Camera3DType::FirstPerson && !gPlayers.empty()) {
-        int trackedIdx = std::max(0, std::min(active3DViewportPlayerIndex, (int)gPlayers.size() - 1));
-        Player* p = gPlayers[trackedIdx];
-        if (p && p->isAlive() && p->isWalking) {
-            isAnyoneWalking = true;
+    // Actualizar intensidad del head bobbing por jugador para evitar mezcla entre cámaras.
+    for (int i = 0; i < 2; ++i) {
+        bool isPlayerWalking = false;
+        if (this->camera3DType == Camera3DType::FirstPerson && i < (int)gPlayers.size()) {
+            Player* p = gPlayers[i];
+            isPlayerWalking = (p != nullptr && p->isAlive() && p->isWalking);
         }
-    }
 
-    if (isAnyoneWalking) {
-        firstPersonHeadBobIntensity = std::min(1.0f, firstPersonHeadBobIntensity + deltaTime * 8.0f);
-    } else {
-        firstPersonHeadBobIntensity = std::max(0.0f, firstPersonHeadBobIntensity - deltaTime * 12.0f);
+        if (isPlayerWalking) {
+            firstPersonHeadBobIntensity[i] = std::min(1.0f, firstPersonHeadBobIntensity[i] + deltaTime * 8.0f);
+        } else {
+            firstPersonHeadBobIntensity[i] = std::max(0.0f, firstPersonHeadBobIntensity[i] - deltaTime * 12.0f);
+        }
     }
 
     // ========== MENU ==========
@@ -6142,7 +6282,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
     const int viewportHeight = std::max(1, viewport[3]);
     const bool isSplitFirstPersonPass =
         (camera3DType == Camera3DType::FirstPerson &&
-         mode == GameMode::TwoPlayers &&
+         isTwoHumanPlayersMode(mode) &&
          gPlayers.size() >= 2 &&
          viewportWidth < WIDTH);
 
@@ -6251,23 +6391,21 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                                        std::cos(elevation),
                                       -std::cos(cameraOrbitYaw) * std::sin(elevation)));
     } else if (camera3DType == Camera3DType::FirstPerson) {
-        float firstPersonCameraYaw = this->firstPersonYaw;
-        float firstPersonCameraPitch = this->firstPersonPitch;
-        if (trackedPlayerIndex > 0 && trackedPlayer != nullptr) {
-            firstPersonCameraYaw = facingKeyToYawRadians(trackedPlayer->facingDirKey);
-            firstPersonCameraPitch = -0.18f;
-        }
+        float firstPersonCameraYaw = (trackedPlayerIndex == 1) ? this->firstPersonYawP2 : this->firstPersonYaw;
+        float firstPersonCameraPitch = (trackedPlayerIndex == 1) ? this->firstPersonPitchP2 : this->firstPersonPitch;
         const glm::vec3 firstPersonForward = firstPersonLookToForward(firstPersonCameraYaw, firstPersonCameraPitch);
+        const int bobSlot = std::max(0, std::min(1, trackedPlayerIndex));
+        const float bobIntensity = firstPersonHeadBobIntensity[bobSlot];
         float headBobOffset = 0.0f;
         if (kFirstPersonHeadBobAmplitude > 0.0f &&
             trackedPlayer != nullptr &&
             trackedPlayer->isAlive() &&
-            (trackedPlayer->isWalking || firstPersonHeadBobIntensity > 0.001f)) {
+            (trackedPlayer->isWalking || bobIntensity > 0.001f)) {
             const float headBobPhase = (float)glfwGetTime() * kFirstPersonHeadBobFrequency;
             // Usamos una combinación más suave (88% sin, 12% sin2x) para evitar la brusquedad en el ascenso
             const float headBobPrimary = std::sin(headBobPhase);
             const float headBobSecondary = std::sin(headBobPhase * 2.0f);
-            headBobOffset = (headBobPrimary * 0.88f + headBobSecondary * 0.12f) * kFirstPersonHeadBobAmplitude * firstPersonHeadBobIntensity;
+            headBobOffset = (headBobPrimary * 0.88f + headBobSecondary * 0.12f) * kFirstPersonHeadBobAmplitude * bobIntensity;
         }
         const glm::vec3 eye = trackedPlayerCenter + glm::vec3(0.0f, 0.34f + headBobOffset, 0.0f) - firstPersonForward * 0.10f;
         cameraPos = eye;
@@ -8647,7 +8785,7 @@ void Game::render() {
 
         const bool splitFirstPersonTwoPlayers =
             (this->camera3DType == Camera3DType::FirstPerson &&
-             this->mode == GameMode::TwoPlayers &&
+             isTwoHumanPlayersMode(this->mode) &&
              gPlayers.size() >= 2 &&
              gPlayers[0] != nullptr &&
              gPlayers[1] != nullptr);
