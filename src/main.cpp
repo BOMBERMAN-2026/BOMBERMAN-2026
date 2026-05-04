@@ -181,11 +181,11 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
             }
 
             // ========== JUEGO NORMAL ==========
-            if (bomberman->state == GAME_PLAYING) {
-                if (key == GLFW_KEY_4 || key == GLFW_KEY_KP_4) {
-                    AudioManager::get().registerPlaceBombSpecialTap();
-                }
-            }
+           // if (bomberman->state == GAME_PLAYING) {
+           //     if (key == GLFW_KEY_4 || key == GLFW_KEY_KP_4) {
+           //         AudioManager::get().registerPlaceBombSpecialTap();
+           //     }
+           // }
 
             if (key == bomberman->inGameMenu.controlsMenu.upKey_P1 || key == bomberman->inGameMenu.controlsMenu.downKey_P1 || key == bomberman->inGameMenu.controlsMenu.leftKey_P1 || key == bomberman->inGameMenu.controlsMenu.rightKey_P1) {
                 bomberman->lastDirKey = key;

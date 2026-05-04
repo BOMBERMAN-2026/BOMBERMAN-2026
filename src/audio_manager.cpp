@@ -54,7 +54,7 @@ struct AudioManager::Impl {
     ma_sound sfxPickup;
     ma_sound sfxSelect;
     bool sfxReady = false;
-    bool placeSpecialReady = false;
+    //bool placeSpecialReady = false;
     bool useSpecialPlaceBombSound = false;
     int placeSpecialTapCount = 0;
 
@@ -192,7 +192,7 @@ bool AudioManager::init(const std::string& basePath) {
     ok &= loadSfx(impl->sfxPlaceNormal,       "resources/sounds/VFX/ponerbomba.wav");
     ok &= loadSfx(impl->sfxPickup,            "resources/sounds/VFX/cogerpowerup.wav");
     ok &= loadSfx(impl->sfxSelect,            "resources/sounds/seleccionar.mp3");
-    impl->placeSpecialReady = loadSfx(impl->sfxPlaceSpecial, "resources/sounds/Voicy_allah akbar.mp3");
+    //impl->placeSpecialReady = loadSfx(impl->sfxPlaceSpecial, "resources/sounds/Voicy_allah akbar.mp3");
 
     impl->sfxReady = ok;
 
@@ -235,10 +235,10 @@ void AudioManager::shutdown() {
         ma_sound_uninit(&impl->sfxSelect);
         impl->sfxReady = false;
     }
-    if (impl->placeSpecialReady) {
-        ma_sound_uninit(&impl->sfxPlaceSpecial);
-        impl->placeSpecialReady = false;
-    }
+    //if (impl->placeSpecialReady) {
+    //    ma_sound_uninit(&impl->sfxPlaceSpecial);
+    //    impl->placeSpecialReady = false;
+    //}
 
     // Apagar engine
     if (impl->engineReady) {
@@ -261,15 +261,15 @@ void AudioManager::playVfx(VfxSound sfx) {
 
     switch (sfx) {
         case VfxSound::PlaceBomb:
-            if (impl->useSpecialPlaceBombSound && impl->placeSpecialReady) {
-                fireFromPool(&impl->engine, &impl->sfxPlaceSpecial,
-                             impl->placePool, impl->vfxVolume,
-                             kPlaceBombSoundStartDelaySeconds,
-                             kPlaceBombSoundDurationSeconds);
-            } else {
+           //if (impl->useSpecialPlaceBombSound && impl->placeSpecialReady) {
+           //    fireFromPool(&impl->engine, &impl->sfxPlaceSpecial,
+           //                 impl->placePool, impl->vfxVolume,
+           //                 kPlaceBombSoundStartDelaySeconds,
+           //                 kPlaceBombSoundDurationSeconds);
+           //} else {
                 fireFromPool(&impl->engine, &impl->sfxPlaceNormal,
                              impl->placePool, impl->vfxVolume);
-            }
+           // }
             break;
         case VfxSound::Explosion:
             fireFromPool(&impl->engine, &impl->sfxExplosion,
@@ -290,15 +290,15 @@ void AudioManager::playVfx(VfxSound sfx) {
     }
 }
 
-void AudioManager::registerPlaceBombSpecialTap() {
-    if (!impl || impl->useSpecialPlaceBombSound) return;
-
-    impl->placeSpecialTapCount += 1;
-    if (impl->placeSpecialTapCount >= 3) {
-        impl->useSpecialPlaceBombSound = impl->placeSpecialReady;
-        impl->placeSpecialTapCount = 0;
-    }
-}
+//void AudioManager::registerPlaceBombSpecialTap() {
+//    if (!impl || impl->useSpecialPlaceBombSound) return;
+//
+//    impl->placeSpecialTapCount += 1;
+//    if (impl->placeSpecialTapCount >= 3) {
+//        impl->useSpecialPlaceBombSound = impl->placeSpecialReady;
+//        impl->placeSpecialTapCount = 0;
+//    }
+//}
 
 void AudioManager::resetPlaceBombSpecialSound() {
     if (!impl) return;

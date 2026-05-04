@@ -3622,7 +3622,7 @@ void Game::advanceToNextLevel() {
 // Sale a men� desde gameplay (Game Over / fin de campa�a / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
-    AudioManager::get().resetPlaceBombSpecialSound();
+    //AudioManager::get().resetPlaceBombSpecialSound();
     CpuBomberman::discardQLearningSession();
 
     customGameMode.deactivate();
