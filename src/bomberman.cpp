@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -91,6 +91,7 @@ SpriteAtlas gVocabNaranjaAtlas; // Atlas para el vocabulario naranja grande
 SpriteAtlas gTimeUpAtlas;       // Atlas exclusivo para la pantalla TIME UP
 SpriteAtlas gNextLevelAtlas;
 SpriteAtlas gExplosionObjetoAtlas;
+SpriteAtlas gBordesMenuAtlas;
 GLuint gExplosionObjetoTexture = 0;
 GLuint gNextLevelTexture = 0;
 GLuint mapTexture;
@@ -102,6 +103,7 @@ GLuint overlayWhiteTexture = 0; // Textura blanca 1x1 para overlays/filtros en 3
 GLuint rankingHistoryTexture = 0;
 GLuint rankingVsTexture = 0;
 GLuint timeUpTexture = 0;      // Textura exclusiva de TimeUP.png
+GLuint bordesMenuTexture = 0; // Textura para los bordes del menu inGameMenu
 
 struct HistoryRankingEntry {
     std::string name;
@@ -2432,6 +2434,21 @@ void Game::ensureGameplayAssets() {
             }
         }
     }
+
+    // Atlas y textura de los bordes del menu inGameMenu
+    {
+        const std::string bordesMenuAtlasPath = resolveAssetPath("resources/sprites/atlases/SpriteAtlasBordesMenu.json");
+        if (!loadSpriteAtlasMinimal(bordesMenuAtlasPath, gBordesMenuAtlas)) {
+            std::cerr << "Aviso: no se pudo cargar atlas BordesMenu: " << bordesMenuAtlasPath << std::endl;
+        } else {
+            const std::string bordesMenuTexPath = resolveAssetPath(gBordesMenuAtlas.imagePath);
+            bordesMenuTexture = LoadTexture(bordesMenuTexPath.c_str());
+            if (bordesMenuTexture == 0) {
+                std::cerr << "Aviso: no se pudo cargar textura ExplosionObjeto: " << bordesMenuTexPath << std::endl;
+            }
+        }
+    }
+
 
     gameplayAssetsLoaded = true;
 }
@@ -7928,7 +7945,8 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                          uniformWhiteFlash);
     glEnable(GL_DEPTH_TEST);
 
-    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, 
+                                                gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, gBordesMenuAtlas, bordesMenuTexture, currentGameLevel);
     
     glBindVertexArray(0);
     glUseProgram(0);
@@ -8168,7 +8186,8 @@ void Game::render2D() {
                          uniformFlipX,
                          uniformWhiteFlash);
 
-    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture);
+    if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, 
+                                                gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, gBordesMenuAtlas, bordesMenuTexture, currentGameLevel);
 
     glUseProgram(0);
 }

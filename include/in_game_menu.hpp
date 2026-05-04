@@ -58,7 +58,8 @@ class InGameMenu {
 
         void renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, GLuint uniformFlipX,
                               SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture, 
-                              SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture);
+                              SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture, 
+                              SpriteAtlas gBordesMenuAtlas, GLuint bordesMenuTexture, std::string currentStage);
 
         int processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEnabled);
 };

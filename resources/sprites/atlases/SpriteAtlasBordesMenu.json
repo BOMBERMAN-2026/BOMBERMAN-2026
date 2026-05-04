@@ -1,0 +1,33 @@
+{
+  "ruta_imagen": "resources/sprites/mapas/Bordes_ingamemenu.png",
+  "tamano_imagen": {
+    "ancho": 2100,
+    "alto": 1500
+  },
+  "sprites": {
+    "BordeStage1": {
+      "x": 88,
+      "y": 60,
+      "w": 622,
+      "h": 671
+    },
+    "BordeStage2": {
+      "x": 744,
+      "y": 60,
+      "w": 622,
+      "h": 671
+    },
+    "BordeStage3": {
+      "x": 1400,
+      "y": 60,
+      "w": 622,
+      "h": 671
+    },
+    "BordeStage4": {
+      "x": 88,
+      "y": 764,
+      "w": 622,
+      "h": 671
+    }
+  }
+}

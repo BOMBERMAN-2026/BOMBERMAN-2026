@@ -123,7 +123,8 @@ void InGameMenu::renderTextString(const std::string& text, glm::vec2 startPos, f
 
 void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLuint uniformProjection, GLuint uniformUvRect, GLuint uniformFlipX,
                                   SpriteAtlas gVocabAmarilloAtlas, GLuint vocabAmarilloTexture,
-                                  SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture) {
+                                  SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture, 
+                                  SpriteAtlas gBordesMenuAtlas, GLuint bordesMenuTexture, std::string currentStage) {
 
     glUseProgram(shader);
     glActiveTexture(GL_TEXTURE0);
@@ -132,10 +133,6 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     }
     glBindTexture(GL_TEXTURE_2D, blackTexture);
     glBindVertexArray(VAO);
-
-    //float aspect = (float)inGameMenuWidth / (float)inGameMenuHeight;
-    // glm::mat4 projection = glm::ortho(-aspect, aspect, -1.0f, 1.0f, -1.0f, 1.0f);
-    // glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
 
     glUniform1f(uniformFlipX, 0.0f);
 
@@ -155,6 +152,32 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     glUniform4fv(uniformUvRect, 1, glm::value_ptr(uvRect));
 
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    // Dibujar el borde del menú 
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, bordesMenuTexture);
+    glBindVertexArray(VAO);
+
+    std::string currentBorder = "";
+
+    if (currentStage[0] == '1') currentBorder = "BordeStage1";
+    else if (currentStage[0] == '3') currentBorder = "BordeStage2";
+    else if (currentStage[0] == '4') currentBorder = "BordeStage3";
+    else currentBorder = "BordeStage4";
+
+    glm::vec4 borderUvRect(0.0f, 0.0f, 1.0f, 1.0f);
+    if (getUvRectForSprite(gBordesMenuAtlas, currentBorder, borderUvRect)) {  // or appropriate stage
+        glm::mat4 borderModel = glm::mat4(1.0f);
+        borderModel = glm::translate(borderModel, glm::vec3(menuOptionPos, 0.05f));  // slightly in front of background
+        borderModel = glm::scale(borderModel, glm::vec3(0.645f, 0.638f, 1.0f));
+        
+        glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(borderModel));
+        glUniform4fv(uniformUvRect, 1, glm::value_ptr(borderUvRect));
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+    else {
+        std::cerr << "Advertencia: Sprite '" << currentBorder << "' no encontrado en atlas de bordes\n";
+    }
 
     if (controlsMenu.showControlsMenu) {
         controlsMenu.renderControlsMenu(gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, VAO, uniformModel, uniformProjection, uniformUvRect);
