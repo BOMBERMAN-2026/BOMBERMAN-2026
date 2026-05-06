@@ -66,6 +66,7 @@ struct AudioManager::Impl {
     // BGM en streaming
     ma_sound bgmSound;
     bool bgmActive = false;
+    std::string currentBgmPath = "";
 
     // Volumen
     float vfxVolume = 1.0f;
@@ -224,6 +225,7 @@ void AudioManager::shutdown() {
         ma_sound_stop(&impl->bgmSound);
         ma_sound_uninit(&impl->bgmSound);
         impl->bgmActive = false;
+        impl->currentBgmPath = "";
     }
 
     // Liberar prototipos SFX
@@ -316,10 +318,16 @@ void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) 
 
     if (musicDisabled) {stopBgm(); return;}
 
+    std::string path = normalizePath(absPath);
+
+    if (impl->bgmActive && impl->currentBgmPath == path) {
+        float v = (volume > 0.0f) ? volume : impl->bgmVolume;
+        ma_sound_set_volume(&impl->bgmSound, v);
+        return;
+    }
+
     // Parar la BGM anterior si existe
     stopBgm();
-
-    std::string path = normalizePath(absPath);
 
     // MA_SOUND_FLAG_DECODE: cargar en RAM para evitar gaps en el loop.
     ma_uint32 flags = MA_SOUND_FLAG_DECODE | MA_SOUND_FLAG_NO_SPATIALIZATION;
@@ -340,6 +348,7 @@ void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) 
     ma_sound_set_pitch(&impl->bgmSound, 1.0f); // Reset pitch for new music
     ma_sound_start(&impl->bgmSound);
     impl->bgmActive = true;
+    impl->currentBgmPath = path;
     impl->bgmVolume = v;
 }
 
@@ -351,6 +360,7 @@ void AudioManager::stopBgm() {
     ma_sound_stop(&impl->bgmSound);
     ma_sound_uninit(&impl->bgmSound);
     impl->bgmActive = false;
+    impl->currentBgmPath = "";
 }
 
 void AudioManager::setBgmPitch(float pitch) {

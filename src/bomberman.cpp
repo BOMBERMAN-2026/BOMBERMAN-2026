@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -4217,18 +4217,21 @@ void Game::init() {
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
         menuScreen.initMenu();
         return;
     }
 
     // ========== CUSTOM GAME (PANTALLA 1) ==========
     if (this->state == GAME_CUSTOM_MENU_1) {
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
         customGameMenu.initMenu1();
         return;
     }
 
     // ========== CUSTOM GAME (PANTALLA 2) ==========
     if (this->state == GAME_CUSTOM_MENU_2) {
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
         customGameMenu.initMenu2();
         return;
     }
