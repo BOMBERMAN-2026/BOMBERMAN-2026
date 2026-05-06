@@ -313,14 +313,14 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
             
             // GRAPHICS
             case 4:
-                result = 3;
+                result = 4;
                 currentOptionsSelected[posSeleccion - 2] == "2D" ? currentOptionsSelected[posSeleccion - 2] = "3D" : currentOptionsSelected[posSeleccion - 2] = "2D";
                 break;
 
             // CAMERA
             case 5:
-                if (!is3DViewEnabled) {return -1;}
-                result = 4;
+                if (!is3DViewEnabled) { keys[controlsMenu.selectKey] = GLFW_REPEAT; return -1; }
+                result = 5;
                 // LOCKED -> BOMBERMAN -> 1ST PERSON -> FREE -> LOCKED -> ...
                 if (currentOptionsSelected[posSeleccion - 2] == "LOCKED") currentOptionsSelected[posSeleccion - 2] = "BOMBERMAN";
                 else if (currentOptionsSelected[posSeleccion - 2] == "BOMBERMAN") currentOptionsSelected[posSeleccion - 2] = "1ST P";
