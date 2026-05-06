@@ -19,6 +19,7 @@
 
 #include "bomberman.hpp"
 #include "audio_manager.hpp"
+#include "external/stb_image.h"
 
 /*
  * main.cpp
@@ -39,6 +40,29 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 void window_focus_callback(GLFWwindow* window, int focused);
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
+
+#ifndef _WIN32
+static void setLinuxWindowIcon(GLFWwindow* window)
+{
+    const std::string iconPath = resolveAssetPath("resources/sprites/icon.png");
+    int iconWidth = 0;
+    int iconHeight = 0;
+    int iconChannels = 0;
+    unsigned char* iconPixels = stbi_load(iconPath.c_str(), &iconWidth, &iconHeight, &iconChannels, STBI_rgb_alpha);
+    if (!iconPixels) {
+        std::cerr << "Failed to load Linux window icon: " << iconPath << std::endl;
+        return;
+    }
+
+    GLFWimage images[1];
+    images[0].width = iconWidth;
+    images[0].height = iconHeight;
+    images[0].pixels = iconPixels;
+    glfwSetWindowIcon(window, 1, images);
+
+    stbi_image_free(iconPixels);
+}
+#endif
 
 #ifdef _WIN32
 static WNDPROC gPreviousWindowProc = nullptr;
@@ -85,6 +109,10 @@ int main() {
         glfwTerminate();
         return 1;
     }
+
+#ifndef _WIN32
+    setLinuxWindowIcon(mainWindow);
+#endif
 
     glfwMakeContextCurrent(mainWindow);
     glfwSetFramebufferSizeCallback(mainWindow, framebuffer_size_callback);
