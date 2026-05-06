@@ -104,6 +104,8 @@ GLuint rankingHistoryTexture = 0;
 GLuint rankingVsTexture = 0;
 GLuint timeUpTexture = 0;      // Textura exclusiva de TimeUP.png
 GLuint bordesMenuTexture = 0; // Textura para los bordes del menu inGameMenu
+GLuint freeCameraHelpTexture = 0;
+GLuint freeCameraCloseTexture = 0;
 
 struct HistoryRankingEntry {
     std::string name;
@@ -192,6 +194,8 @@ static const char* kHorizonBackgroundCandidates[] = {
     "build/Fondo3D.jpeg",
     "build/WhatsApp Image 2026-04-08 at 11.06.16.jpeg"
 };
+static const char* kFreeCameraHelpButtonPath = "models/botonControles.png";
+static const char* kFreeCameraCloseButtonPath = "models/botonOcultarControles.png";
 
 GLuint cubeVAO = 0;
 GLuint cubeVBO = 0;
@@ -2110,6 +2114,70 @@ static void renderFirstPersonMiniMap2D(const GameMap* map, int width, int height
     glUseProgram(0);
 }
 
+struct UiRect {
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    constexpr UiRect() = default;
+    constexpr UiRect(float x_, float y_, float w_, float h_) : x(x_), y(y_), w(w_), h(h_) {}
+};
+
+static bool pointInsideRect(double px, double py, const UiRect& rect)
+{
+    return (px >= rect.x && px <= (rect.x + rect.w) && py >= rect.y && py <= (rect.y + rect.h));
+}
+
+struct FreeCameraHelpLayout {
+    UiRect helpButton;
+    UiRect popup;
+    UiRect closeButton;
+};
+
+static FreeCameraHelpLayout computeFreeCameraHelpLayout(int width, int height)
+{
+    FreeCameraHelpLayout layout;
+    const float W = (float)std::max(1, width);
+    const float H = (float)std::max(1, height);
+    const float aspect = W / H;
+
+    const float margin = std::max(12.0f, H * 0.02f);
+    const float buttonSize = std::max(48.0f, std::min(96.0f, H * 0.10f));
+    const float buttonSizeAdjusted = buttonSize / aspect;
+    layout.helpButton = UiRect{ W - margin - buttonSize, margin, buttonSize, buttonSizeAdjusted };
+
+    const float popupW = std::min(W * 0.78f, 840.0f);
+    const float popupH = std::min(H * 0.68f, 520.0f);
+    layout.popup = UiRect{ (W - popupW) * 0.5f, (H - popupH) * 0.5f + margin * 0.5f, popupW, popupH };
+
+    const float closeSize = std::max(32.0f, std::min(64.0f, popupH * 0.14f));
+    const float closeSizeAdjusted = closeSize / aspect;
+    const float closePadX = std::max(4.0f, popupH * 0.02f);
+    const float closePadY = std::max(2.0f, popupH * 0.01f);
+    layout.closeButton = UiRect{
+        layout.popup.x + layout.popup.w - closeSize - closePadX,
+        layout.popup.y + closePadY,
+        closeSize,
+        closeSizeAdjusted
+    };
+
+    return layout;
+}
+
+static const char* kFreeCameraHelpLines[] = {
+    "RATON: ARRASTRE IZQ MUEVE",
+    "RATON: ARRASTRE DER ROTA",
+    "RUEDA: ZOOM",
+    "IJKL: MOVER",
+    "U-O: SUBE BAJA",
+    "Q-E: ROLL",
+    "SHIFT: RAPIDO",
+    "0: FIJA DESFIJA",
+    "BACKSPACE: RESETEA"
+};
+static constexpr int kFreeCameraHelpLineCount =
+    (int)(sizeof(kFreeCameraHelpLines) / sizeof(kFreeCameraHelpLines[0]));
+
 void AddShader(GLuint program, const char* shaderCode, GLenum shaderType)
 {
     GLuint shaderObject = glCreateShader(shaderType);
@@ -2446,6 +2514,22 @@ void Game::ensureGameplayAssets() {
             if (bordesMenuTexture == 0) {
                 std::cerr << "Aviso: no se pudo cargar textura ExplosionObjeto: " << bordesMenuTexPath << std::endl;
             }
+        }
+    }
+
+    if (freeCameraHelpTexture == 0) {
+        const std::string helpButtonPath = resolveAssetPath(kFreeCameraHelpButtonPath);
+        freeCameraHelpTexture = LoadTexture(helpButtonPath.c_str());
+        if (freeCameraHelpTexture == 0) {
+            std::cerr << "Aviso: no se pudo cargar boton de controles: " << helpButtonPath << std::endl;
+        }
+    }
+
+    if (freeCameraCloseTexture == 0) {
+        const std::string closeButtonPath = resolveAssetPath(kFreeCameraCloseButtonPath);
+        freeCameraCloseTexture = LoadTexture(closeButtonPath.c_str());
+        if (freeCameraCloseTexture == 0) {
+            std::cerr << "Aviso: no se pudo cargar boton de cerrar controles: " << closeButtonPath << std::endl;
         }
     }
 
@@ -3820,11 +3904,20 @@ void Game::setCamera3DType(Camera3DType newType) {
         freeCameraPitch = wrapAnglePi(freeCameraPitch);
         freeCameraRoll = wrapAnglePi(freeCameraRoll);
         cameraOrbitDragging = false;
+        freeCameraHelpPopupVisible = true;
+        freeCameraHelpMouseCaptured = false;
+        freeCameraHelpMouseLeftPressedLastFrame = false;
         std::cout << "[Render] Camara libre: arrastre IZQ mueve | arrastre DER rota | rueda zoom | 0 fija/desfija\n";
     } else if (camera3DType == Camera3DType::PerspectiveFixed ||
                camera3DType == Camera3DType::PerspectiveMobile) {
         cameraOrbitYaw = wrapAnglePi(cameraOrbitYaw);
         cameraOrbitPitch = wrapAnglePi(cameraOrbitPitch);
+    }
+
+    if (camera3DType != Camera3DType::FreeCamera) {
+        freeCameraHelpPopupVisible = false;
+        freeCameraHelpMouseCaptured = false;
+        freeCameraHelpMouseLeftPressedLastFrame = false;
     }
 
     const bool shouldCaptureFirstPersonMouse =
@@ -4260,6 +4353,9 @@ void Game::init() {
     resetRawMouseInputState(/*clearDeviceAssignments=*/false);
     freeCameraInitialized = false;
     freeCameraAnchored = false;
+    freeCameraHelpPopupVisible = false;
+    freeCameraHelpMouseCaptured = false;
+    freeCameraHelpMouseLeftPressedLastFrame = false;
     gFirstPersonBlockedHintTimer[0] = 0.0f;
     gFirstPersonBlockedHintTimer[1] = 0.0f;
     if (window != nullptr) {
@@ -4632,6 +4728,40 @@ void Game::processInput() {
     const bool firstPersonP2RightClick = shouldUseDualMouseFirstPerson
         && p2MouseRightPressedNow
         && !this->firstPersonMouseP2RightPressedLastFrame;
+
+    bool freeCameraUiConsumesMouse = false;
+    if (isFreeCamera3D && this->window != nullptr) {
+        double uiMouseX = 0.0;
+        double uiMouseY = 0.0;
+        glfwGetCursorPos(this->window, &uiMouseX, &uiMouseY);
+
+        const FreeCameraHelpLayout layout = computeFreeCameraHelpLayout(this->WIDTH, this->HEIGHT);
+        const bool leftClicked = mouseLeftPressedNow && !this->freeCameraHelpMouseLeftPressedLastFrame;
+
+        if (leftClicked) {
+            if (freeCameraHelpPopupVisible) {
+                if (pointInsideRect(uiMouseX, uiMouseY, layout.closeButton)) {
+                    freeCameraHelpPopupVisible = false;
+                    freeCameraHelpMouseCaptured = true;
+                    freeCameraUiConsumesMouse = true;
+                }
+            }
+            if (!freeCameraHelpPopupVisible && !freeCameraHelpMouseCaptured) {
+                if (pointInsideRect(uiMouseX, uiMouseY, layout.helpButton)) {
+                    freeCameraHelpPopupVisible = true;
+                    freeCameraHelpMouseCaptured = true;
+                    freeCameraUiConsumesMouse = true;
+                }
+            }
+        }
+
+        if (freeCameraHelpMouseCaptured) {
+            freeCameraUiConsumesMouse = true;
+            if (!mouseLeftPressedNow) {
+                freeCameraHelpMouseCaptured = false;
+            }
+        }
+    }
 
     auto bombBlocksCellForPlayer = [&](int row, int col, int playerId) {
         for (auto* bomb : gBombs) {
@@ -5080,8 +5210,11 @@ void Game::processInput() {
         double mouseY = 0.0;
         glfwGetCursorPos(this->window, &mouseX, &mouseY);
 
-        const bool leftPressed = (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
-        const bool rightPressed = (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+        const bool leftPressedRaw = (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS);
+        const bool rightPressedRaw = (glfwGetMouseButton(this->window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS);
+        const bool allowDrag = !(editingFreeCamera && freeCameraUiConsumesMouse);
+        const bool leftPressed = allowDrag && leftPressedRaw;
+        const bool rightPressed = allowDrag && rightPressedRaw;
         const bool dragPressed = leftPressed || rightPressed;
 
         if (dragPressed) {
@@ -5203,6 +5336,7 @@ void Game::processInput() {
     this->firstPersonMouseRightPressedLastFrame = p1MouseRightPressedNow;
     this->firstPersonMouseP2LeftPressedLastFrame = p2MouseLeftPressedNow;
     this->firstPersonMouseP2RightPressedLastFrame = p2MouseRightPressedNow;
+    this->freeCameraHelpMouseLeftPressedLastFrame = mouseLeftPressedNow;
 
 }
 
@@ -8103,6 +8237,167 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
             if (!wasBlendEnabled) {
                 glDisable(GL_BLEND);
             }
+        }
+    }
+
+    const bool showFreeCameraHelpUi =
+        (state == GAME_PLAYING &&
+         viewMode == ViewMode::Mode3D &&
+         camera3DType == Camera3DType::FreeCamera &&
+         !inGameMenu.showInGameMenu &&
+         shader != 0 &&
+         VAO != 0 &&
+         overlayWhiteTexture != 0 &&
+         vocabAmarilloTexture != 0 &&
+         freeCameraHelpTexture != 0 &&
+         freeCameraCloseTexture != 0);
+
+    if (showFreeCameraHelpUi) {
+        const GLboolean wasBlendEnabled = glIsEnabled(GL_BLEND);
+        if (!wasBlendEnabled) {
+            glEnable(GL_BLEND);
+        }
+
+        glDisable(GL_DEPTH_TEST);
+        glUseProgram(shader);
+
+        const float W = (float)std::max(1, viewportWidth);
+        const float H = (float)std::max(1, viewportHeight);
+        const glm::mat4 projection = glm::ortho(0.0f, W, H, 0.0f, -1.0f, 1.0f);
+        glUniformMatrix4fv(uniformProjection, 1, GL_FALSE, glm::value_ptr(projection));
+        glUniform1i(uniformTexture, 0);
+        glUniform1f(uniformFlipX, 0.0f);
+        glUniform1f(uniformWhiteFlash, 0.0f);
+
+        glBindVertexArray(VAO);
+
+        const FreeCameraHelpLayout layout = computeFreeCameraHelpLayout(viewportWidth, viewportHeight);
+        const glm::vec4 fullUv(0.0f, 0.0f, 1.0f, 1.0f);
+
+        auto drawQuadPx = [&](GLuint texId, const UiRect& rect, const glm::vec4& tint) {
+            if (texId == 0 || rect.w <= 0.0f || rect.h <= 0.0f) {
+                return;
+            }
+
+            const float centerX = rect.x + rect.w * 0.5f;
+            const float centerY = rect.y + rect.h * 0.5f;
+            const float halfW = rect.w * 0.5f;
+            const float halfH = rect.h * 0.5f;
+
+            glm::mat4 model(1.0f);
+            model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
+            model = glm::scale(model, glm::vec3(halfW, halfH, 1.0f));
+
+            glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+            glUniform4fv(uniformUvRect, 1, glm::value_ptr(fullUv));
+            glUniform4fv(uniformTintColor, 1, glm::value_ptr(tint));
+
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texId);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        };
+
+        if (freeCameraHelpPopupVisible) {
+            const UiRect screenRect{ 0.0f, 0.0f, W, H };
+            drawQuadPx(overlayWhiteTexture, screenRect, glm::vec4(0.0f, 0.0f, 0.0f, 0.52f));
+
+            UiRect borderRect = layout.popup;
+            borderRect.x -= 6.0f;
+            borderRect.y -= 6.0f;
+            borderRect.w += 12.0f;
+            borderRect.h += 12.0f;
+            drawQuadPx(overlayWhiteTexture, borderRect, glm::vec4(0.92f, 0.78f, 0.22f, 0.90f));
+            drawQuadPx(overlayWhiteTexture, layout.popup, glm::vec4(0.08f, 0.08f, 0.08f, 0.92f));
+
+            // Renderizar cruz de cierre con UV invertidos verticalmente
+            {
+                const float centerX = layout.closeButton.x + layout.closeButton.w * 0.5f;
+                const float centerY = layout.closeButton.y + layout.closeButton.h * 0.5f;
+                const float halfW = layout.closeButton.w * 0.5f;
+                const float halfH = layout.closeButton.h * 0.5f;
+                const float aspect = W / H;
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
+                model = glm::scale(model, glm::vec3(halfW, halfH * aspect, 1.0f));
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(glm::vec4(0.0f, 1.0f, 1.0f, -1.0f)));
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, freeCameraCloseTexture);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+
+            const float padding = std::max(18.0f, layout.popup.w * 0.055f);
+            const float titleGlyphW = std::max(18.0f, layout.popup.w * 0.035f);
+            const float titleGlyphH = titleGlyphW * 1.15f;
+            const float titleSpacing = titleGlyphW * 0.18f;
+            const float titleSpaceFactor = 0.75f;
+            const std::string titleText = "CONTROLES CAMARA LIBRE";
+            const float titleWidth = measureYellowTextWidthPx(titleText, titleGlyphW, titleSpacing, titleSpaceFactor);
+            const float titleX = layout.popup.x + std::max(0.0f, (layout.popup.w - titleWidth) * 0.5f);
+            const float topPadding = std::max(padding, layout.closeButton.y + layout.closeButton.h + padding * 0.5f - layout.popup.y);
+            const float titleY = layout.popup.y + topPadding;
+            drawYellowTextLeftPx(titleText,
+                                 titleX,
+                                 titleY,
+                                 titleGlyphW,
+                                 titleGlyphH,
+                                 titleSpacing,
+                                 titleSpaceFactor,
+                                 glm::vec4(1.0f));
+
+            const float lineGlyphW = std::max(16.0f, layout.popup.w * 0.028f);
+            const float lineGlyphH = lineGlyphW * 1.05f;
+            const float lineSpacing = lineGlyphW * 0.20f;
+            const float lineSpaceFactor = 0.70f;
+            const float availableHeight = std::max(0.0f, layout.popup.h - (padding * 2.0f) - titleGlyphH);
+            const float minGap = lineGlyphH * 1.10f;
+            const float maxGap = lineGlyphH * 1.35f;
+            const float lineGap = std::max(minGap,
+                                           std::min(maxGap, availableHeight / std::max(1.0f, (float)kFreeCameraHelpLineCount)));
+
+            float lineX = layout.popup.x + padding;
+            float lineY = titleY + titleGlyphH + (padding * 0.45f);
+            const float lineMaxY = layout.popup.y + layout.popup.h - padding - lineGlyphH;
+            for (int i = 0; i < kFreeCameraHelpLineCount; ++i) {
+                if (lineY > lineMaxY) {
+                    break;
+                }
+                drawYellowTextLeftPx(kFreeCameraHelpLines[i],
+                                     lineX,
+                                     lineY,
+                                     lineGlyphW,
+                                     lineGlyphH,
+                                     lineSpacing,
+                                     lineSpaceFactor,
+                                     glm::vec4(1.0f));
+                lineY += lineGap;
+            }
+        } else {
+            // Renderizar botón de ayuda con UV invertidos verticalmente
+            {
+                const float centerX = layout.helpButton.x + layout.helpButton.w * 0.5f;
+                const float centerY = layout.helpButton.y + layout.helpButton.h * 0.5f;
+                const float halfW = layout.helpButton.w * 0.5f;
+                const float halfH = layout.helpButton.h * 0.5f;
+                const float aspect = W / H;
+                glm::mat4 model(1.0f);
+                model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
+                model = glm::scale(model, glm::vec3(halfW, halfH * aspect, 1.0f));
+                glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(glm::vec4(0.0f, 1.0f, 1.0f, -1.0f)));
+                glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, freeCameraHelpTexture);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+        }
+
+        glBindVertexArray(0);
+        glUseProgram(0);
+
+        if (!wasBlendEnabled) {
+            glDisable(GL_BLEND);
         }
     }
 }

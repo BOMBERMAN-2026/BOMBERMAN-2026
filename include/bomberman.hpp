@@ -147,6 +147,9 @@ private:
     float freeCameraRoll = 0.0f;
     bool freeCameraInitialized = false;
     bool freeCameraAnchored = false;
+    bool freeCameraHelpPopupVisible = false;
+    bool freeCameraHelpMouseCaptured = false;
+    bool freeCameraHelpMouseLeftPressedLastFrame = false;
 
     void resetFreeCameraPose();
 
