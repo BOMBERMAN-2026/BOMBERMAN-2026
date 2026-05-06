@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -4278,20 +4278,6 @@ void Game::processInput() {
         toggleFullscreen(this->window);
     }
 
-    if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
-        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
-        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
-        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
-        toggleViewMode();
-    }
-
-    if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
-        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_PRESS;
-        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
-        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
-        cycleCamera3DType(); 
-    }
-
     if (this->keys[GLFW_KEY_F10] == GLFW_PRESS && this->window != nullptr) {
         this->keys[GLFW_KEY_F10] = GLFW_REPEAT;
         glfwIconifyWindow(this->window);
@@ -4332,7 +4318,37 @@ void Game::processInput() {
             this->firstPersonCursorLocked = false;
             this->firstPersonMouseInitialized = false;
         }
-        menuScreen.processInputMenu(this->keys, inGameMenu.controlsMenu);
+        // ========== CONTROLS_MENU ==========
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {
+            // TODO, cambiar el lastkey
+            this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+
+            lastDirKey = GLFW_KEY_UNKNOWN;
+            lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+
+            return;
+        }
+        else if (inGameMenu.showInGameMenu) {
+            int result = this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
+            switch (result) {
+                case 2: 
+                    AudioManager::get().toggleMusicDisabled(); 
+                    if (!AudioManager::get().isMusicDisabled()) {
+                        std::string bgmFile = "resources/sounds/51 Menu.mp3";
+                        
+                        if (!bgmFile.empty()) {
+                            AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                        }
+                    }
+                    break;
+                case 3: AudioManager::get().toggleVFXDisable(); break;
+                case 4: toggleViewMode(); break;
+                case 5: cycleCamera3DType(); break;
+                case 6: menuScreen.requestExitGame(); inGameMenu.showInGameMenu = false; break;
+                default: break;
+            }
+        }
+        else menuScreen.processInputMenu(this->keys, inGameMenu);
         return;
     }
 
@@ -4404,6 +4420,21 @@ void Game::processInput() {
     }
 
     if (this->state != GAME_PLAYING) return;
+
+    if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
+        toggleViewMode();
+    }
+
+    if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
+        cycleCamera3DType(); 
+    }
+
 
     bool revivedSomeone = false;
     auto tryRevivePlayer = [&](int playerIndex, GLint reviveKey) {
@@ -4483,7 +4514,7 @@ void Game::processInput() {
 
         // Mirar processInputInGameMenu para saber que devuelve
         switch (result) {
-            case 1: 
+            case 2: 
                 AudioManager::get().toggleMusicDisabled(); 
                 if (!AudioManager::get().isMusicDisabled()) {
                     std::string bgmFile = "";
@@ -4500,9 +4531,9 @@ void Game::processInput() {
                     }
                 }
                 break;
-            case 2: AudioManager::get().toggleVFXDisable(); break;
-            case 3: toggleViewMode(); break;
-            case 4: cycleCamera3DType(); break;
+            case 3: AudioManager::get().toggleVFXDisable(); break;
+            case 4: toggleViewMode(); break;
+            case 5: cycleCamera3DType(); break;
             case 6: returnToMenuFromGame(/*resetRun=*/true); break;
             default: break;
         }
@@ -8218,6 +8249,10 @@ void Game::render() {
         glUseProgram(shader);
         menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        
+        if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, 
+                                                gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, gBordesMenuAtlas, bordesMenuTexture, currentGameLevel);
+        
         glUseProgram(0);
         return;
     }

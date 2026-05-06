@@ -788,7 +788,10 @@ void ControlsMenu::processInputControlsMenu(std::map<int, int>& keys, int lastKe
             AudioManager::get().playVfx(VfxSound::Select);
             switch (actualIndexSaveResetExit) {
                 // SAVE
-                case 0: saveToNonTemps(); saveToFile(); break;
+                case 0: saveToNonTemps(); saveToFile(); showControlsMenu = false; flushTemps(); 
+                    actualIndexBomberman_1_Controls = 0; actualIndexBomberman_2_Controls = -1; 
+                    actualIndexGlobalControls = -1; actualIndexSaveResetExit = -1; 
+                    readFromFile(); break;
                 // RESET
                 case 1: loadDefaultControls(); break;
                  // EXIT
