@@ -25,8 +25,8 @@ public:
     int getPlayerCount() const { return playerCount; }
     int getStageNumber() const { return stageNumber; }
     int getMapIndex() const { return mapIndex; }
-    bool isOnePlayerPlusCpu() const { return settings.players == CustomPlayersOption::OnePlayerPlusCpu; }
-    bool isCooperativeMode() const { return settings.teamMode == CustomTeamModeOption::Cooperative; }
+    bool isOnePlayerPlusCpu() const { return settings.gamemode == CustomGamemodeOptions::OnePlayerPlusCpuCoop; }
+    bool isCooperativeMode() const { return settings.gamemode == CustomGamemodeOptions::TwoPlayersCoop || settings.gamemode == CustomGamemodeOptions::OnePlayerPlusCpuCoop; }
     const std::string& getLevelPath() const { return levelPath; }
     const std::string& getHudLevelLabel() const { return hudLevelLabel; }
     float getInitialTimeSeconds() const { return initialTimeSeconds; }

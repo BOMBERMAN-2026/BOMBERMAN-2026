@@ -66,10 +66,6 @@ void CustomGameMode::activate(const CustomGameSettings& inSettings,
                               const std::array<int, 11>& inEnemyCounts) {
     settings = inSettings;
 
-    if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
-        settings.teamMode = CustomTeamModeOption::Cooperative;
-    }
-
     enemyCounts = inEnemyCounts;
 
     mapIndex = clampMapIndex(settings.mapIndex);
@@ -78,7 +74,7 @@ void CustomGameMode::activate(const CustomGameSettings& inSettings,
     hudLevelLabel = kCustomHudLabels[mapIndex];
 
     // 1P+Comp mantiene 1 jugador humano; el compañero CPU se crea como Agent en spawns de enemigos.
-    playerCount = (settings.players == CustomPlayersOption::TwoPlayers) ? 2 : 1;
+    playerCount = (settings.gamemode == CustomGamemodeOptions::TwoPlayersVs || settings.gamemode == CustomGamemodeOptions::TwoPlayersCoop) ? 2 : 1;
 
     infiniteTime = false;
     switch (settings.timeLimit) {
@@ -314,7 +310,7 @@ void CustomGameMode::spawnConfiguredEnemies(const GameMap* gameMap,
     }
 
     // 1P+Comp: crea Bomberman rojo CPU como segundo jugador no humano.
-    if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
+    if (settings.gamemode == CustomGamemodeOptions::OnePlayerPlusCpuCoop) {
         const glm::vec2 cpuSpawnPos = gameMap->getSpawnPosition(1);
         const float bomberSpeed = std::max(0.18f, defaultPlayerSpeed);
         CpuBomberman::Agent* companion = new CpuBomberman::Agent(cpuSpawnPos,

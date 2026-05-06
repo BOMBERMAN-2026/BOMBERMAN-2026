@@ -14,15 +14,11 @@
 #include "cpu_bomberman_difficulty.hpp"
 #include "sprite_atlas.hpp"
 
-enum class CustomPlayersOption {
+enum class CustomGamemodeOptions {
     OnePlayer,
-    TwoPlayers,
-    OnePlayerPlusCpu
-};
-
-enum class CustomTeamModeOption {
-    Versus,
-    Cooperative
+    TwoPlayersVs,
+    TwoPlayersCoop,
+    OnePlayerPlusCpuCoop
 };
 
 enum class CustomTimeLimitOption {
@@ -33,8 +29,7 @@ enum class CustomTimeLimitOption {
 };
 
 struct CustomGameSettings {
-    CustomPlayersOption players = CustomPlayersOption::OnePlayer;
-    CustomTeamModeOption teamMode = CustomTeamModeOption::Versus;
+    CustomGamemodeOptions gamemode = CustomGamemodeOptions::OnePlayer;
     CustomTimeLimitOption timeLimit = CustomTimeLimitOption::ThreeMinutes;
     int mapIndex = 0;
 
@@ -123,6 +118,7 @@ private:
 
     bool drawVocabGlyph(char glyph,
                         bool yellow,
+                        bool red,
                         float centerXpx,
                         float centerYpx,
                         float glyphSizePx,
@@ -134,6 +130,7 @@ private:
 
     void drawVocabTextCentered(const std::string& text,
                                bool yellow,
+                               bool red,
                                float centerXpx,
                                float centerYpx,
                                float glyphSizePx,

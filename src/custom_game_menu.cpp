@@ -18,7 +18,7 @@ namespace {
 constexpr float kCanvasWidth = 1920.0f;
 constexpr float kCanvasHeight = 1080.0f;
 
-constexpr int kMenu1Rows = 5;
+constexpr int kMenu1Rows = 4;
 constexpr int kEnemyTypeCount = 11;
 constexpr int kEnemyTotalMax = 12;
 
@@ -26,13 +26,11 @@ const std::array<float, kMenu1Rows> kMenu1ArrowXPixels = {
     210.0f,
     210.0f,
     210.0f,
-    210.0f,
     210.0f
 };
 
 const std::array<float, kMenu1Rows> kMenu1ArrowYPixels = {
-    220.0f,
-    365.0f,
+    292.5f,
     510.0f,
     660.0f,
     940.0f
@@ -45,14 +43,14 @@ const std::array<glm::vec2, kEnemyTypeCount> kEnemyCounterCenters = {
     glm::vec2(360.0f, 340.0f),
     glm::vec2(810.0f, 340.0f),
     glm::vec2(1250.0f, 340.0f),
-    glm::vec2(1690.0f, 340.0f),
     glm::vec2(360.0f, 555.0f),
     glm::vec2(810.0f, 555.0f),
     glm::vec2(1250.0f, 555.0f),
     glm::vec2(1690.0f, 555.0f),
     glm::vec2(360.0f, 765.0f),
     glm::vec2(810.0f, 765.0f),
-    glm::vec2(1250.0f, 765.0f)
+    glm::vec2(1250.0f, 765.0f),
+    glm::vec2(1690.0f, 765.0f),
 };
 
 const std::array<std::string, 5> kMapSpriteNames = {
@@ -144,8 +142,7 @@ CustomGameMenu::~CustomGameMenu() {
 }
 
 void CustomGameMenu::resetToDefaults() {
-    settings.players = CustomPlayersOption::OnePlayer;
-    settings.teamMode = CustomTeamModeOption::Versus;
+    settings.gamemode = CustomGamemodeOptions::OnePlayer;
     settings.timeLimit = CustomTimeLimitOption::ThreeMinutes;
     settings.mapIndex = 0;
 
@@ -173,9 +170,9 @@ void CustomGameMenu::initMenu1() {
     resetFlowFlags();
 
     if (menu1BackgroundTexture == 0) {
-        menu1BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu1CustomGame.jpg").c_str());
+        menu1BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu1CustomGame-v2.jpg").c_str());
         if (menu1BackgroundTexture == 0) {
-            std::cerr << "Error cargando Menu1CustomGame.jpg\n";
+            std::cerr << "Error cargando Menu1CustomGame-v2.jpg\n";
         }
     }
 
@@ -220,9 +217,9 @@ void CustomGameMenu::initMenu2() {
     resetFlowFlags();
 
     if (menu2BackgroundTexture == 0) {
-        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame-v3.jpg").c_str());
+        menu2BackgroundTexture = LoadTexture(resolveAssetPath("resources/sprites/custom_game/Menu2CustomGame-v4.jpg").c_str());
         if (menu2BackgroundTexture == 0) {
-            std::cerr << "Error cargando Menu2CustomGame.jpg\n";
+            std::cerr << "Error cargando Menu2CustomGame-v4.jpg\n";
         }
     }
 
@@ -377,6 +374,7 @@ int CustomGameMenu::getEnemyTotalCount() const {
 
 bool CustomGameMenu::drawVocabGlyph(char glyph,
                                     bool yellow,
+                                    bool red,
                                     float centerXpx,
                                     float centerYpx,
                                     float glyphSizePx,
@@ -395,6 +393,8 @@ bool CustomGameMenu::drawVocabGlyph(char glyph,
     if (upperGlyph >= '0' && upperGlyph <= '9') {
         if (yellow) {
             spriteName = std::string(1, upperGlyph) + "_Ama";
+        } else if (red) {
+            spriteName = std::string(1, upperGlyph) + "_Roj";
         } else {
             spriteName = std::string(1, upperGlyph) + "_Bla";
             if (vocabAtlas.sprites.find(spriteName) == vocabAtlas.sprites.end()) {
@@ -407,6 +407,8 @@ bool CustomGameMenu::drawVocabGlyph(char glyph,
     } else if (upperGlyph >= 'A' && upperGlyph <= 'Z') {
         if (yellow) {
             spriteName = std::string(1, upperGlyph) + "_Ama";
+        } else if (red) {
+            spriteName = std::string(1, upperGlyph) + "_Roj";
         } else {
             spriteName = std::string(1, upperGlyph) + "_Bla";
             if (vocabAtlas.sprites.find(spriteName) == vocabAtlas.sprites.end()) {
@@ -417,12 +419,24 @@ bool CustomGameMenu::drawVocabGlyph(char glyph,
             }
         }
     } else if (upperGlyph == '-') {
-        spriteName = yellow ? "-_Ama" : "-_Bla";
+        if (yellow) {
+            spriteName = "-_Ama";
+        } else if (red) {
+            spriteName = "-_Roj";
+        } else {
+            spriteName = "-_Bla";
+        }
         if (vocabAtlas.sprites.find(spriteName) == vocabAtlas.sprites.end()) {
             spriteName = "-_Ama";
         }
     } else if (upperGlyph == '/') {
-        spriteName = yellow ? "/_Ama" : "/_Bla";
+        if (yellow) {
+            spriteName = "/_Ama";
+        } else if (red) {
+            spriteName = "/_Roj";
+        } else {
+            spriteName = "/_Bla";
+        }
         if (vocabAtlas.sprites.find(spriteName) == vocabAtlas.sprites.end()) {
             spriteName = "/_Bla";
         }
@@ -468,6 +482,7 @@ bool CustomGameMenu::drawVocabGlyph(char glyph,
 
 void CustomGameMenu::drawVocabTextCentered(const std::string& text,
                                            bool yellow,
+                                           bool red,
                                            float centerXpx,
                                            float centerYpx,
                                            float glyphSizePx,
@@ -501,6 +516,7 @@ void CustomGameMenu::drawVocabTextCentered(const std::string& text,
         if (c != ' ') {
             drawVocabGlyph(c,
                            yellow,
+                           red,
                            currentCenterX,
                            centerYpx,
                            glyphSizePx,
@@ -542,30 +558,18 @@ void CustomGameMenu::processInputMenu1(std::map<int, int>& keys, ControlsMenu& c
         AudioManager::get().playVfx(VfxSound::Explosion);
         switch (menu1RowSelection) {
             case 0: {
-                if (settings.players == CustomPlayersOption::OnePlayer) {
-                    settings.players = CustomPlayersOption::TwoPlayers;
-                } else if (settings.players == CustomPlayersOption::TwoPlayers) {
-                    settings.players = CustomPlayersOption::OnePlayerPlusCpu;
+                if (settings.gamemode == CustomGamemodeOptions::OnePlayer) {
+                    settings.gamemode = CustomGamemodeOptions::TwoPlayersVs;
+                } else if (settings.gamemode == CustomGamemodeOptions::TwoPlayersVs) {
+                    settings.gamemode = CustomGamemodeOptions::TwoPlayersCoop;
+                } else if (settings.gamemode == CustomGamemodeOptions::TwoPlayersCoop) {
+                    settings.gamemode = CustomGamemodeOptions::OnePlayerPlusCpuCoop;
                 } else {
-                    settings.players = CustomPlayersOption::OnePlayer;
-                }
-
-                if (settings.players == CustomPlayersOption::OnePlayer) {
-                    settings.teamMode = CustomTeamModeOption::Versus;
-                } else if (settings.players == CustomPlayersOption::OnePlayerPlusCpu) {
-                    settings.teamMode = CustomTeamModeOption::Cooperative;
+                    settings.gamemode = CustomGamemodeOptions::OnePlayer;
                 }
                 break;
             }
             case 1: {
-                if (settings.players == CustomPlayersOption::TwoPlayers) {
-                    settings.teamMode = (settings.teamMode == CustomTeamModeOption::Versus)
-                        ? CustomTeamModeOption::Cooperative
-                        : CustomTeamModeOption::Versus;
-                }
-                break;
-            }
-            case 2: {
                 if (settings.timeLimit == CustomTimeLimitOption::OneMinute) {
                     settings.timeLimit = CustomTimeLimitOption::TwoMinutes;
                 } else if (settings.timeLimit == CustomTimeLimitOption::TwoMinutes) {
@@ -577,11 +581,11 @@ void CustomGameMenu::processInputMenu1(std::map<int, int>& keys, ControlsMenu& c
                 }
                 break;
             }
-            case 3: {
+            case 2: {
                 settings.mapIndex = (settings.mapIndex + 1) % static_cast<int>(kMapSpriteNames.size());
                 break;
             }
-            case 4:
+            case 3:
                 menuArrowSelected = true;
                 menuArrowAnimTimer = 0.0f;
                 menuSelectedWaitTimer = 0.0f;
@@ -733,31 +737,19 @@ void CustomGameMenu::renderMenu1(GLuint VAO,
     const glm::vec4 whiteColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     // Grupo de jugadores.
-    const bool is1P = (settings.players == CustomPlayersOption::OnePlayer);
-    const bool is2P = (settings.players == CustomPlayersOption::TwoPlayers);
-    const bool is1PComp = (settings.players == CustomPlayersOption::OnePlayerPlusCpu);
+    const bool is1P = (settings.gamemode == CustomGamemodeOptions::OnePlayer);
+    const bool is2PVs = (settings.gamemode == CustomGamemodeOptions::TwoPlayersVs);
+    const bool is2PCoop = (settings.gamemode == CustomGamemodeOptions::TwoPlayersCoop);
+    const bool is1PComp = (settings.gamemode == CustomGamemodeOptions::OnePlayerPlusCpuCoop);
 
-    drawAtlasSprite(is1P ? "1P_Ama" : "1P_Bla", 720.0f, 210.0f, 0.0f, 0.0f, aspect,
+    drawAtlasSprite(is1P ? "1P_Ama" : "1P_Bla", 770.0f, 230.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX, whiteColor);
-    drawAtlasSprite(is2P ? "2P_Ama" : "2P_Bla", 980.0f, 210.0f, 0.0f, 0.0f, aspect,
+    drawAtlasSprite(is2PVs ? "2PVS_Ama" : "2PVS_Bla", 980.0f, 370.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX, whiteColor);
-    drawAtlasSprite(is1PComp ? "1P1Comp_Ama" : "1P1Comp_Bla", 1390.0f, 210.0f, 0.0f, 0.0f, aspect,
+    drawAtlasSprite(is2PCoop ? "2PCoop_Ama" : "2PCoop_Bla", 1200.0f, 230.0f, 0.0f, 0.0f, aspect,
                     uniformModel, uniformUvRect, uniformTintColor, uniformFlipX, whiteColor);
-
-    // Grupo versus/cooperativo.
-    const bool modeEditable = (settings.players == CustomPlayersOption::TwoPlayers);
-    const bool vsSelected = modeEditable && (settings.teamMode == CustomTeamModeOption::Versus);
-    const bool coopSelected = (settings.teamMode == CustomTeamModeOption::Cooperative);
-    const glm::vec4 disabledTint(0.65f, 0.65f, 0.65f, 1.0f);
-    const glm::vec4 vsTint = modeEditable ? whiteColor : disabledTint;
-    const glm::vec4 coopTint = (modeEditable || is1PComp) ? whiteColor : disabledTint;
-
-    drawAtlasSprite(vsSelected ? "Vs_Ama" : "Vs_Bla", 800.0f, 365.0f, 0.0f, 0.0f, aspect,
-                    uniformModel, uniformUvRect, uniformTintColor, uniformFlipX,
-                    vsTint);
-    drawAtlasSprite(coopSelected ? "Coop_Ama" : "Coop_Bla", 1240.0f, 365.0f, 0.0f, 0.0f, aspect,
-                    uniformModel, uniformUvRect, uniformTintColor, uniformFlipX,
-                    coopTint);
+    drawAtlasSprite(is1PComp ? "1P1COMP_Ama" : "1P1COMP_Bla", 1500.0f, 370.0f, 0.0f, 0.0f, aspect,
+                    uniformModel, uniformUvRect, uniformTintColor, uniformFlipX, whiteColor);
 
     // Grupo de tiempo limite.
     const bool t1 = (settings.timeLimit == CustomTimeLimitOption::OneMinute);
@@ -864,6 +856,7 @@ void CustomGameMenu::renderMenu2(GLuint VAO,
         const bool selected = (i == enemyTypeSelection);
         drawVocabTextCentered(std::to_string(enemyCounts[i]),
                               selected,
+                              false,
                               kEnemyCounterCenters[i].x,
                               kEnemyCounterCenters[i].y,
                               51.0f,
@@ -880,6 +873,7 @@ void CustomGameMenu::renderMenu2(GLuint VAO,
     const bool totalAtLimit = (totalEnemies >= kEnemyTotalMax);
 
     drawVocabTextCentered(std::to_string(totalEnemies),
+                          false,
                           totalAtLimit,
                           1410.0f,
                           186.0f,
@@ -893,6 +887,7 @@ void CustomGameMenu::renderMenu2(GLuint VAO,
 
     drawVocabTextCentered(std::to_string(kEnemyTotalMax),
                           false,
+                          false,
                           1555.0f,
                           186.0f,
                           40.0f,
@@ -905,7 +900,7 @@ void CustomGameMenu::renderMenu2(GLuint VAO,
 
     // Flecha Play: misma bomba y mismas coordenadas que la fila NEXT del Menu 1.
     if (menuArrowTexture != 0) {
-        const float arrowCenterX = kMenu1ArrowXPixels[kMenu1Rows - 1];
+        const float arrowCenterX = kMenu1ArrowXPixels[kMenu1Rows - 1] - 120.0f; // Ajuste para que quede a la izquierda del texto "NEXT".
         const float arrowCenterY = kMenu1ArrowYPixels[kMenu1Rows - 1] + 10;
 
         std::string spriteNameToUse = "explosion_0";

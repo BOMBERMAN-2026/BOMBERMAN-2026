@@ -1,18 +1,15 @@
 {
-  "ruta_imagen": "resources/sprites/custom_game/AtlasMenu1.png",
+  "ruta_imagen": "resources/sprites/custom_game/AtlasMenu1-v2.png",
   "tamano_imagen": { "ancho": 1920, "alto": 1080 },
   "sprites": {
     "1P_Bla": {"x": 0, "y": 0, "w": 91, "h": 123},
     "1P_Ama": {"x": 91, "y": 0, "w": 91, "h": 123},
-    "2P_Bla": {"x": 182, "y": 0, "w": 147, "h": 123},
-    "2P_Ama": {"x": 329, "y": 0, "w": 147, "h": 123},
-    "1P1Comp_Bla": {"x": 476, "y": 0, "w": 402, "h": 123},
-    "1P1Comp_Ama": {"x": 878, "y": 0, "w": 402, "h": 123},
-
-    "Vs_Bla": {"x": 0, "y": 123, "w": 355, "h": 126},
-    "Vs_Ama": {"x": 355, "y": 123, "w": 355, "h": 126},
-    "Coop_Bla": {"x": 710, "y": 123, "w": 271, "h": 126},
-    "Coop_Ama": {"x": 981, "y": 123, "w": 271, "h": 126},
+    "2PVS_Bla": {"x": 182, "y": 0, "w": 270, "h": 123},
+    "2PVS_Ama": {"x": 452, "y": 0, "w": 270, "h": 123},
+    "2PCoop_Bla": {"x": 722, "y": 0, "w": 242, "h": 123},
+    "2PCoop_Ama": {"x": 964, "y": 0, "w": 242, "h": 123},
+    "1P1COMP_Bla": {"x": 1206, "y": 0, "w": 345, "h": 123},
+    "1P1COMP_Ama": {"x": 1551, "y": 0, "w": 345, "h": 123},
 
     "1min_Bla": {"x": 0, "y": 249, "w": 144, "h": 64},
     "1min_Ama": {"x": 144, "y": 249, "w": 144, "h": 64},
