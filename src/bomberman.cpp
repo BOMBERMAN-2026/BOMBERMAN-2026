@@ -2139,26 +2139,23 @@ static FreeCameraHelpLayout computeFreeCameraHelpLayout(int width, int height)
     FreeCameraHelpLayout layout;
     const float W = (float)std::max(1, width);
     const float H = (float)std::max(1, height);
-    const float aspect = W / H;
 
     const float margin = std::max(12.0f, H * 0.02f);
     const float buttonSize = std::max(48.0f, std::min(96.0f, H * 0.10f));
-    const float buttonSizeAdjusted = buttonSize / aspect;
-    layout.helpButton = UiRect{ W - margin - buttonSize, margin, buttonSize, buttonSizeAdjusted };
+    layout.helpButton = UiRect{ W - margin - buttonSize, margin, buttonSize, buttonSize };
 
     const float popupW = std::min(W * 0.78f, 840.0f);
     const float popupH = std::min(H * 0.68f, 520.0f);
     layout.popup = UiRect{ (W - popupW) * 0.5f, (H - popupH) * 0.5f + margin * 0.5f, popupW, popupH };
 
     const float closeSize = std::max(32.0f, std::min(64.0f, popupH * 0.14f));
-    const float closeSizeAdjusted = closeSize / aspect;
     const float closePadX = std::max(4.0f, popupH * 0.02f);
     const float closePadY = std::max(2.0f, popupH * 0.01f);
     layout.closeButton = UiRect{
         layout.popup.x + layout.popup.w - closeSize - closePadX,
         layout.popup.y + closePadY,
         closeSize,
-        closeSizeAdjusted
+        closeSize
     };
 
     return layout;
@@ -4735,7 +4732,19 @@ void Game::processInput() {
         double uiMouseY = 0.0;
         glfwGetCursorPos(this->window, &uiMouseX, &uiMouseY);
 
-        const FreeCameraHelpLayout layout = computeFreeCameraHelpLayout(this->WIDTH, this->HEIGHT);
+        int windowWidth = 0;
+        int windowHeight = 0;
+        int framebufferWidth = 0;
+        int framebufferHeight = 0;
+        glfwGetWindowSize(this->window, &windowWidth, &windowHeight);
+        glfwGetFramebufferSize(this->window, &framebufferWidth, &framebufferHeight);
+
+        const float mouseScaleX = (windowWidth > 0) ? ((float)framebufferWidth / (float)windowWidth) : 1.0f;
+        const float mouseScaleY = (windowHeight > 0) ? ((float)framebufferHeight / (float)windowHeight) : 1.0f;
+        uiMouseX *= mouseScaleX;
+        uiMouseY *= mouseScaleY;
+
+        const FreeCameraHelpLayout layout = computeFreeCameraHelpLayout(framebufferWidth, framebufferHeight);
         const bool leftClicked = mouseLeftPressedNow && !this->freeCameraHelpMouseLeftPressedLastFrame;
 
         if (leftClicked) {
@@ -8315,12 +8324,11 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 const float centerY = layout.closeButton.y + layout.closeButton.h * 0.5f;
                 const float halfW = layout.closeButton.w * 0.5f;
                 const float halfH = layout.closeButton.h * 0.5f;
-                const float aspect = W / H;
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
-                model = glm::scale(model, glm::vec3(halfW, halfH * aspect, 1.0f));
+                model = glm::scale(model, glm::vec3(halfW, halfH, 1.0f));
                 glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-                glUniform4fv(uniformUvRect, 1, glm::value_ptr(glm::vec4(0.0f, 1.0f, 1.0f, -1.0f)));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(glm::vec4(0.0f, 1.0f, 1.0f, 0.0f)));
                 glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, freeCameraCloseTexture);
@@ -8380,12 +8388,11 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
                 const float centerY = layout.helpButton.y + layout.helpButton.h * 0.5f;
                 const float halfW = layout.helpButton.w * 0.5f;
                 const float halfH = layout.helpButton.h * 0.5f;
-                const float aspect = W / H;
                 glm::mat4 model(1.0f);
                 model = glm::translate(model, glm::vec3(centerX, centerY, 0.0f));
-                model = glm::scale(model, glm::vec3(halfW, halfH * aspect, 1.0f));
+                model = glm::scale(model, glm::vec3(halfW, halfH, 1.0f));
                 glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
-                glUniform4fv(uniformUvRect, 1, glm::value_ptr(glm::vec4(0.0f, 1.0f, 1.0f, -1.0f)));
+                glUniform4fv(uniformUvRect, 1, glm::value_ptr(glm::vec4(0.0f, 1.0f, 1.0f, 0.0f)));
                 glUniform4fv(uniformTintColor, 1, glm::value_ptr(glm::vec4(1.0f)));
                 glActiveTexture(GL_TEXTURE0);
                 glBindTexture(GL_TEXTURE_2D, freeCameraHelpTexture);
