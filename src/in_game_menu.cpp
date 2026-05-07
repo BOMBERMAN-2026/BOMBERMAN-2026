@@ -37,7 +37,7 @@ InGameMenu::InGameMenu() : showInGameMenu(false), menuArrowTexture(0), blackText
         "2D",
         "LOCKED"
     };
-
+    applyVolumeSettings();
 }
 
 InGameMenu::~InGameMenu() {
@@ -204,6 +204,15 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     glBindVertexArray(0);
 }
 
+void InGameMenu::applyVolumeSettings() {
+    try {
+        float musicVol = std::stof(currentOptionsSelected[0]) / 100.0f;
+        float sfxVol = std::stof(currentOptionsSelected[1]) / 100.0f;
+        AudioManager::get().setBgmVolume(musicVol);
+        AudioManager::get().setVfxVolume(sfxVol);
+    } catch (...) {}
+}
+
 // ============================== INPUT ==============================
 
 int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEnabled) {
@@ -258,6 +267,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
                 if (num <= 0) {}
                 else num = num - 5;
                 currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
                 break;
             // SOUNDS
             case 3:
@@ -265,6 +275,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
                 if (num <= 0) {}
                 else num = num - 5;
                 currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
                 break;
             default:
                 break;
@@ -281,6 +292,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
                 if (num >= 100) {}
                 else num = num + 5;
                 currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
                 break;
             // SOUNDS
             case 3:
@@ -288,6 +300,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
                 if (num >= 100) {}
                 else num = num + 5;
                 currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
                 break;
             default:
                 break;

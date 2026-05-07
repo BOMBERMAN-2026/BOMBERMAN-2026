@@ -61,6 +61,7 @@ class InGameMenu {
                               SpriteAtlas gVocabNaranjaAtlas, GLuint vocabNaranjaTexture, 
                               SpriteAtlas gBordesMenuAtlas, GLuint bordesMenuTexture, std::string currentStage);
 
+        void applyVolumeSettings();
         int processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEnabled);
 };
 
