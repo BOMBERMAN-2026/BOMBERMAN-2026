@@ -3717,11 +3717,14 @@ void Game::resetFreeCameraPose() {
     const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
     cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
     cameraFollowDistance = 6.8f;
-    freeCameraPosX = target.x + mapRadius * 0.90f + 1.4f;
-    freeCameraPosY = mapRadius * 1.05f + 3.2f;
-    freeCameraPosZ = target.z + mapRadius * 0.95f + 1.6f;
-    freeCameraYaw = -0.68f;
-    freeCameraPitch = -0.34f;
+    // freeCameraPosX = target.x + mapRadius * 0.90f + 0.0f;
+    // freeCameraPosY = mapRadius * 1.05f + 0.0f;
+    // freeCameraPosZ = target.z + mapRadius * 0.95f + 1.6f;
+    freeCameraPosX = 0.6f;
+    freeCameraPosY = 11.0f;
+    freeCameraPosZ = 13.4f;
+    freeCameraYaw = 0.0f;  // Mirar hacia el mapa
+    freeCameraPitch = -0.45f;  // Pitch para mirar abajo
     freeCameraRoll = 0.0f;
 }
 
@@ -3858,12 +3861,12 @@ void Game::onMouseScroll(double yOffset) {
         const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
         const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
         if (cameraOrbitDistance <= 0.0f) {
-            cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
+            cameraOrbitDistance = mapRadius * 1.10f + 0.6f;
         }
 
         cameraOrbitDistance -= scroll * kOrbitZoomStep;
         const float minDistance = std::max(4.0f, mapRadius * 0.58f);
-        const float maxDistance = mapRadius * 2.55f + 18.0f;
+        const float maxDistance = mapRadius * 2.55f + 12.0f;
         cameraOrbitDistance = std::max(minDistance, std::min(maxDistance, cameraOrbitDistance));
     } else if (camera3DType == Camera3DType::PerspectiveMobile) {
         cameraFollowDistance -= scroll * (kOrbitZoomStep * 0.62f);
@@ -4249,7 +4252,8 @@ void Game::init() {
     }
     firstPersonPitch = -0.18f;
     firstPersonPitchP2 = -0.18f;
-    cameraOrbitPitch = -0.18f;
+    cameraOrbitPitch = 90.0f;
+    cameraOrbitYaw = 90.0f;
     cameraOrbitDistance = 0.0f;
     cameraFollowDistance = 6.8f;
     cameraOrbitDragging = false;
@@ -4271,6 +4275,7 @@ void Game::init() {
 
 // Lee teclas y aplica acciones (movimiento, animaci+�n y colocar bombas).
 void Game::processInput() {
+
     // Atajos globales de ventana (tambi�n disponibles en intro/menu).
     if (this->keys[inGameMenu.controlsMenu.swapWindowModeKey] == GLFW_PRESS || this->keys[GLFW_KEY_F11] == GLFW_PRESS) {
         this->keys[inGameMenu.controlsMenu.swapWindowModeKey] = GLFW_REPEAT;
@@ -6077,7 +6082,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         trackedPlayerCenter = ndcToWorld3D(gameMap, trackedBasePos, trackedHeight);
     }
 
-    glm::vec3 cameraPos(mapRadius * 0.70f, mapRadius * 1.55f + 3.0f, mapRadius * 1.25f + 2.5f);
+    glm::vec3 cameraPos(-0.0177436f, 17.8751f, 2.21791);
     glm::vec3 cameraTarget(mapCenter);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
 
@@ -6087,6 +6092,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         up = glm::vec3(0.0f, 0.0f, -1.0f);
     } else if (camera3DType == Camera3DType::PerspectiveFixed) {
         const float orbitRadius = cameraOrbitDistance;
+        //const glm::vec3 pivot = glm::vec3(-0.0177436f, 17.8751f, 2.21791);
         const glm::vec3 pivot = mapCenter + glm::vec3(0.0f, mapRadius * 0.30f + 0.75f, 0.0f);
         const float elevation = cameraOrbitPitch;
         const float horizontalRadius = std::cos(elevation) * orbitRadius;
