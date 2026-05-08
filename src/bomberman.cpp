@@ -2726,7 +2726,7 @@ void Game::enterRankingScreen() {
     rankingAutoExitSeconds = 15.0f; // NEW timeout 15 seconds
 
     AudioManager::get().stopBgm();
-    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/10 High Scores.mp3"), /*loop=*/true, 0.35f);
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/10 High Scores.mp3"), /*loop=*/true, 0.60f);
 
     state = GAME_RANKING;
 }
@@ -2980,7 +2980,7 @@ void Game::updateTimeUpSequence(float deltaTime) {
         std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
         cinematicPlayer.open(videoPath);
 
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.60f);
     }
 }
 
@@ -3528,7 +3528,7 @@ void Game::startNewRun(GameMode newMode) {
 
         // Reproducir jingle "Game Start" durante la cinem�tica del nivel
         AudioManager::get().stopBgm();
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
         menuScreen.resetTransition();
         return;
@@ -3547,7 +3547,7 @@ void Game::startNewRun(GameMode newMode) {
 
     // Reproducir jingle "Game Start" durante la cinem�tica del nivel
     AudioManager::get().stopBgm();
-    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
 
     // Por si el men� dej� la marca de transici�n activa.
@@ -3590,7 +3590,7 @@ void Game::advanceToNextLevel() {
 
         // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
         AudioManager::get().stopBgm();
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
         return;
     }
@@ -3632,7 +3632,7 @@ void Game::advanceToNextLevel() {
 
     // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
     AudioManager::get().stopBgm();
-    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
 }
 
@@ -4217,21 +4217,21 @@ void Game::init() {
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.6f);
         menuScreen.initMenu();
         return;
     }
 
     // ========== CUSTOM GAME (PANTALLA 1) ==========
     if (this->state == GAME_CUSTOM_MENU_1) {
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.6f);
         customGameMenu.initMenu1();
         return;
     }
 
     // ========== CUSTOM GAME (PANTALLA 2) ==========
     if (this->state == GAME_CUSTOM_MENU_2) {
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.6f);
         customGameMenu.initMenu2();
         return;
     }
@@ -4331,13 +4331,15 @@ void Game::processInput() {
         else if (inGameMenu.showInGameMenu) {
             int result = this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
             switch (result) {
+                case 1:
+                    inGameMenu.showInGameMenu = false; break;
                 case 2: 
                     AudioManager::get().toggleMusicDisabled(); 
                     if (!AudioManager::get().isMusicDisabled()) {
                         std::string bgmFile = "resources/sounds/51 Menu.mp3";
                         
                         if (!bgmFile.empty()) {
-                            AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                            AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
                         }
                     }
                     break;
@@ -4483,7 +4485,7 @@ void Game::processInput() {
             }
 
             if (!bgmFile.empty()) {
-                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
             }
         }
 
@@ -4494,8 +4496,9 @@ void Game::processInput() {
 
     // ========== IN_GAME_MENU ==========
     if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {  this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed); }
+        else this->inGameMenu.showInGameMenu = !this->inGameMenu.showInGameMenu;
         this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
-        this->inGameMenu.showInGameMenu = true;
     }
     // Salimos para no recibir m�s inputs en caso de haber desplegado el menu
     if (this->inGameMenu.showInGameMenu) { 
@@ -4527,7 +4530,7 @@ void Game::processInput() {
                     }
 
                     if (!bgmFile.empty()) {
-                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
                     }
                 }
                 break;
@@ -5275,7 +5278,7 @@ void Game::update() {
                 
                 // Reproducir m�sica de intro de Historia antes de la cinem�tica
                 AudioManager::get().stopBgm();
-                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.6f);
 
 
                 menuScreen.resetTransition();
@@ -5290,7 +5293,7 @@ void Game::update() {
                 
                 // Reproducir m�sica de intro de Historia antes de la cinem�tica
                 AudioManager::get().stopBgm();
-                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/11 Vs. Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/11 Vs. Game ~ Intro.mp3"), /*loop=*/false, 0.6f);
 
 
                 menuScreen.resetTransition();
@@ -5374,7 +5377,7 @@ void Game::update() {
             loadLevel(0, /*preserveLivesAndScore=*/false);
 
             AudioManager::get().stopBgm();
-            AudioManager::get().playBgm(resolveAssetPath("resources/sounds/03 BGM 1.mp3"), /*loop=*/true, 0.35f);
+            AudioManager::get().playBgm(resolveAssetPath("resources/sounds/03 BGM 1.mp3"), /*loop=*/true, 0.60f);
             return;
         }
 
@@ -5525,7 +5528,7 @@ void Game::update() {
             }
 
             if (!bgmFile.empty()) {
-                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
             }
         };
 
@@ -5608,7 +5611,7 @@ void Game::update() {
                     }
                     cinematicPlayer.open(videoPath);
 
-                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
                 } else if (action == VsCinematicPostAction::AdvanceNextLevel) {
                     advanceToNextLevel();
                 } else if (action == VsCinematicPostAction::ReturnToMenu) {

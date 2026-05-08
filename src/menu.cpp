@@ -171,18 +171,18 @@ void MenuScreen::renderMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLui
 // ============================== INPUT ==============================
 
 void MenuScreen::processInputMenu(std::map<int, int>& keys, InGameMenu& configMenu) {
-    if (keys[configMenu.controlsMenu.upKey_P1] == GLFW_PRESS) {
+    if (keys[configMenu.controlsMenu.upKeyMenus] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection - 1 + NUM_MENU_OPTIONS) % NUM_MENU_OPTIONS;
             AudioManager::get().playVfx(VfxSound::Select);
-            keys[configMenu.controlsMenu.upKey_P1] = GLFW_REPEAT;
+            keys[configMenu.controlsMenu.upKeyMenus] = GLFW_REPEAT;
         }
     }
-    if (keys[configMenu.controlsMenu.downKey_P1] == GLFW_PRESS) {
+    if (keys[configMenu.controlsMenu.downKeyMenus] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;
             AudioManager::get().playVfx(VfxSound::Select);
-            keys[configMenu.controlsMenu.downKey_P1] = GLFW_REPEAT;
+            keys[configMenu.controlsMenu.downKeyMenus] = GLFW_REPEAT;
         }
     }
 

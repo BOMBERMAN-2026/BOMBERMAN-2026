@@ -542,16 +542,16 @@ void CustomGameMenu::processInputMenu1(std::map<int, int>& keys, ControlsMenu& c
         return;
     }
 
-    if (keys[controls.upKey_P1] == GLFW_PRESS) {
+    if (keys[controls.upKeyMenus] == GLFW_PRESS) {
         menu1RowSelection = (menu1RowSelection - 1 + kMenu1Rows) % kMenu1Rows;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[controls.upKey_P1] = GLFW_REPEAT;
+        keys[controls.upKeyMenus] = GLFW_REPEAT;
     }
 
-    if (keys[controls.downKey_P1] == GLFW_PRESS) {
+    if (keys[controls.downKeyMenus] == GLFW_PRESS) {
         menu1RowSelection = (menu1RowSelection + 1) % kMenu1Rows;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[controls.downKey_P1] = GLFW_REPEAT;
+        keys[controls.downKeyMenus] = GLFW_REPEAT;
     }
 
     if (keys[controls.selectKey] == GLFW_PRESS) {
@@ -612,34 +612,34 @@ void CustomGameMenu::processInputMenu2(std::map<int, int>& keys, ControlsMenu& c
         return;
     }
 
-    if (keys[GLFW_KEY_LEFT] == GLFW_PRESS) {
+    if (keys[controls.leftKeyMenus] == GLFW_PRESS) {
         enemyTypeSelection = (enemyTypeSelection - 1 + kEnemyTypeCount) % kEnemyTypeCount;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[GLFW_KEY_LEFT] = GLFW_REPEAT;
+        keys[controls.leftKeyMenus] = GLFW_REPEAT;
     }
 
-    if (keys[GLFW_KEY_RIGHT] == GLFW_PRESS) {
+    if (keys[controls.rightKeyMenus] == GLFW_PRESS) {
         enemyTypeSelection = (enemyTypeSelection + 1) % kEnemyTypeCount;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[GLFW_KEY_RIGHT] = GLFW_REPEAT;
+        keys[controls.rightKeyMenus] = GLFW_REPEAT;
     }
 
-    if (keys[GLFW_KEY_UP] == GLFW_PRESS) {
+    if (keys[controls.upKeyMenus] == GLFW_PRESS) {
         const int totalNow = getEnemyTotalCount();
         if (totalNow < kEnemyTotalMax) {
             enemyCounts[enemyTypeSelection] += 1;
             AudioManager::get().playVfx(VfxSound::Select);
         }
-        keys[GLFW_KEY_UP] = GLFW_REPEAT;
+        keys[controls.upKeyMenus] = GLFW_REPEAT;
     }
 
-    if (keys[GLFW_KEY_DOWN] == GLFW_PRESS) {
+    if (keys[controls.downKeyMenus] == GLFW_PRESS) {
         const int oldCount = enemyCounts[enemyTypeSelection];
         enemyCounts[enemyTypeSelection] = std::max(0, enemyCounts[enemyTypeSelection] - 1);
         if (enemyCounts[enemyTypeSelection] != oldCount) {
             AudioManager::get().playVfx(VfxSound::Select);
         }
-        keys[GLFW_KEY_DOWN] = GLFW_REPEAT;
+        keys[controls.downKeyMenus] = GLFW_REPEAT;
     }
 
     if (keys[controls.selectKey] == GLFW_PRESS) {

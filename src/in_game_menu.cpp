@@ -32,8 +32,8 @@ std::vector<std::string> currentOptionsSelected;
 InGameMenu::InGameMenu() : showInGameMenu(false), menuArrowTexture(0), blackTexture(0), 
                            inGameMenuHeight(0.55f), inGameMenuWidth(0.30f), posSeleccion(0) {
     currentOptionsSelected = {
-        "100",
-        "100",
+        "50",
+        "50",
         "2D",
         "LOCKED"
     };
@@ -226,6 +226,14 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
     //  6 -> hay que volver al menu de seleccion de juego
     int result = -1;
 
+    if (keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        result = 1;
+        showInGameMenu = false;
+        posSeleccion = 0;
+        keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
+        return result;
+    }
+
     if (keys[controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
         result = 3;
         currentOptionsSelected[2] == "2D" ? currentOptionsSelected[2] = "3D" : currentOptionsSelected[2] = "2D";
@@ -246,19 +254,19 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
         return result;
     }
 
-    if (keys[controlsMenu.downKey_P1] == GLFW_PRESS) {
+    if (keys[controlsMenu.downKeyMenus] == GLFW_PRESS) {
         posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[controlsMenu.downKey_P1] = GLFW_REPEAT;
+        keys[controlsMenu.downKeyMenus] = GLFW_REPEAT;
     }
     
-    if (keys[controlsMenu.upKey_P1] == GLFW_PRESS) {
+    if (keys[controlsMenu.upKeyMenus] == GLFW_PRESS) {
         posSeleccion <= 0 ? posSeleccion = inGameMenuOptions.size() - 1 : posSeleccion -= 1;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[controlsMenu.upKey_P1] = GLFW_REPEAT;
+        keys[controlsMenu.upKeyMenus] = GLFW_REPEAT;
     }
 
-    if (keys[controlsMenu.leftKey_P1] == GLFW_PRESS) {
+    if (keys[controlsMenu.leftKeyMenus] == GLFW_PRESS) {
         int num = 0;
         switch (posSeleccion) {
             // MUSIC
@@ -280,10 +288,10 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
             default:
                 break;
         }
-        keys[controlsMenu.leftKey_P1] = GLFW_REPEAT;
+        keys[controlsMenu.leftKeyMenus] = GLFW_REPEAT;
     }
 
-    if (keys[controlsMenu.rightKey_P1] == GLFW_PRESS) {
+    if (keys[controlsMenu.rightKeyMenus] == GLFW_PRESS) {
         int num = 0;
         switch (posSeleccion) {
             // MUSIC
@@ -305,7 +313,7 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
             default:
                 break;
         }
-        keys[controlsMenu.rightKey_P1] = GLFW_REPEAT;
+        keys[controlsMenu.rightKeyMenus] = GLFW_REPEAT;
     }
 
     if (keys[controlsMenu.selectKey] == GLFW_PRESS) {
