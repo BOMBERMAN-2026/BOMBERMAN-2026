@@ -10,7 +10,7 @@
  */
 class Babosa : public Enemy {
 public:
-    static constexpr float kSpeed = 0.13f;
+    static constexpr float kSpeed = 0.17f;
 
     Babosa(glm::vec2 pos, glm::vec2 size);
     ~Babosa() override;

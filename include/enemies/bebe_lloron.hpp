@@ -10,7 +10,7 @@
  */
 class BebeLloron : public Enemy {
 public:
-    static constexpr float kSpeed = 0.16f;
+    static constexpr float kSpeed = 0.20f;
 
     BebeLloron(glm::vec2 pos, glm::vec2 size);
     ~BebeLloron() override;

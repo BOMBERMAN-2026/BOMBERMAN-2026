@@ -23,7 +23,7 @@ extern GLuint enemyTexture;
 DragonJoven::DragonJoven(glm::vec2 pos, glm::vec2 size)
     : Enemy(pos, size, kSpeed, /*hp=*/1, /*score=*/400),
       fireCooldown(0.0f),
-      fireCooldownMax(3.0f),  // Cada 3 segundos puede escupir fuego
+      fireCooldownMax(2.0f),  // Cada 2 segundos puede escupir fuego
       fireRange(2),
       isCharging(false),
       chargeTimer(0.0f),

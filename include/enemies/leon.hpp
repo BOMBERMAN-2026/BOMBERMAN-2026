@@ -10,7 +10,7 @@
  */
 class Leon : public Enemy {
 public:
-    static constexpr float kSpeed = 0.18f;
+    static constexpr float kSpeed = 0.24f;
 
     Leon(glm::vec2 pos, glm::vec2 size);
     ~Leon() override;

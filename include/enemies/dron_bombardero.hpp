@@ -12,8 +12,8 @@ enum class DronState {
 
 class DronBombardero : public Enemy {
 public:
-    static constexpr float kSpeed    = 0.17f;
-    static constexpr float kFireSpeed = 0.22f;
+    static constexpr float kSpeed    = 0.20f;
+    static constexpr float kFireSpeed = 0.28f;
 
     DronBombardero(glm::vec2 pos, glm::vec2 size,
                    const std::string& skinBase = "dronrosa");
