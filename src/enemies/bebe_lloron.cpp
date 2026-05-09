@@ -114,7 +114,7 @@ void BebeLloron::Update() {
         }
 
         patrolTimer += deltaTime;
-        if (patrolTimer >= patrolInterval) {
+        if (patrolTimer >= patrolInterval && !movingToTarget) {
             patrolTimer = 0.0f;
             facing = randomDirection();
         }
