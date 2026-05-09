@@ -206,8 +206,6 @@ void DronBombardero::updateNormal(float dist, float step) {
         if (!tryMove(toPlayer, step)) {
             EnemyDirection alt = randomDirection();
             tryMove(alt, step);
-        } else {
-            facing = toPlayer;
         }
     }
     updateWalkAnimation(false);
@@ -248,8 +246,6 @@ void DronBombardero::updateFireMode(float dist, float step) {
         if (!tryMove(toPlayer, fastStep)) {
             EnemyDirection alt = randomDirection();
             tryMove(alt, fastStep);
-        } else {
-            facing = toPlayer;
         }
     }
     updateWalkAnimation(true);
