@@ -106,8 +106,8 @@ private:
 
     // Cámara 3D avanzada (estado interno de control/cursor).
     float cameraOrbitYaw = 0.0f;
-    float cameraOrbitPitch = -0.18f;
-    float cameraOrbitDistance = 0.0f;
+    float cameraOrbitPitch = 1.4f;
+    float cameraOrbitDistance;
     float cameraFollowDistance = 6.8f;
     bool cameraOrbitDragging = false;
     double cameraOrbitLastMouseX = 0.0;

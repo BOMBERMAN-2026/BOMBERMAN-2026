@@ -76,6 +76,12 @@ class ControlsMenu {
         GLint swapWindowModeKey_temp;
         GLint selectKey_temp;
 
+        // Controles fijos para todos los menus
+        GLint upKeyMenus;
+        GLint downKeyMenus;
+        GLint leftKeyMenus;
+        GLint rightKeyMenus;
+
         ControlsMenu();
         ~ControlsMenu();
 

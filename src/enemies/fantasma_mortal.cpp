@@ -237,8 +237,7 @@ void FantasmaMortal::Update() {
         }
 
         if (bestDir != EnemyDirection::NONE && bestGain >= -0.0001f) {
-            facing = bestDir;
-            tryMove(facing, movementStepForDirection(facing));
+            tryMove(bestDir, movementStepForDirection(bestDir));
 
             switch (facing) {
                 case EnemyDirection::LEFT:

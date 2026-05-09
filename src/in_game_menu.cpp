@@ -13,15 +13,15 @@ static constexpr float scaleUsualHud = 0.0015f;
 static constexpr glm::vec2 menuOptionPos(0.0f, 0.0f);
 static constexpr glm::vec2 pausePos(-0.45f, 0.45f);
 static constexpr glm::vec2 initMenuOptionsPos(-0.45f, 0.27f);
-static constexpr glm::vec2 currentOptionsSelectedPos(0.05f, 0.145f);
+static constexpr glm::vec2 currentOptionsSelectedPos(0.05f, 0.025f);
 
 const std::vector<std::string> inGameMenuOptions = {
     "CONTINUE",
+    "CONTROLS",
     "MUSIC",
     "SOUNDS",
     "GRAPHICS",
     "CAMERA",
-    "CONTROLS",
     "EXIT"
 };
 
@@ -32,12 +32,12 @@ std::vector<std::string> currentOptionsSelected;
 InGameMenu::InGameMenu() : showInGameMenu(false), menuArrowTexture(0), blackTexture(0), 
                            inGameMenuHeight(0.55f), inGameMenuWidth(0.30f), posSeleccion(0) {
     currentOptionsSelected = {
-        "ON",
-        "ON",
+        "50",
+        "50",
         "2D",
         "LOCKED"
     };
-
+    applyVolumeSettings();
 }
 
 InGameMenu::~InGameMenu() {
@@ -141,7 +141,7 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
 
     // Renderizar fondo del menú
     glm::mat4 model = glm::mat4(1.0f);
-    model = glm::translate(model, glm::vec3(menuOptionPos, 0.0f)); // Le damos la posición fixeada del menú
+    model = glm::translate(model, glm::vec3(menuOptionPos, 0.01f)); // Le damos la posición fixeada del menú
     model = glm::scale(model, glm::vec3(inGameMenuHeight, inGameMenuHeight, 1.0f));
     glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(model));
 
@@ -166,9 +166,9 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
     else currentBorder = "BordeStage4";
 
     glm::vec4 borderUvRect(0.0f, 0.0f, 1.0f, 1.0f);
-    if (getUvRectForSprite(gBordesMenuAtlas, currentBorder, borderUvRect)) {  // or appropriate stage
+    if (getUvRectForSprite(gBordesMenuAtlas, currentBorder, borderUvRect)) {
         glm::mat4 borderModel = glm::mat4(1.0f);
-        borderModel = glm::translate(borderModel, glm::vec3(menuOptionPos, 0.05f));  // slightly in front of background
+        borderModel = glm::translate(borderModel, glm::vec3(menuOptionPos, 0.05f));
         borderModel = glm::scale(borderModel, glm::vec3(0.645f, 0.638f, 1.0f));
         
         glUniformMatrix4fv(uniformModel, 1, GL_FALSE, glm::value_ptr(borderModel));
@@ -194,11 +194,23 @@ void InGameMenu::renderInGameMenu(GLuint VAO, GLuint shader, GLuint uniformModel
 
             // Parte de la derecha
         for (int i=0; i < currentOptionsSelected.size();  i++) {
-            renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 1);
+            if (i == 0 || i == 1) {
+                renderTextString("<- " + currentOptionsSelected[i] + " ->", currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 1);
+            }
+            else renderTextString(currentOptionsSelected[i], currentOptionsSelectedPos + glm::vec2(0.0f, -i * 0.125f), scaleUsualHud, gVocabAmarilloAtlas, vocabAmarilloTexture, VAO, uniformModel, uniformProjection, uniformUvRect, 1);
         }
     }
     
     glBindVertexArray(0);
+}
+
+void InGameMenu::applyVolumeSettings() {
+    try {
+        float musicVol = std::stof(currentOptionsSelected[0]) / 100.0f;
+        float sfxVol = std::stof(currentOptionsSelected[1]) / 100.0f;
+        AudioManager::get().setBgmVolume(musicVol);
+        AudioManager::get().setVfxVolume(sfxVol);
+    } catch (...) {}
 }
 
 // ============================== INPUT ==============================
@@ -207,12 +219,20 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
 
     // Devolvemos un valor entre los siguientes
     // -1 -> no hay que hacer nada en bomberman.cpp
-    //  1 -> hay que silenciar la musica
-    //  2 -> hay que silenciar los efectos de sonido
-    //  3 -> hay que alternar entre 2D y 3D
-    //  4 -> hay que cambiar la camara
+    //  2 -> hay que silenciar la musica
+    //  3 -> hay que silenciar los efectos de sonido
+    //  4 -> hay que alternar entre 2D y 3D
+    //  5 -> hay que cambiar la camara
     //  6 -> hay que volver al menu de seleccion de juego
     int result = -1;
+
+    if (keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        result = 1;
+        showInGameMenu = false;
+        posSeleccion = 0;
+        keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
+        return result;
+    }
 
     if (keys[controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
         result = 3;
@@ -234,16 +254,66 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
         return result;
     }
 
-    if (keys[controlsMenu.downKey_P1] == GLFW_PRESS) {
+    if (keys[controlsMenu.downKeyMenus] == GLFW_PRESS) {
         posSeleccion >= inGameMenuOptions.size() - 1 ? posSeleccion = 0 : posSeleccion += 1;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[controlsMenu.downKey_P1] = GLFW_REPEAT;
+        keys[controlsMenu.downKeyMenus] = GLFW_REPEAT;
     }
     
-    if (keys[controlsMenu.upKey_P1] == GLFW_PRESS) {
+    if (keys[controlsMenu.upKeyMenus] == GLFW_PRESS) {
         posSeleccion <= 0 ? posSeleccion = inGameMenuOptions.size() - 1 : posSeleccion -= 1;
         AudioManager::get().playVfx(VfxSound::Select);
-        keys[controlsMenu.upKey_P1] = GLFW_REPEAT;
+        keys[controlsMenu.upKeyMenus] = GLFW_REPEAT;
+    }
+
+    if (keys[controlsMenu.leftKeyMenus] == GLFW_PRESS) {
+        int num = 0;
+        switch (posSeleccion) {
+            // MUSIC
+            case 2:
+                num = stoi(currentOptionsSelected[posSeleccion - 2]);
+                if (num <= 0) {}
+                else num = num - 5;
+                currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
+                break;
+            // SOUNDS
+            case 3:
+                num = stoi(currentOptionsSelected[posSeleccion - 2]);
+                if (num <= 0) {}
+                else num = num - 5;
+                currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
+                break;
+            default:
+                break;
+        }
+        keys[controlsMenu.leftKeyMenus] = GLFW_REPEAT;
+    }
+
+    if (keys[controlsMenu.rightKeyMenus] == GLFW_PRESS) {
+        int num = 0;
+        switch (posSeleccion) {
+            // MUSIC
+            case 2:
+                num = stoi(currentOptionsSelected[posSeleccion - 2]);
+                if (num >= 100) {}
+                else num = num + 5;
+                currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
+                break;
+            // SOUNDS
+            case 3:
+                num = stoi(currentOptionsSelected[posSeleccion - 2]);
+                if (num >= 100) {}
+                else num = num + 5;
+                currentOptionsSelected[posSeleccion - 2] = std::to_string(num);
+                applyVolumeSettings();
+                break;
+            default:
+                break;
+        }
+        keys[controlsMenu.rightKeyMenus] = GLFW_REPEAT;
     }
 
     if (keys[controlsMenu.selectKey] == GLFW_PRESS) {
@@ -256,38 +326,27 @@ int InGameMenu::processInputInGameMenu(std::map<int, int>& keys, bool is3DViewEn
                 showInGameMenu = false;
                 posSeleccion = 0;
                 break;
-            // MUSIC
+
+            // CONTROLS
             case 1:
-                result = 1;
-                currentOptionsSelected[posSeleccion - 1] == "ON" ? currentOptionsSelected[posSeleccion - 1] = "OFF" : currentOptionsSelected[posSeleccion - 1] = "ON";
+                controlsMenu.showControlsMenu = true;
                 break;
-
-            // SOUNDS
-            case 2:
-                result = 2;
-                currentOptionsSelected[posSeleccion - 1] == "ON" ? currentOptionsSelected[posSeleccion - 1] = "OFF" : currentOptionsSelected[posSeleccion - 1] = "ON";
-                break;
-
+            
             // GRAPHICS
-            case 3:
-                result = 3;
-                currentOptionsSelected[posSeleccion - 1] == "2D" ? currentOptionsSelected[posSeleccion - 1] = "3D" : currentOptionsSelected[posSeleccion - 1] = "2D";
+            case 4:
+                result = 4;
+                currentOptionsSelected[posSeleccion - 2] == "2D" ? currentOptionsSelected[posSeleccion - 2] = "3D" : currentOptionsSelected[posSeleccion - 2] = "2D";
                 break;
 
             // CAMERA
-            case 4:
-                if (!is3DViewEnabled) {return -1;}
-                result = 4;
-                // LOCKED -> BOMBERMAN -> 1ST PERSON -> FREE -> LOCKED -> ...
-                if (currentOptionsSelected[posSeleccion - 1] == "LOCKED") currentOptionsSelected[posSeleccion - 1] = "BOMBERMAN";
-                else if (currentOptionsSelected[posSeleccion - 1] == "BOMBERMAN") currentOptionsSelected[posSeleccion - 1] = "1ST P";
-                else if (currentOptionsSelected[posSeleccion - 1] == "1ST P") currentOptionsSelected[posSeleccion - 1] = "FREE";
-                else currentOptionsSelected[posSeleccion - 1] = "LOCKED";
-                break;
-
-            // CONTROLS
             case 5:
-                controlsMenu.showControlsMenu = true;
+                if (!is3DViewEnabled) { keys[controlsMenu.selectKey] = GLFW_REPEAT; return -1; }
+                result = 5;
+                // LOCKED -> BOMBERMAN -> 1ST PERSON -> FREE -> LOCKED -> ...
+                if (currentOptionsSelected[posSeleccion - 2] == "LOCKED") currentOptionsSelected[posSeleccion - 2] = "BOMBERMAN";
+                else if (currentOptionsSelected[posSeleccion - 2] == "BOMBERMAN") currentOptionsSelected[posSeleccion - 2] = "1ST P";
+                else if (currentOptionsSelected[posSeleccion - 2] == "1ST P") currentOptionsSelected[posSeleccion - 2] = "FREE";
+                else currentOptionsSelected[posSeleccion - 2] = "LOCKED";
                 break;
             
             // EXIT

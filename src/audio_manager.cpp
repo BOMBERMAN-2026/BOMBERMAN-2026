@@ -283,7 +283,7 @@ void AudioManager::playVfx(VfxSound sfx) {
             break;
         case VfxSound::Select:
             fireFromPool(&impl->engine, &impl->sfxSelect,
-                         impl->pickupPool, 0.25);
+                         impl->pickupPool, impl->vfxVolume - (0.75f * impl->vfxVolume));
             break;
         case VfxSound::Pickup:
             fireFromPool(&impl->engine, &impl->sfxPickup,
@@ -321,7 +321,7 @@ void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) 
     std::string path = normalizePath(absPath);
 
     if (impl->bgmActive && impl->currentBgmPath == path) {
-        float v = (volume > 0.0f) ? volume : impl->bgmVolume;
+        float v = impl->bgmVolume;
         ma_sound_set_volume(&impl->bgmSound, v);
         return;
     }
@@ -343,7 +343,7 @@ void AudioManager::playBgm(const std::string& absPath, bool loop, float volume) 
     }
 
     ma_sound_set_looping(&impl->bgmSound, loop ? MA_TRUE : MA_FALSE);
-    float v = (volume > 0.0f) ? volume : impl->bgmVolume;
+    float v = impl->bgmVolume;
     ma_sound_set_volume(&impl->bgmSound, v);
     ma_sound_set_pitch(&impl->bgmSound, 1.0f); // Reset pitch for new music
     ma_sound_start(&impl->bgmSound);

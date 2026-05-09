@@ -42,9 +42,9 @@ void Leon::Update() {
         }
     }
 
-    // Temporizador: ocasionalmente cambia de dirección sin colisión.
+    // Temporizador: ocasionalmente cambia de dirección sin colisión, solo al terminar un tile.
     dirChangeTimer += deltaTime;
-    if (dirChangeTimer >= dirChangeInterval) {
+    if (dirChangeTimer >= dirChangeInterval && !movingToTarget) {
         dirChangeTimer = 0.0f;
         float roll = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
         if (roll < dirChangeChance) {

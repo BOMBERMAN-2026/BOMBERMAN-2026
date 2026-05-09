@@ -11,7 +11,7 @@
  */
 class FantasmaMortal : public Enemy {
 public:
-    static constexpr float kSpeed        = 0.20f;
+    static constexpr float kSpeed        = 0.24f;
     static constexpr float kBlockSlowdown = 0.35f;
 
     FantasmaMortal(glm::vec2 pos, glm::vec2 size);

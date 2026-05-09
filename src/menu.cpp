@@ -170,35 +170,36 @@ void MenuScreen::renderMenu(GLuint VAO, GLuint shader, GLuint uniformModel, GLui
 
 // ============================== INPUT ==============================
 
-void MenuScreen::processInputMenu(std::map<int, int>& keys, ControlsMenu& controls) {
-    if (keys[controls.upKey_P1] == GLFW_PRESS) {
+void MenuScreen::processInputMenu(std::map<int, int>& keys, InGameMenu& configMenu) {
+    if (keys[configMenu.controlsMenu.upKeyMenus] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection - 1 + NUM_MENU_OPTIONS) % NUM_MENU_OPTIONS;
             AudioManager::get().playVfx(VfxSound::Select);
-            keys[controls.upKey_P1] = GLFW_REPEAT;
+            keys[configMenu.controlsMenu.upKeyMenus] = GLFW_REPEAT;
         }
     }
-    if (keys[controls.downKey_P1] == GLFW_PRESS) {
+    if (keys[configMenu.controlsMenu.downKeyMenus] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuSelection = (menuSelection + 1) % NUM_MENU_OPTIONS;
             AudioManager::get().playVfx(VfxSound::Select);
-            keys[controls.downKey_P1] = GLFW_REPEAT;
+            keys[configMenu.controlsMenu.downKeyMenus] = GLFW_REPEAT;
         }
     }
 
     // Confirmar selección.
-    if (keys[controls.selectKey] == GLFW_PRESS) {
+    if (keys[configMenu.controlsMenu.selectKey] == GLFW_PRESS) {
         if (!menuArrowSelected) {
             menuArrowSelected = true;
             menuArrowAnimTimer = 0.0f;
             AudioManager::get().playVfx(VfxSound::Explosion);
-            keys[controls.selectKey] = GLFW_REPEAT;
+            keys[configMenu.controlsMenu.selectKey] = GLFW_REPEAT;
         }
     }
 
     // Escape para cerrar el juego desde el menú.
     if (keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
-        shouldExitGame = true;
+        // shouldExitGame = true;
+        configMenu.showInGameMenu = true;
         keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
     }
 }

@@ -1,4 +1,4 @@
-#include "bomberman.hpp"
+﻿#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -2807,7 +2807,7 @@ void Game::enterRankingScreen() {
     rankingAutoExitSeconds = 15.0f; // NEW timeout 15 seconds
 
     AudioManager::get().stopBgm();
-    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/10 High Scores.mp3"), /*loop=*/true, 0.35f);
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/10 High Scores.mp3"), /*loop=*/true, 0.60f);
 
     state = GAME_RANKING;
 }
@@ -3061,7 +3061,7 @@ void Game::updateTimeUpSequence(float deltaTime) {
         std::string videoPath = resolveAssetPath(levelCinematicSequence[currentLevelIndex]);
         cinematicPlayer.open(videoPath);
 
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.60f);
     }
 }
 
@@ -3609,7 +3609,7 @@ void Game::startNewRun(GameMode newMode) {
 
         // Reproducir jingle "Game Start" durante la cinem�tica del nivel
         AudioManager::get().stopBgm();
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
         menuScreen.resetTransition();
         return;
@@ -3628,7 +3628,7 @@ void Game::startNewRun(GameMode newMode) {
 
     // Reproducir jingle "Game Start" durante la cinem�tica del nivel
     AudioManager::get().stopBgm();
-    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
 
     // Por si el men� dej� la marca de transici�n activa.
@@ -3671,7 +3671,7 @@ void Game::advanceToNextLevel() {
 
         // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
         AudioManager::get().stopBgm();
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
         return;
     }
@@ -3713,7 +3713,7 @@ void Game::advanceToNextLevel() {
 
     // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
     AudioManager::get().stopBgm();
-    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.6f);
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
 }
 
@@ -3798,11 +3798,14 @@ void Game::resetFreeCameraPose() {
     const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
     cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
     cameraFollowDistance = 6.8f;
-    freeCameraPosX = target.x + mapRadius * 0.90f + 1.4f;
-    freeCameraPosY = mapRadius * 1.05f + 3.2f;
-    freeCameraPosZ = target.z + mapRadius * 0.95f + 1.6f;
-    freeCameraYaw = -0.68f;
-    freeCameraPitch = -0.34f;
+    // freeCameraPosX = target.x + mapRadius * 0.90f + 0.0f;
+    // freeCameraPosY = mapRadius * 1.05f + 0.0f;
+    // freeCameraPosZ = target.z + mapRadius * 0.95f + 1.6f;
+    freeCameraPosX = 0.6f;
+    freeCameraPosY = 11.0f;
+    freeCameraPosZ = 13.4f;
+    freeCameraYaw = 0.0f;  // Mirar hacia el mapa
+    freeCameraPitch = -0.45f;  // Pitch para mirar abajo
     freeCameraRoll = 0.0f;
 }
 
@@ -3948,12 +3951,12 @@ void Game::onMouseScroll(double yOffset) {
         const float mapHalfDepth = std::max(2.0f, (float)gameMap->getRows() * 0.5f);
         const float mapRadius = std::max(mapHalfWidth, mapHalfDepth);
         if (cameraOrbitDistance <= 0.0f) {
-            cameraOrbitDistance = mapRadius * 1.10f + 2.6f;
+            cameraOrbitDistance = mapRadius * 1.10f + 0.6f;
         }
 
         cameraOrbitDistance -= scroll * kOrbitZoomStep;
         const float minDistance = std::max(4.0f, mapRadius * 0.58f);
-        const float maxDistance = mapRadius * 2.55f + 18.0f;
+        const float maxDistance = mapRadius * 2.55f + 12.0f;
         cameraOrbitDistance = std::max(minDistance, std::min(maxDistance, cameraOrbitDistance));
     } else if (camera3DType == Camera3DType::PerspectiveMobile) {
         cameraFollowDistance -= scroll * (kOrbitZoomStep * 0.62f);
@@ -4307,21 +4310,21 @@ void Game::init() {
 
     // ========== MENU ==========
     if (this->state == GAME_MENU) {
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.6f);
         menuScreen.initMenu();
         return;
     }
 
     // ========== CUSTOM GAME (PANTALLA 1) ==========
     if (this->state == GAME_CUSTOM_MENU_1) {
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.6f);
         customGameMenu.initMenu1();
         return;
     }
 
     // ========== CUSTOM GAME (PANTALLA 2) ==========
     if (this->state == GAME_CUSTOM_MENU_2) {
-        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.4f);
+        AudioManager::get().playBgm(resolveAssetPath("resources/sounds/51. Menu.mp3"), /*loop=*/true, 0.6f);
         customGameMenu.initMenu2();
         return;
     }
@@ -4339,7 +4342,8 @@ void Game::init() {
     }
     firstPersonPitch = -0.18f;
     firstPersonPitchP2 = -0.18f;
-    cameraOrbitPitch = -0.18f;
+    cameraOrbitPitch = 90.0f;
+    cameraOrbitYaw = 90.0f;
     cameraOrbitDistance = 0.0f;
     cameraFollowDistance = 6.8f;
     cameraOrbitDragging = false;
@@ -4364,25 +4368,12 @@ void Game::init() {
 
 // Lee teclas y aplica acciones (movimiento, animaci+�n y colocar bombas).
 void Game::processInput() {
+
     // Atajos globales de ventana (tambi�n disponibles en intro/menu).
     if (this->keys[inGameMenu.controlsMenu.swapWindowModeKey] == GLFW_PRESS || this->keys[GLFW_KEY_F11] == GLFW_PRESS) {
         this->keys[inGameMenu.controlsMenu.swapWindowModeKey] = GLFW_REPEAT;
         this->keys[GLFW_KEY_F11] = GLFW_REPEAT;
         toggleFullscreen(this->window);
-    }
-
-    if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
-        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
-        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
-        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
-        toggleViewMode();
-    }
-
-    if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
-        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_PRESS;
-        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
-        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
-        cycleCamera3DType(); 
     }
 
     if (this->keys[GLFW_KEY_F10] == GLFW_PRESS && this->window != nullptr) {
@@ -4425,7 +4416,39 @@ void Game::processInput() {
             this->firstPersonCursorLocked = false;
             this->firstPersonMouseInitialized = false;
         }
-        menuScreen.processInputMenu(this->keys, inGameMenu.controlsMenu);
+        // ========== CONTROLS_MENU ==========
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {
+            // TODO, cambiar el lastkey
+            this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed);
+
+            lastDirKey = GLFW_KEY_UNKNOWN;
+            lastDirKeyP2 = GLFW_KEY_UNKNOWN;
+
+            return;
+        }
+        else if (inGameMenu.showInGameMenu) {
+            int result = this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
+            switch (result) {
+                case 1:
+                    inGameMenu.showInGameMenu = false; break;
+                case 2: 
+                    AudioManager::get().toggleMusicDisabled(); 
+                    if (!AudioManager::get().isMusicDisabled()) {
+                        std::string bgmFile = "resources/sounds/51 Menu.mp3";
+                        
+                        if (!bgmFile.empty()) {
+                            AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
+                        }
+                    }
+                    break;
+                case 3: AudioManager::get().toggleVFXDisable(); break;
+                case 4: toggleViewMode(); break;
+                case 5: cycleCamera3DType(); break;
+                case 6: menuScreen.requestExitGame(); inGameMenu.showInGameMenu = false; break;
+                default: break;
+            }
+        }
+        else menuScreen.processInputMenu(this->keys, inGameMenu);
         return;
     }
 
@@ -4498,6 +4521,21 @@ void Game::processInput() {
 
     if (this->state != GAME_PLAYING) return;
 
+    if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
+        this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_REPEAT;
+        toggleViewMode();
+    }
+
+    if (this->keys[inGameMenu.controlsMenu.swap3DCameraKey] == GLFW_PRESS && is3DViewEnabled()) { 
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_PRESS;
+        this->inGameMenu.processInputInGameMenu(this->keys, is3DViewEnabled());
+        this->keys[inGameMenu.controlsMenu.swap3DCameraKey] = GLFW_REPEAT;
+        cycleCamera3DType(); 
+    }
+
+
     bool revivedSomeone = false;
     auto tryRevivePlayer = [&](int playerIndex, GLint reviveKey) {
         if (playerIndex < 0 || playerIndex >= (int)gPlayers.size()) {
@@ -4545,7 +4583,7 @@ void Game::processInput() {
             }
 
             if (!bgmFile.empty()) {
-                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
             }
         }
 
@@ -4556,8 +4594,9 @@ void Game::processInput() {
 
     // ========== IN_GAME_MENU ==========
     if (this->keys[GLFW_KEY_ESCAPE] == GLFW_PRESS) {
+        if (this->inGameMenu.controlsMenu.showControlsMenu) {  this->inGameMenu.controlsMenu.processInputControlsMenu(this->keys, lastKeyPressed); }
+        else this->inGameMenu.showInGameMenu = !this->inGameMenu.showInGameMenu;
         this->keys[GLFW_KEY_ESCAPE] = GLFW_REPEAT;
-        this->inGameMenu.showInGameMenu = true;
     }
     // Salimos para no recibir m�s inputs en caso de haber desplegado el menu
     if (this->inGameMenu.showInGameMenu) { 
@@ -4576,7 +4615,7 @@ void Game::processInput() {
 
         // Mirar processInputInGameMenu para saber que devuelve
         switch (result) {
-            case 1: 
+            case 2: 
                 AudioManager::get().toggleMusicDisabled(); 
                 if (!AudioManager::get().isMusicDisabled()) {
                     std::string bgmFile = "";
@@ -4589,13 +4628,13 @@ void Game::processInput() {
                     }
 
                     if (!bgmFile.empty()) {
-                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                        AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
                     }
                 }
                 break;
-            case 2: AudioManager::get().toggleVFXDisable(); break;
-            case 3: toggleViewMode(); break;
-            case 4: cycleCamera3DType(); break;
+            case 3: AudioManager::get().toggleVFXDisable(); break;
+            case 4: toggleViewMode(); break;
+            case 5: cycleCamera3DType(); break;
             case 6: returnToMenuFromGame(/*resetRun=*/true); break;
             default: break;
         }
@@ -5387,7 +5426,7 @@ void Game::update() {
                 
                 // Reproducir m�sica de intro de Historia antes de la cinem�tica
                 AudioManager::get().stopBgm();
-                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/01 Normal Game ~ Intro.mp3"), /*loop=*/false, 0.6f);
 
 
                 menuScreen.resetTransition();
@@ -5402,7 +5441,7 @@ void Game::update() {
                 
                 // Reproducir m�sica de intro de Historia antes de la cinem�tica
                 AudioManager::get().stopBgm();
-                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/11 Vs. Game ~ Intro.mp3"), /*loop=*/false, 0.4f);
+                AudioManager::get().playBgm(resolveAssetPath("resources/sounds/11 Vs. Game ~ Intro.mp3"), /*loop=*/false, 0.6f);
 
 
                 menuScreen.resetTransition();
@@ -5486,7 +5525,7 @@ void Game::update() {
             loadLevel(0, /*preserveLivesAndScore=*/false);
 
             AudioManager::get().stopBgm();
-            AudioManager::get().playBgm(resolveAssetPath("resources/sounds/03 BGM 1.mp3"), /*loop=*/true, 0.35f);
+            AudioManager::get().playBgm(resolveAssetPath("resources/sounds/03 BGM 1.mp3"), /*loop=*/true, 0.60f);
             return;
         }
 
@@ -5637,7 +5676,7 @@ void Game::update() {
             }
 
             if (!bgmFile.empty()) {
-                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.35f);
+                AudioManager::get().playBgm(resolveAssetPath(bgmFile), /*loop=*/true, 0.60f);
             }
         };
 
@@ -5720,7 +5759,7 @@ void Game::update() {
                     }
                     cinematicPlayer.open(videoPath);
 
-                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false, 0.35f);
+                    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
                 } else if (action == VsCinematicPostAction::AdvanceNextLevel) {
                     advanceToNextLevel();
                 } else if (action == VsCinematicPostAction::ReturnToMenu) {
@@ -6186,7 +6225,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         trackedPlayerCenter = ndcToWorld3D(gameMap, trackedBasePos, trackedHeight);
     }
 
-    glm::vec3 cameraPos(mapRadius * 0.70f, mapRadius * 1.55f + 3.0f, mapRadius * 1.25f + 2.5f);
+    glm::vec3 cameraPos(-0.0177436f, 17.8751f, 2.21791);
     glm::vec3 cameraTarget(mapCenter);
     glm::vec3 up(0.0f, 1.0f, 0.0f);
 
@@ -6196,6 +6235,7 @@ void Game::render3D(const glm::mat4& lightSpaceMatrix) {
         up = glm::vec3(0.0f, 0.0f, -1.0f);
     } else if (camera3DType == Camera3DType::PerspectiveFixed) {
         const float orbitRadius = cameraOrbitDistance;
+        //const glm::vec3 pivot = glm::vec3(-0.0177436f, 17.8751f, 2.21791);
         const glm::vec3 pivot = mapCenter + glm::vec3(0.0f, mapRadius * 0.30f + 0.75f, 0.0f);
         const float elevation = cameraOrbitPitch;
         const float horizontalRadius = std::cos(elevation) * orbitRadius;
@@ -8520,6 +8560,10 @@ void Game::render() {
         glUseProgram(shader);
         menuScreen.renderMenu(VAO, shader, uniformModel, uniformProjection, uniformTexture,
                                      uniformUvRect, uniformTintColor, uniformFlipX, WIDTH, HEIGHT);
+        
+        if (this->inGameMenu.showInGameMenu) this->inGameMenu.renderInGameMenu(VAO, shader, uniformModel, uniformProjection, uniformUvRect, uniformFlipX, 
+                                                gVocabAmarilloAtlas, vocabAmarilloTexture, gVocabNaranjaAtlas, vocabNaranjaTexture, gBordesMenuAtlas, bordesMenuTexture, currentGameLevel);
+        
         glUseProgram(0);
         return;
     }

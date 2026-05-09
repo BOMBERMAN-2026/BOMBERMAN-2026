@@ -34,9 +34,9 @@ void Babosa::Update() {
         facing = randomDirection();
     }
 
-    // Cambio periódico de dirección, incluso sin colisión.
+    // Cambio periódico de dirección, solo al terminar un tile (evita patinar).
     dirChangeTimer += deltaTime;
-    if (dirChangeTimer >= dirChangeInterval) {
+    if (dirChangeTimer >= dirChangeInterval && !movingToTarget) {
         dirChangeTimer = 0.0f;
         facing = randomDirection();
     }

@@ -9,6 +9,7 @@
 
 #include "sprite_atlas.hpp"
 #include "controls_menu.hpp"
+#include "in_game_menu.hpp"
 
 // Forward declaration to avoid circular dependency
 enum class GameMode;
@@ -64,7 +65,7 @@ public:
                     int WIDTH, int HEIGHT);
 
     // Procesamiento de entrada
-    void processInputMenu(std::map<int, int>& keys, ControlsMenu& controls);
+    void processInputMenu(std::map<int, int>& keys, InGameMenu& configMenu);
 
     // Getters
     int getMenuSelection() const { return menuSelection; }
@@ -74,6 +75,9 @@ public:
     bool isExitRequested() const { return shouldExitGame; }
     GameMode getSelectedMode() const { return selectedGameMode; }
     void resetTransition() { shouldTransitionToGame = false; shouldTransitionToCustomGame = false; shouldExitGame = false; }
+
+    // Modificar variables privadas
+    void requestExitGame() { shouldExitGame = true; }
 };
 
 #endif // MENU_HPP
