@@ -527,16 +527,17 @@ static std::vector<uint8_t> buildDangerMask(const GameMap& map, const AiProfile&
         return danger;
     }
 
-    // Peligro “pronto”:
-    // - Bombas EXPLODING: siempre.
-    // - Bombas FUSE a punto de explotar: ventana para que la CPU pueda reaccionar.
-    // - Bombas remotas: se consideran peligrosas mientras existan.
-    const float kImminentSeconds = 0.45f + 1.65f * dangerAversion;
+// Tiempo de reacción equilibrado. 
+    // Una IA miedosa huye faltando 1.8s, una valiente apura hasta 0.8s.
+    const float kImminentSeconds = 0.80f + 1.0f * dangerAversion;
     const float precision = clampFloat(profile.pathfindingPrecision, 0.0f, 1.0f);
 
     for (auto* b : gBombs) {
         if (!b) continue;
         if (b->state == BombState::DONE) continue;
+
+        // MEJORA 2: Forzar que el epicentro de TODA bomba se vea peligroso siempre.
+        danger[(size_t)b->gridRow * (size_t)cols + (size_t)b->gridCol] = 1;
 
         const bool exploding = (b->state == BombState::EXPLODING);
         const bool imminentFuse =
@@ -1944,9 +1945,82 @@ void updateCpuPlayers(GameMode mode,
         st.moveLockSeconds = std::max(0.0f, st.moveLockSeconds - deltaTime);
         st.bombCooldownSeconds = std::max(0.0f, st.bombCooldownSeconds - deltaTime);
 
+        // --- FIX: Control Remoto Evaluado SIEMPRE antes de interrumpirse por movimiento ---
+        Bomb* ownedRemoteBomb = findOwnedRemoteBomb(*p);
+        if (ownedRemoteBomb) {
+            st.remoteBombArmedSeconds = (st.remoteBombArmedSeconds < 0.0f)
+                ? 0.0f
+                : (st.remoteBombArmedSeconds + deltaTime);
+
+            std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
+            markBlastArea(*map, ownedRemoteBomb->gridRow, ownedRemoteBomb->gridCol, ownedRemoteBomb->power, blast, rows, cols);
+
+            // NUEVO: Comprobar la hitbox física real (4 esquinas) para evitar suicidios en los bordes.
+            bool selfInBlast = false;
+            const float halfBox = map->getTileSize() * 0.35f; // Usamos el 70% del tile como cuerpo de seguridad
+            const glm::vec2 corners[4] = {
+                p->position + glm::vec2(-halfBox, -halfBox),
+                p->position + glm::vec2( halfBox, -halfBox),
+                p->position + glm::vec2(-halfBox,  halfBox),
+                p->position + glm::vec2( halfBox,  halfBox)
+            };
+            
+            for (int k = 0; k < 4; ++k) {
+                int cr = 0, cc = 0;
+                map->ndcToGrid(corners[k], cr, cc);
+                if (maskContainsCell(blast, cr, cc, cols)) {
+                    selfInBlast = true;
+                    break; // Si aunque sea un pixel de la hitbox sigue en peligro, abortamos.
+                }
+            }
+
+            const bool opponentInBlast = remoteBlastHitsOpponent(*map, blast, cols, *p, players);
+            const bool opensTile = remoteBlastCanOpenTile(*map, *ownedRemoteBomb);
+
+            if (!selfInBlast) {
+                // Detonar de inmediato si: da a rival, rompe bloque (0.2s), es inútil (0.5s), o lleva mucho tiempo (2s)
+                if (opponentInBlast ||
+                   (opensTile && st.remoteBombArmedSeconds >= 0.20f) ||
+                   (!opensTile && !opponentInBlast && st.remoteBombArmedSeconds >= 0.50f) ||
+                   (st.remoteBombArmedSeconds >= 2.0f)) 
+                {
+                    ownedRemoteBomb->detonate();
+                    st.remoteBombArmedSeconds = -1.0f;
+                    ownedRemoteBomb = nullptr; 
+                }
+            } else {
+                // Anti-atasco: Si se encerró a sí misma y lleva 2.5s pillada, ¡kamikaze para destrabar la partida!
+                if (st.remoteBombArmedSeconds >= 2.5f || (opponentInBlast && st.remoteBombArmedSeconds >= 0.75f)) {
+                    ownedRemoteBomb->detonate();
+                    st.remoteBombArmedSeconds = -1.0f;
+                    ownedRemoteBomb = nullptr;
+                }
+            }
+        } else {
+            st.remoteBombArmedSeconds = -1.0f;
+        }
+        // -----------------------------------------------------------------------------------
+
         // Recalcular peligro por CPU para evitar decisiones con estado desfasado
-        // cuando otra CPU acaba de poner/detonar una bomba en el mismo frame.
         std::vector<uint8_t> danger = buildDangerMask(*map, profile);
+
+        // NUEVO: Evaluar si TODO el cuerpo está a salvo (Hitbox de 4 esquinas)
+        bool playerInPhysicalDanger = false;
+        const float safeBox = map->getTileSize() * 0.35f;
+        const glm::vec2 bodyCorners[4] = {
+            p->position + glm::vec2(-safeBox, -safeBox),
+            p->position + glm::vec2( safeBox, -safeBox),
+            p->position + glm::vec2(-safeBox,  safeBox),
+            p->position + glm::vec2( safeBox,  safeBox)
+        };
+        for (int k = 0; k < 4; ++k) {
+            int cr = 0, cc = 0;
+            map->ndcToGrid(bodyCorners[k], cr, cc);
+            if (isDangerousCell(danger, cr, cc, cols)) {
+                playerInPhysicalDanger = true;
+                break;
+            }
+        }
 
         // Movimiento por tiles (como los enemigos): mientras tenga target, seguirlo.
         if (p->movingToTarget) {
@@ -2007,22 +2081,12 @@ void updateCpuPlayers(GameMode mode,
             }
         }
 
-        Bomb* ownedRemoteBomb = findOwnedRemoteBomb(*p);
-        if (ownedRemoteBomb) {
-            st.remoteBombArmedSeconds = (st.remoteBombArmedSeconds < 0.0f)
-                ? 0.0f
-                : (st.remoteBombArmedSeconds + deltaTime);
-        } else {
-            st.remoteBombArmedSeconds = -1.0f;
-        }
-
         // ═════════════════════════════════════════════════════════════════════
         // Q-Learning: decisión estratégica basada en aprendizaje por refuerzo
         // ═════════════════════════════════════════════════════════════════════
 
         ensureQTablesLoaded();
 
-        // Inicializar estado QL del CPU si es la primera vez.
         if (!st.qlInitialized) {
             const Difficulty diff = difficultyFor(settings, pid);
             st.qlConfig = qlConfigForDifficulty(difficultyToIndex(diff));
@@ -2035,60 +2099,49 @@ void updateCpuPlayers(GameMode mode,
         const int diffIdx = difficultyToIndex(difficultyFor(settings, pid));
         QTable& qTable = gQTableByDifficulty[diffIdx];
 
-        // Acumular recompensas pendientes inyectadas externamente.
         if (pid >= 0 && pid < 4) {
             st.accumulatedReward += gPendingRewards[(size_t)pid];
             gPendingRewards[(size_t)pid] = 0.0f;
         }
 
-        // Recompensa por tick: +0.05 por sobrevivir, -0.6 si está en peligro.
         st.accumulatedReward += 0.05f;
-        if (isDangerousCell(danger, sr, sc, cols)) {
+        if (playerInPhysicalDanger) { // Sustituido
             st.accumulatedReward -= 0.6f;
         }
 
-        // Temporizador de decisión: solo recalcular estrategia cada N segundos.
         st.qlDecisionTimer -= deltaTime;
 
         bool wantBomb = false;
         float nextActionReward = 0.0f;
 
         if (st.qlDecisionTimer <= 0.0f) {
-            // Extraer estado actual del juego.
             QState newState = extractQState(*map, danger, *p, sr, sc,
                                            target, tr, tc, bestDist, players);
             const uint32_t newStateId = newState.encode();
 
-            // Actualizar Q-table con el resultado de la acción anterior.
             if (st.lastQAction >= 0) {
                 qTable.update(st.lastQState.encode(), st.lastQAction,
                               st.accumulatedReward, newStateId,
                               st.qlConfig.alpha, st.qlConfig.gamma);
             }
 
-            // Elegir nueva acción (ε-greedy).
             const int action = qTable.chooseAction(newStateId, st.qlConfig.epsilon);
 
-           // Ejecutar la acción elegida.
             desired = executeQAction(action, *map, danger, *p, sr, sc,
                                      target, tr, tc, wantBomb, holdPosition);
 
             if (wantBomb) {
-                // Le damos los puntos YA, para que entienda que poner bombas es BUENO.
                 if (action == (int)QAction::DESTROY_BLOCK) nextActionReward += 15.0f;
                 if (action == (int)QAction::PLACE_BOMB_COMBAT) nextActionReward += 50.0f;
             }
-            // ----------------------------------------------------
 
-            // Penalización inmediata si la acción es imposible.
             if (action == (int)QAction::PLACE_BOMB_COMBAT && !wantBomb && desired == MOVE_NONE) {
-                nextActionReward -= 2.0f; // accion inutil
+                nextActionReward -= 2.0f; 
             }
             if (action == (int)QAction::COLLECT_POWERUP && desired == MOVE_NONE) {
-                nextActionReward -= 1.0f; // no hay power-up
+                nextActionReward -= 1.0f; 
             }
 
-            // Log de decisión (solo en debug).
             if (kAiDebugEnabled && st.lastQAction != action) {
                 std::cout << "[CPU-AI][QL] CPU" << (pid + 1)
                           << " state=" << newStateId
@@ -2098,33 +2151,31 @@ void updateCpuPlayers(GameMode mode,
                           << std::endl;
             }
 
-            // Guardar estado para la siguiente actualización.
             st.lastQState = newState;
             st.lastQAction = action;
             st.accumulatedReward = nextActionReward;
             st.qlDecisionTimer = st.qlConfig.decisionInterval;
         } else {
-            // Entre decisiones: continuar ejecutando la última acción elegida.
             if (st.lastQAction >= 0) {
                 desired = executeQAction(st.lastQAction, *map, danger, *p, sr, sc,
                                          target, tr, tc, wantBomb, holdPosition);
             }
         }
 
-        if (!isDangerousCell(danger, sr, sc, cols) && target) {
+        if (!playerInPhysicalDanger && target) { // Sustituido
             bool tacticalBomb = false;
             const Move tacticalMove = chooseAggressiveCombatMove(*map,
-                                                                  danger,
-                                                                  *p,
-                                                                  profile,
-                                                                  sr,
-                                                                  sc,
-                                                                  target,
-                                                                  tr,
-                                                                  tc,
-                                                                  bestDist,
-                                                                  st.bombCooldownSeconds <= 0.0f,
-                                                                  tacticalBomb);
+                                                                 danger,
+                                                                 *p,
+                                                                 profile,
+                                                                 sr,
+                                                                 sc,
+                                                                 target,
+                                                                 tr,
+                                                                 tc,
+                                                                 bestDist,
+                                                                 st.bombCooldownSeconds <= 0.0f,
+                                                                 tacticalBomb);
             if (tacticalBomb || tacticalMove != MOVE_NONE) {
                 desired = tacticalMove;
                 wantBomb = tacticalBomb;
@@ -2138,9 +2189,8 @@ void updateCpuPlayers(GameMode mode,
             }
         }
 
-        // Override de seguridad: si está en peligro inmediato, forzar escape
-        // independientemente de lo que diga el Q-Learner.
-        if (isDangerousCell(danger, sr, sc, cols) && st.lastQAction != (int)QAction::FLEE_DANGER) {
+        // Override de seguridad: Evaluamos escape CONTINUAMENTE a 60 FPS si hay peligro.
+        if (playerInPhysicalDanger) { 
             const int rows_local = map->getRows();
             const int cols_local = map->getCols();
             std::vector<uint8_t> allBlast((size_t)rows_local * (size_t)cols_local, 0);
@@ -2154,6 +2204,10 @@ void updateCpuPlayers(GameMode mode,
                 holdPosition = false;
                 wantBomb = false;
                 st.lastQAction = (int)QAction::FLEE_DANGER;
+                st.moveLockSeconds = 0.0f; // Corre inmediatamente
+            } else {
+                // Mantiene el tiempo de reacción a 0 para salir volando apenas la bomba desaparezca.
+                st.moveLockSeconds = 0.0f; 
             }
         }
 
@@ -2175,16 +2229,13 @@ void updateCpuPlayers(GameMode mode,
             const bool placed = tryPlaceBomb(*p, *map);
             if (placed) {
                 plantedBomb = true;
-                // Evitar spam.
                 st.bombCooldownSeconds = 0.65f;
                 if (p->hasRemoteControl) {
                     st.remoteBombArmedSeconds = 0.0f;
                 }
 
-                // Tras plantar, SIEMPRE priorizar una ruta de escape inmediata.
                 int br = 0, bc = 0;
                 map->ndcToGrid(p->position, br, bc);
-
                 std::vector<uint8_t> ownBlast((size_t)rows * (size_t)cols, 0);
                 markBlastArea(*map, br, bc, p->explosionPower, ownBlast, rows, cols);
 
@@ -2195,7 +2246,6 @@ void updateCpuPlayers(GameMode mode,
                     st.currentMove = escapeMove;
                     st.moveLockSeconds = 0.0f;
                 } else {
-                    // Si no hay ruta segura, intentar salir de todas formas.
                     const std::vector<Move> emergencyMoves = validMoves(*map, ownBlast, *p, /*avoidDanger=*/false);
                     if (!emergencyMoves.empty()) {
                         desired = pickRandomMove(emergencyMoves);
@@ -2212,47 +2262,7 @@ void updateCpuPlayers(GameMode mode,
             wantBomb = false;
         }
 
-        // Remote Control: detonar por valor tactico, no apenas salga del blast.
-        if (ownedRemoteBomb) {
-            int br = 0, bc = 0;
-            map->ndcToGrid(p->position, br, bc);
-
-            std::vector<uint8_t> blast((size_t)rows * (size_t)cols, 0);
-            markBlastArea(*map, ownedRemoteBomb->gridRow, ownedRemoteBomb->gridCol, ownedRemoteBomb->power, blast, rows, cols);
-
-            const bool selfInBlast = maskContainsCell(blast, br, bc, cols);
-            const bool opponentInBlast = remoteBlastHitsOpponent(*map, blast, cols, *p, players);
-            const bool opensTile = remoteBlastCanOpenTile(*map, *ownedRemoteBomb);
-            const bool staleRemoteBomb = st.remoteBombArmedSeconds >= 2.25f;
-
-            // Si está fuera del blast, detonar apenas alcance 0.15 segundos.
-            if (!selfInBlast) {
-                if (opponentInBlast ||
-                    (opensTile && st.remoteBombArmedSeconds >= 0.30f) ||
-                    staleRemoteBomb)
-                {
-                    ownedRemoteBomb->detonate();
-                    st.remoteBombArmedSeconds = -1.0f;
-                    continue;
-                }
-            } else {
-                // Si sigue dentro del blast, intentar escapar continuamente.
-                // Si ya ha pasado demasiado tiempo atrapado (0.85s), fuerza detonación para no quedarse quieta.
-                // Mantener la prioridad de escape si está atrapado.
-                if (desired == MOVE_NONE || holdPosition || opponentInBlast) {
-                    const Move escapeMove = bfsNextStepToEscapeBlast(*map, *p, blast);
-                    if (escapeMove != MOVE_NONE) {
-                        desired = escapeMove;
-                        holdPosition = false;
-                        st.currentMove = escapeMove;
-                        st.moveLockSeconds = 0.0f;
-                    }
-                }
-            }
-        }
-
-        // Refrescar peligro tras posibles cambios de bombas en este mismo ciclo.
-        danger = buildDangerMask(*map, profile);
+        // Ya procesado arriba el Control Remoto (eliminadas líneas duplicadas)
 
         if (holdPosition && !plantedBomb) {
             holdPosition = false;
@@ -2316,8 +2326,6 @@ void updateCpuPlayers(GameMode mode,
             continue;
         }
 
-        // Movimiento por tiles (como los enemigos).
-        // Validación final con peligro fresco antes de iniciar el paso.
         if (avoidDanger && desired != MOVE_NONE) {
             int dr = sr;
             int dc = sc;
@@ -2327,8 +2335,21 @@ void updateCpuPlayers(GameMode mode,
             else if (desired == MOVE_RIGHT) dc++;
 
             if (dr < 0 || dc < 0 || dr >= rows || dc >= cols || isDangerousCell(danger, dr, dc, cols)) {
-                const std::vector<Move> safeMoves = validMoves(*map, danger, *p, /*avoidDanger=*/true);
-                desired = pickRandomMove(safeMoves);
+                std::vector<uint8_t> allBlast((size_t)rows * (size_t)cols, 0);
+                for (auto* b : gBombs) {
+                    if (b && b->state != BombState::DONE) {
+                        markBlastArea(*map, b->gridRow, b->gridCol, b->power, allBlast, rows, cols);
+                    }
+                }
+                const Move smartEscape = bfsNextStepToEscapeBlast(*map, *p, allBlast);
+                
+                if (smartEscape != MOVE_NONE) {
+                    desired = smartEscape; 
+                } else {
+                    const std::vector<Move> safeMoves = validMoves(*map, danger, *p, /*avoidDanger=*/true);
+                    desired = pickRandomMove(safeMoves); 
+                }
+                
                 st.currentMove = desired;
                 st.moveLockSeconds = 0.0f;
             }
@@ -2336,8 +2357,6 @@ void updateCpuPlayers(GameMode mode,
 
         cpuStartTileMove(*p, *map, st, desired, deltaTime);
 
-        // Si el move elegido acaba siendo peligroso (porque el jugador está justo en el borde),
-        // liberamos el lock para que recalcule antes.
         if (avoidDanger) {
             int pr = 0, pc = 0;
             map->ndcToGrid(p->position, pr, pc);
@@ -3356,7 +3375,18 @@ void Agent::Update()
 
     // Override de seguridad.
     if (selfDanger && lastQAction != (int)QAction::FLEE_DANGER) {
-        desired = pickRandomMove(moves);
+        std::vector<uint8_t> allBlast((size_t)gameMap->getRows() * (size_t)gameMap->getCols(), 0);
+        for (auto* b : gBombs) {
+            if (b && b->state != BombState::DONE) {
+                markBlastArea(*gameMap, b->gridRow, b->gridCol, b->power, allBlast, gameMap->getRows(), gameMap->getCols());
+            }
+        }
+        Move esc = bfsNextStepToEscapeBlastForAgent(*gameMap, *this, allBlast);
+        if (esc != MOVE_NONE) {
+            desired = esc;
+        } else {
+            desired = pickRandomMove(moves);
+        }
         lastQAction = (int)QAction::FLEE_DANGER;
     }
 
