@@ -137,6 +137,11 @@ void saveQLearning();
 // Borra los modelos temporales de aprendizaje de la partida actual.
 void discardQLearningSession();
 
+// Modo de entrenamiento persistente: corre x8 y guarda el aprendizaje en los .bin base.
+void setForcedTrainingMode(bool enabled);
+bool isForcedTrainingMode();
+float forcedTrainingTimeScale();
+
 } // namespace CpuBomberman
 
 #endif // CPU_BOMBERMAN_HPP

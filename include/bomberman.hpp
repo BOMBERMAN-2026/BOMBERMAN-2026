@@ -249,6 +249,8 @@ private:
     // Progresión de niveles (uso interno).
     void loadLevel(int levelIndex, bool preserveLivesAndScore);
     void startNewRun(GameMode newMode);
+    void startCpuTrainingRun();
+    void advanceCpuTrainingRound();
     void advanceToNextLevel();
     void returnToMenuFromGame(bool resetRun);
 
@@ -292,6 +294,7 @@ public:
     float levelTimeRemaining = 121.0f;
     std::string currentGameLevel = "5-5";
     std::string currentLevelVS = "2";
+    bool cpuTrainingRunActive = false;
     
 
     Game(GLFWwindow* window, GLuint width, GLuint height)

@@ -65,7 +65,13 @@ static std::array<bool, 4> gCpuControlledByPlayerId = {false, false, false, fals
 static QTable gQTableByDifficulty[3]; // Q-network MLP: [0]=Easy, [1]=Medium, [2]=Hard
 static bool   gQTablesLoaded = false;
 static bool   gQLearningSessionActive = false;
+static bool   gForcedTrainingMode = false;
 static std::array<float, 4> gPendingRewards = {0.0f, 0.0f, 0.0f, 0.0f};
+
+// Rejilla de peligro persistente para evitar suicidios tras explosiones (delay de reacción)
+static std::vector<float> gLingeringDangerGrid;
+
+static constexpr float kForcedTrainingTimeScale = 8.0f;
 
 static const char* kBaseModelPaths[3] = {
     "../resources/ai/mlp_easy.bin",
@@ -121,6 +127,10 @@ static void prepareQLearningTempModels()
         }
     }
 }
+
+void setForcedTrainingMode(bool enabled) { gForcedTrainingMode = enabled; }
+bool isForcedTrainingMode() { return gForcedTrainingMode; }
+float forcedTrainingTimeScale() { return gForcedTrainingMode ? kForcedTrainingTimeScale : 1.0f; }
 
 static int difficultyToIndex(Difficulty d) {
     switch (d) {
@@ -550,6 +560,13 @@ static std::vector<uint8_t> buildDangerMask(const GameMap& map, const AiProfile&
         const int effectivePower = (precision >= 0.70f) ? b->power : std::min(2, b->power);
 
         markBlastArea(map, b->gridRow, b->gridCol, effectivePower, danger, rows, cols);
+    }
+
+    // Integrar el peligro persistente (Lingering Danger) para evitar entrar en celdas que acaban de explotar
+    for (int i = 0; i < rows * cols; ++i) {
+        if (gLingeringDangerGrid[i] > 0.0f) {
+            danger[i] = 1;
+        }
     }
 
     return danger;
@@ -1827,7 +1844,7 @@ static Move executeQAction(int action,
 
 static void ensureQTablesLoaded()
 {
-    if (!gQLearningSessionActive) {
+    if (!gForcedTrainingMode && !gQLearningSessionActive) {
         gQLearningSessionActive = true;
         prepareQLearningTempModels();
     }
@@ -1860,17 +1877,32 @@ void loadQLearning()
         deleteTempModelFiles();
     }
 
-    gQLearningSessionActive = true;
-    prepareQLearningTempModels();
-    gQTablesLoaded = false; // Forzar recarga desde los temporales recien creados.
-    ensureQTablesLoaded();
+    if (gForcedTrainingMode) {
+        gQLearningSessionActive = false; // No usamos temporales
+        gQTablesLoaded = false;
+        for (int d = 0; d < 3; ++d) {
+            gQTableByDifficulty[d].load(baseModelPath(d));
+        }
+        gQTablesLoaded = true;
+    } else {
+        gQLearningSessionActive = true;
+        prepareQLearningTempModels();
+        gQTablesLoaded = false; 
+        ensureQTablesLoaded();
+    }
 }
 
 void saveQLearning()
 {
-    ensureQTablesLoaded();
-    for (int d = 0; d < 3; ++d) {
-        gQTableByDifficulty[d].save(tempModelPath(d));
+    if (gForcedTrainingMode) {
+        for (int d = 0; d < 3; ++d) {
+            gQTableByDifficulty[d].save(baseModelPath(d));
+        }
+    } else {
+        ensureQTablesLoaded();
+        for (int d = 0; d < 3; ++d) {
+            gQTableByDifficulty[d].save(tempModelPath(d));
+        }
     }
 }
 
@@ -1905,6 +1937,32 @@ static const char* qActionName(int action)
     }
 }
 
+// Marca una zona de peligro persistente tras una explosión
+static void markLingeringBlast(const GameMap& map, int br, int bc, int power, int rows, int cols)
+{
+    auto mark = [&](int r, int c) {
+        if (r >= 0 && r < rows && c >= 0 && c < cols) {
+            gLingeringDangerGrid[(size_t)r * cols + c] = 0.38f; // 0.38 segundos de "memoria" del fuego
+        }
+    };
+    mark(br, bc);
+    const int dr[4] = {0, -1, 0, 1};
+    const int dc[4] = {1, 0, -1, 0};
+    for (int i = 0; i < 4; ++i) {
+        for (int d = 1; d <= power; ++d) {
+            int r = br + dr[i] * d;
+            int c = bc + dc[i] * d;
+            if (r < 0 || c < 0 || r >= rows || c >= cols) break;
+            if (!map.isWalkable(r, c)) break;
+            mark(r, c);
+            int nr = r + dr[i];
+            int nc = c + dc[i];
+            if (nr < 0 || nc < 0 || nr >= rows || nc >= cols) break;
+            if (!map.isWalkable(nr, nc)) break;
+        }
+    }
+}
+
 void updateCpuPlayers(GameMode mode,
                       const GameMap* map,
                       std::vector<Player*>& players,
@@ -1915,15 +1973,28 @@ void updateCpuPlayers(GameMode mode,
     if (!map) return;
     (void)context;
 
-    const int start = firstCpuIndex(mode);
+    const int rows = map->getRows();
+    const int cols = map->getCols();
+
+    // Actualizar rejilla de peligro persistente (Lingering Danger)
+    if ((int)gLingeringDangerGrid.size() != rows * cols) {
+        gLingeringDangerGrid.assign((size_t)rows * (size_t)cols, 0.0f);
+    }
+    for (float& d : gLingeringDangerGrid) {
+        d = std::max(0.0f, d - deltaTime);
+    }
+    for (auto* b : gBombs) {
+        if (b && b->state == BombState::EXPLODING) {
+            markLingeringBlast(*map, b->gridRow, b->gridCol, b->power, rows, cols);
+        }
+    }
+
+    const int start = isForcedTrainingMode() ? 0 : firstCpuIndex(mode);
     if (start < 0) return;
 
     for (int idx = 0; idx < 4; ++idx) {
         gCpuControlledByPlayerId[(size_t)idx] = false;
     }
-
-    const int rows = map->getRows();
-    const int cols = map->getCols();
 
     for (int i = start; i < (int)players.size(); ++i) {
         Player* p = players[i];

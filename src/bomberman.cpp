@@ -1,4 +1,4 @@
-﻿#include "bomberman.hpp"
+#include "bomberman.hpp"
 #include "player.hpp"
 #include "sprite_atlas.hpp"
 #include "game_map.hpp"
@@ -618,7 +618,10 @@ static std::string buildWindowTitle(ViewMode viewMode, Camera3DType camera3DType
     if (viewMode == ViewMode::Mode3D) {
         title << " | Camara: " << camera3DTypeToString(camera3DType);
     }
-    title << " | F1 Vista | 1-4 Camara3D | F2 Ciclo | 0 FijarLibre | Rueda Zoom | TAB/F11 Fullscreen | F10 Minimizar";
+    if (CpuBomberman::isForcedTrainingMode()) {
+        title << " | TRAIN CPU x8";
+    }
+    title << " | F1 Vista | F8 TrainCPU | 1-4 Camara3D | F2 Ciclo | 0 FijarLibre | Rueda Zoom | TAB/F11 Fullscreen | F10 Minimizar";
     return title.str();
 }
 
@@ -3334,9 +3337,10 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
     float aspectRatio = (float)WIDTH / (float)HEIGHT;
     gameMap->calculateTileMetrics(aspectRatio);
 
-    // Crear jugadores seg�n el modo.
-    const int numPlayers = custom ? customGameMode.getPlayerCount()
-                                  : (versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1));
+    // Crear jugadores segn el modo.
+    const int numPlayers = CpuBomberman::isForcedTrainingMode() ? 3 :
+                           (custom ? customGameMode.getPlayerCount() :
+                           (versus ? 4 : ((mode == GameMode::HistoryTwoPlayers) ? 2 : 1)));
     const int versusHumanCount = (mode == GameMode::VsTwoPlayers) ? 2 : 1;
     if (versus) {
         // En VS, playerScores representa wins y debe persistir entre rondas.
@@ -3380,10 +3384,13 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
     gPlayers.reserve(numPlayers);
     for (int i = 0; i < numPlayers; ++i) {
-        glm::vec2 spawnPos = gameMap->getSpawnPosition(i);
-        int colorIndex = getPlayerColorIndex(i);
+        // En modo entrenamiento forzado, saltamos al jugador blanco (ID 0) y usamos IDs 1, 2, 3 (Rojo, Azul, Amarillo).
+        int logicalId = CpuBomberman::isForcedTrainingMode() ? (i + 1) : i;
+
+        glm::vec2 spawnPos = gameMap->getSpawnPosition(logicalId);
+        int colorIndex = CpuBomberman::isForcedTrainingMode() ? logicalId : getPlayerColorIndex(i);
         const std::string prefix = (colorIndex >= 0 && colorIndex < 4) ? kPlayerPrefixes[colorIndex] : "jugadorblanco";
-        Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/i, prefix);
+        Player* p = new Player(spawnPos, kDefaultPlayerSize, kDefaultPlayerSpeed, /*playerId=*/logicalId, prefix);
 
         if (preserveLivesAndScore && i < (int)savedLives.size()) {
             if (versus && i >= versusHumanCount) {
@@ -3415,8 +3422,9 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
                 }
             }
         } else if (versus) {
-            // Humanos: vidas de la run VS. CPUs: una sola vida por ronda.
-            p->lives = (i < versusHumanCount) ? 4 : 1;
+            // Entrenamiento CPU: vidas virtualmente infinitas, pero cada ronda se resuelve
+            // por supervivientes vivos para poder encadenar mapas sin Game Over.
+            p->lives = cpuTrainingRunActive ? 999999 : ((i < versusHumanCount) ? 4 : 1);
         } else if (custom) {
             // En Custom Game hay un solo nivel: cada jugador empieza con 1 vida.
             p->lives = 1;
@@ -3569,6 +3577,8 @@ void Game::loadLevel(int levelIndex, bool preserveLivesAndScore) {
 
 // Arranca una partida nueva desde nivel_01 (�ndice 0).
 void Game::startNewRun(GameMode newMode) {
+    cpuTrainingRunActive = false;
+    CpuBomberman::setForcedTrainingMode(false);
     customGameMode.deactivate();
     mode = newMode;
     CpuBomberman::resetEvolutionState();
@@ -3635,10 +3645,53 @@ void Game::startNewRun(GameMode newMode) {
     menuScreen.resetTransition();
 }
 
+void Game::startCpuTrainingRun() {
+    customGameMode.deactivate();
+    CpuBomberman::setForcedTrainingMode(true);
+    CpuBomberman::resetEvolutionState();
+    CpuBomberman::loadQLearning();
+    cinematicPlayer.close(); // Detener cualquier cinemática en curso (Intro, victorias, etc.)
+
+    cpuTrainingRunActive = true;
+    mode = GameMode::VsOnePlayer;
+    currentLevelIndex = 0;
+    versusRoundNumber = 1;
+    currentLevelHadEnemies = false;
+    playerScores.assign(4, 0);
+    vsAliveSeconds = 0.0f;
+    continueSequenceActive = false;
+    continueShowingGameOver = false;
+    continueTimerSeconds = 0.0f;
+    continueProgress01 = 0.0f;
+    continueCountdownValue = 9;
+    rankingScreenTimer = 0.0f;
+    vsCinematicWinnerIndex = -1;
+    vsCinematicPostAction = VsCinematicPostAction::None;
+
+    state = GAME_PLAYING;
+    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+
+    AudioManager::get().stopBgm();
+    AudioManager::get().playBgm(resolveAssetPath("resources/sounds/12 Vs. Game BGM.mp3"), /*loop=*/true, 0.60f);
+    AudioManager::get().setBgmPitch(1.8f);
+    refreshWindowTitle();
+}
+
+void Game::advanceCpuTrainingRound() {
+    if (!cpuTrainingRunActive) return;
+
+    versusRoundNumber += 1;
+    currentLevelIndex = VersusMode::nextLevelIndex(currentLevelIndex);
+    loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+    state = GAME_PLAYING;
+    AudioManager::get().setBgmPitch(1.8f);
+    refreshWindowTitle();
+}
+
 // Avanza al siguiente nivel (si existe) preservando el progreso definido en `loadLevel`.
 void Game::advanceToNextLevel() {
     if (customGameMode.isActive()) {
-        // En Custom Game hay un solo nivel: al completarlo volvemos al men� principal.
+        // En Custom Game hay un solo nivel: al completarlo volvemos al men principal.
         returnToMenuFromGame(/*resetRun=*/true);
         return;
     }
@@ -3647,20 +3700,26 @@ void Game::advanceToNextLevel() {
 
     if (versus) {
         // VS: las wins solo cuentan para HUD/ranking. El encuentro termina al agotar vidas.
-        // TODO: Cambiar esto para que la pantalla y audio de carga salga al empezar cada nivel
         versusRoundNumber += 1;
         currentLevelIndex = VersusMode::nextLevelIndex(currentLevelIndex);
-        //loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
-        //this->state = GAME_PLAYING;
 
-        // Transicionar a CINEMATIC para reproducir cinem�tica del siguiente nivel antes de cargar.
+        if (cpuTrainingRunActive) {
+            // Entrenamiento infinito: cargar el siguiente mapa de inmediato
+            loadLevel(currentLevelIndex, /*preserveLivesAndScore=*/false);
+            this->state = GAME_PLAYING;
+            AudioManager::get().setBgmPitch(1.85f);
+            refreshWindowTitle();
+            return;
+        }
+
+        // Transicionar a CINEMATIC para reproducir cinemtica del siguiente nivel antes de cargar.
         this->state = GAME_CINEMATIC;
         this->currentCinematicType = CinematicType::LevelStart;
         this->nextStateAfterCinematic = GAME_PLAYING;
-        this->loadLevelPending = true;  // Flag para cargar nivel despu�s de cinem�tica
+        this->loadLevelPending = true;  // Flag para cargar nivel despus de cinemtica
         this->pendingLoadPreserveLivesAndScore = true;
 
-        // Abrir el video de la cinem�tica del nivel.
+        // Abrir el video de la cinemtica del nivel.
         std::string videoPath;
         if (mode == GameMode::VsTwoPlayers) {
             videoPath = resolveAssetPath("resources/video/vsMode/LoadVsMode2Player.mp4");
@@ -3669,7 +3728,7 @@ void Game::advanceToNextLevel() {
         }
         cinematicPlayer.open(videoPath);
 
-        // Reproducir jingle "Game Start" durante la cinem�tica del nivel (siguiente nivel)
+        // Reproducir jingle "Game Start" durante la cinemtica del nivel (siguiente nivel)
         AudioManager::get().stopBgm();
         AudioManager::get().playBgm(resolveAssetPath("resources/sounds/02 Game Start.mp3"), /*loop=*/false);
 
@@ -3720,7 +3779,10 @@ void Game::advanceToNextLevel() {
 // Sale a men� desde gameplay (Game Over / fin de campa�a / fin VS).
 void Game::returnToMenuFromGame(bool resetRun) {
     AudioManager::get().stopBgm();
+    AudioManager::get().setBgmPitch(1.0f);
     //AudioManager::get().resetPlaceBombSpecialSound();
+    cpuTrainingRunActive = false;
+    CpuBomberman::setForcedTrainingMode(false);
     CpuBomberman::discardQLearningSession();
 
     customGameMode.deactivate();
@@ -4390,6 +4452,12 @@ void Game::processInput() {
         return;
     }
 
+    if (this->keys[GLFW_KEY_F8] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_F8] = GLFW_REPEAT;
+        startCpuTrainingRun();
+        return;
+    }
+
     // ========== CINEMATICA ==========
     if (this->state == GAME_CINEMATIC) {
         if (this->window != nullptr && this->firstPersonCursorLocked) {
@@ -4520,6 +4588,17 @@ void Game::processInput() {
     }
 
     if (this->state != GAME_PLAYING) return;
+
+    if (this->keys[GLFW_KEY_F8] == GLFW_PRESS) {
+        this->keys[GLFW_KEY_F8] = GLFW_REPEAT;
+        CpuBomberman::setForcedTrainingMode(!CpuBomberman::isForcedTrainingMode());
+        if (!CpuBomberman::isForcedTrainingMode()) {
+            cpuTrainingRunActive = false;
+        }
+        CpuBomberman::loadQLearning();
+        AudioManager::get().setBgmPitch(CpuBomberman::isForcedTrainingMode() ? 1.8f : 1.0f);
+        refreshWindowTitle();
+    }
 
     if (this->keys[inGameMenu.controlsMenu.swap2D_3DKey] == GLFW_PRESS) {
         this->keys[inGameMenu.controlsMenu.swap2D_3DKey] = GLFW_PRESS;
@@ -4903,8 +4982,7 @@ void Game::processInput() {
     Player* p1 = gPlayers[0];
 
     // ======================= Jugador 1 (blanco): Flechas =======================
-
-    if (p1->isAlive()) {
+    if (p1->isAlive() && !cpuTrainingRunActive) {
         const bool up = (this->keys[inGameMenu.controlsMenu.upKey_P1] >= GLFW_PRESS);
         const bool down = (this->keys[inGameMenu.controlsMenu.downKey_P1] >= GLFW_PRESS);
         const bool left = (this->keys[inGameMenu.controlsMenu.leftKey_P1] >= GLFW_PRESS);
@@ -5140,7 +5218,8 @@ void Game::processInput() {
         cpuContext.versusRoundNumber = this->versusRoundNumber;
 
         CpuBomberman::Settings cpuSettings;
-        CpuBomberman::updateCpuPlayers(this->mode, gameMap, gPlayers, this->deltaTime, cpuContext, cpuSettings);
+        const float cpuDeltaTime = this->deltaTime * CpuBomberman::forcedTrainingTimeScale();
+        CpuBomberman::updateCpuPlayers(this->mode, gameMap, gPlayers, cpuDeltaTime, cpuContext, cpuSettings);
     }
 
     // Debug: forzar avance al siguiente nivel.
@@ -5159,7 +5238,7 @@ void Game::processInput() {
         (!shouldCaptureFirstPersonMouse && this->keys[inGameMenu.controlsMenu.bombKey_P1] == GLFW_PRESS);
     const bool p1BombByMouse = (firstPersonLeftClick || firstPersonRightClick);
 
-    if (p1->isAlive() && !p1->isGameOver() && (p1BombByKeyboard || p1BombByMouse)) {
+    if (p1->isAlive() && !p1->isGameOver() && !cpuTrainingRunActive && (p1BombByKeyboard || p1BombByMouse)) {
         if (p1BombByKeyboard) {
             this->keys[inGameMenu.controlsMenu.bombKey_P1] = GLFW_REPEAT;
         }
@@ -5188,7 +5267,7 @@ void Game::processInput() {
         }
     }
 
-    if (p1->isAlive() && p1->hasRemoteControl && this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] == GLFW_PRESS) {
+    if (p1->isAlive() && p1->hasRemoteControl && !cpuTrainingRunActive && this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] == GLFW_PRESS) {
         this->keys[inGameMenu.controlsMenu.detonateBombKey_P1] = GLFW_REPEAT;
         for (auto* b : gBombs) {
             if (b && b->ownerIndex == p1->playerId && b->state == BombState::FUSE) {
@@ -5391,6 +5470,9 @@ void Game::processInput() {
 // Tick de l+�gica: mapa, enemigos, bombas (da+�o) y contacto enemigo-jugador.
 void Game::update() {
     float deltaTime = this->deltaTime;
+    if (this->state == GAME_PLAYING && CpuBomberman::isForcedTrainingMode()) {
+        deltaTime *= CpuBomberman::forcedTrainingTimeScale();
+    }
     gFirstPersonBlockedHintTimer[0] = std::max(0.0f, gFirstPersonBlockedHintTimer[0] - deltaTime);
     gFirstPersonBlockedHintTimer[1] = std::max(0.0f, gFirstPersonBlockedHintTimer[1] - deltaTime);
 
@@ -5985,8 +6067,26 @@ void Game::update() {
                 }
             }
 
-            // Victoria: queda un �nico jugador en pie y ya no quedan enemigos.
-            if (deathAnimationsFinished && survivingPlayers == 1 && noHostileEnemiesAlive) {
+            if (cpuTrainingRunActive) {
+                const bool roundResolved =
+                    (survivingPlayers <= 1 && noHostileEnemiesAlive) ||
+                    timeUp;
+                if (roundResolved) {
+                    const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
+                    if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
+                        playerScores[winnerIndex] += 1;
+                    }
+                    evolveVsCpu(/*playerWon=*/false);
+                    CpuBomberman::saveQLearning();
+                    
+                    // Entrenamiento infinito: avanzar nivel directamente sin pasar por cinemáticas ni menús
+                    advanceToNextLevel();
+                    return;
+                }
+            }
+
+            // Victoria: queda un nico jugador en pie y ya no quedan enemigos.
+            if (!cpuTrainingRunActive && deathAnimationsFinished && survivingPlayers == 1 && noHostileEnemiesAlive) {
                 const int winnerIndex = VersusMode::findLastPlayerStillInMatchIndex(gPlayers);
                 if (winnerIndex >= 0 && winnerIndex < (int)playerScores.size()) {
                     playerScores[winnerIndex] += 1;
@@ -6022,15 +6122,15 @@ void Game::update() {
                 return;
             }
 
-            // Empate total: no quedan jugadores ni enemigos (muerte simult�nea global).
-            if (deathAnimationsFinished && survivingPlayers == 0 && noHostileEnemiesAlive) {
+            // Empate total: no quedan jugadores ni enemigos (muerte simultnea global).
+            if (!cpuTrainingRunActive && deathAnimationsFinished && survivingPlayers == 0 && noHostileEnemiesAlive) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
                     : VsCinematicPostAction::RestartCurrentLevel;
 
-                // Muerte simult�nea total siempre se considera empate visualmente,
-                // aunque la post-acci�n pueda cerrar partida si no quedan vidas.
+                // Muerte simultnea total siempre se considera empate visualmente,
+                // aunque la post-accin pueda cerrar partida si no quedan vidas.
                 startVsRoundCinematic(CinematicType::VsDraw,
                                       resolveAssetPath("resources/video/vsMode/VsModeDraw.mp4"),
                                       /*winnerIndex=*/-1);
@@ -6040,8 +6140,8 @@ void Game::update() {
             // Sin humanos vivos durante la ronda:
             // - Si aun quedan humanos con vidas, se avanza la ronda.
             // - Si los humanos estan sin vidas, termina la partida y muestra ranking.
-            // En ambos casos, la resoluci�n visual de la ronda es derrota.
-            if (deathAnimationsFinished && aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
+            // En ambos casos, la resolucin visual de la ronda es derrota.
+            if (!cpuTrainingRunActive && deathAnimationsFinished && aliveHumans == 0 && (survivingPlayers > 0 || hostileEnemiesAlive > 0)) {
                 evolveVsCpu(/*playerWon=*/false);
                 vsCinematicPostAction = vsRunOutOfLives
                     ? VsCinematicPostAction::ReturnToMenu
@@ -6125,8 +6225,10 @@ void Game::update() {
         levelTimeRemaining -= deltaTime;
         if (levelTimeRemaining < 0.0f) levelTimeRemaining = 0.0f;
 
-        // Aceleraci�n de m�sica si queda 1 minuto o menos
-        if (this->state == GAME_PLAYING && levelTimeRemaining <= 60.0f) {
+        // Aceleración de música si queda 1 minuto o menos
+        if (this->state == GAME_PLAYING && CpuBomberman::isForcedTrainingMode()) {
+            AudioManager::get().setBgmPitch(1.85f);
+        } else if (this->state == GAME_PLAYING && levelTimeRemaining <= 60.0f) {
             fastMusicActive = true;
             AudioManager::get().setBgmPitch(1.25f); // Forzar siempre si el tiempo es bajo (corrige desmuteo)
         } else if (this->state == GAME_PLAYING && fastMusicActive) {

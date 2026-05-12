@@ -466,16 +466,19 @@ void QTable::heuristicTargets(uint32_t stateId, float strength, std::vector<floa
     out[(size_t)QAction::COLLECT_POWERUP] =
         (s.visiblePowerUp && s.dangerLevel <= 1) ? 36.0f : 1.0f;
 
-    if (s.adjDestructibles > 0 && s.canBomb && s.dangerLevel <= 1) {
+    if (s.adjDestructibles > 0 && s.canBomb && s.hasEscape && s.dangerLevel <= 1) {
         out[(size_t)QAction::DESTROY_BLOCK] = 32.0f + (float)s.adjDestructibles * 5.0f;
+    } else if (s.canBomb && !s.hasEscape) {
+        out[(size_t)QAction::DESTROY_BLOCK] = -25.0f;
     } else {
         out[(size_t)QAction::DESTROY_BLOCK] = 4.0f;
     }
 
-    if (s.opponentDir > 0 && s.opponentDist >= 2 && s.canBomb && s.dangerLevel <= 1) {
+    if (s.opponentDir > 0 && s.opponentDist >= 2 && s.canBomb && s.hasEscape && s.dangerLevel == 0) {
         out[(size_t)QAction::PLACE_BOMB_COMBAT] = 42.0f + (s.opponentDist == 3 ? 18.0f : 0.0f);
         if (s.hpAdvantage) out[(size_t)QAction::PLACE_BOMB_COMBAT] += 12.0f;
-        if (!s.hasEscape) out[(size_t)QAction::PLACE_BOMB_COMBAT] -= 18.0f;
+    } else if (s.canBomb && !s.hasEscape) {
+        out[(size_t)QAction::PLACE_BOMB_COMBAT] = -45.0f;
     } else {
         out[(size_t)QAction::PLACE_BOMB_COMBAT] = -4.0f;
     }
